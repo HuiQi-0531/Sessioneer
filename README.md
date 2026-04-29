@@ -1,0 +1,2 @@
+# Sessioneer
+Sessioneer: a system for negotiating and scheduling when sessional staff can and will work
