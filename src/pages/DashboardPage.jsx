@@ -16,7 +16,7 @@ const DashboardPage = () => {
 
         <nav className="navigation">
           <a href="#dashboard" className="nav-item active">Dashboard</a>
-          <a href="#sessions" className="nav-item">Sessions</a>
+          <Link to="/session" className="nav-item">Sessions</Link>
           <Link to="/availability" className="nav-item">Availability</Link>
           <a href="#schedule-builder" className="nav-item">Schedule Builder</a>
           <a href="#requests" className="nav-item">Requests</a>
@@ -51,8 +51,8 @@ const DashboardPage = () => {
           <div className="stat-card">
             <div className="stat-icon blue">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <div className="stat-number">7</div>
@@ -63,8 +63,8 @@ const DashboardPage = () => {
           <div className="stat-card">
             <div className="stat-icon orange">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
             <div className="stat-number">1</div>
@@ -75,8 +75,8 @@ const DashboardPage = () => {
           <div className="stat-card">
             <div className="stat-icon green">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/>
-                <path d="M3 9H21M8 2V6M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M3 9H21M8 2V6M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
             <div className="stat-number">6</div>

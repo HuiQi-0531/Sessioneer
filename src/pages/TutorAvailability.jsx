@@ -29,9 +29,9 @@ const TutorAvailability = () => {
 
     const slotKey = `${day}-${time}`;
     const currentState = availabilityData[slotKey] || 'unselected';
-    
+
     let nextState;
-    switch(currentState) {
+    switch (currentState) {
       case 'unselected':
         nextState = 'preferred';
         break;
@@ -74,7 +74,7 @@ const TutorAvailability = () => {
   const handleSubmit = () => {
     // Simulate API call
     console.log('Saving availability data:', availabilityData);
-    
+
     // In a real application, make API call here:
     // fetch('/api/availability', {
     //     method: 'POST',
@@ -85,11 +85,11 @@ const TutorAvailability = () => {
 
     // Save to localStorage
     localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
-    
+
     // Update state
     setIsEditable(false);
     setShowSuccess(true);
-    
+
     // Hide success message after 3 seconds
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -120,7 +120,7 @@ const TutorAvailability = () => {
 
         <nav className="navigation">
           <Link to="/" className="nav-item">Dashboard</Link>
-          <a href="#sessions" className="nav-item">Sessions</a>
+          <Link to="/session" className="nav-item">Sessions</Link>
           <Link to="/availability" className="nav-item active">Availability</Link>
           <a href="#schedule-builder" className="nav-item">Schedule Builder</a>
           <a href="#requests" className="nav-item">Requests</a>
