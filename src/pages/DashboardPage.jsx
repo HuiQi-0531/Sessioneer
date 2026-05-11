@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import '../styles/Dashboard.css';
 
 const DashboardPage = () => {
@@ -16,7 +17,7 @@ const DashboardPage = () => {
         <nav className="navigation">
           <a href="#dashboard" className="nav-item active">Dashboard</a>
           <a href="#sessions" className="nav-item">Sessions</a>
-          <a href="#availability" className="nav-item">Availability</a>
+          <Link to="/availability" className="nav-item">Availability</Link>
           <a href="#schedule-builder" className="nav-item">Schedule Builder</a>
           <a href="#requests" className="nav-item">Requests</a>
           <a href="#messages" className="nav-item">Messages</a>
