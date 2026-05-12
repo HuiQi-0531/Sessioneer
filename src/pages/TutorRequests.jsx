@@ -251,7 +251,9 @@ const TutorRequests = () => {
                         <span className={`badge ${request.requestType === 'Session swap' ? 'swap-badge' : 'change-badge'}`}>
                           {request.requestType === 'Session swap' ? 'SWAP REQUEST' : 'CHANGE REQUEST'}
                         </span>
-                        <span className="badge pending-badge">PENDING</span>
+                        <span className={`badge ${request.status?.toLowerCase()}-badge`}>
+  {request.status}
+</span>
                       </div>
                       <button 
                         className="delete-btn" 
