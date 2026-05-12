@@ -12,6 +12,28 @@
       "status": "Pending"
     },
     {
+      "id": 1778594102471,
+      "unitCode": "CAB201",
+      "requestType": "Session swap",
+      "priority": "Normal",
+      "currentSession": "CAB201 - Tue TUT-01 9am Tutorial 01",
+      "preferredSwapTo": "CAB201 - Wed TUT-02 11am Tutorial 02",
+      "reason": "Crash",
+      "submittedDate": "2026-05-12T13:55:02.471Z",
+      "status": "Pending"
+    },
+    {
+      "id": 1778593952501,
+      "unitCode": "CAB201",
+      "requestType": "Session change",
+      "priority": "Normal",
+      "currentSession": "CAB201 - Wed TUT-02 11am Tutorial 02",
+      "preferredSwapTo": "",
+      "reason": "Conflict",
+      "submittedDate": "2026-05-12T13:52:32.501Z",
+      "status": "Pending"
+    },
+    {
       "id": 1778591146155,
       "unitCode": "IFB388",
       "requestType": "Session change",
