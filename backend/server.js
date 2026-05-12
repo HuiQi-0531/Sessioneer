@@ -93,7 +93,7 @@ app.post('/requests', (req, res) => {
     });
     
     writeDB(db);
-    console.log('✅ New request created:', newRequest.id);
+    console.log(' New request created:', newRequest.id);
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Error creating request:', error);
@@ -116,7 +116,7 @@ app.patch('/requests/:id', (req, res) => {
     db.requests[index] = { ...db.requests[index], ...req.body };
     writeDB(db);
     
-    console.log('✅ Request updated:', id);
+    console.log(' Request updated:', id);
     res.json(db.requests[index]);
   } catch (error) {
     console.error('Error updating request:', error);
@@ -138,7 +138,7 @@ app.delete('/requests/:id', (req, res) => {
     }
     
     writeDB(db);
-    console.log('🗑️ Request deleted:', id);
+    console.log(' Request deleted:', id);
     res.json({ success: true, message: 'Request deleted successfully' });
   } catch (error) {
     console.error('Error deleting request:', error);
@@ -156,6 +156,51 @@ app.get('/sessions', (req, res) => {
   }
 });
 
+app.get('/uc/requests', (req, res) => {
+  try {
+    const db = readDB();
+
+    res.json(db.requests);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to fetch UC requests'
+    });
+  }
+});
+
+app.patch('/uc/requests/:id/review', (req, res) => {
+  try {
+    const db = readDB();
+    const id = parseInt(req.params.id);
+    const { status, reviewNotes } = req.body;
+
+    const index = db.requests.findIndex(
+      request => request.id === id
+    );
+
+    if (index === -1) {
+      return res.status(404).json({
+        error: 'Request not found'
+      });
+    }
+
+    db.requests[index] = {
+      ...db.requests[index],
+      status,
+      reviewNotes,
+      reviewedDate: new Date().toISOString()
+    };
+
+    writeDB(db);
+
+    res.json(db.requests[index]);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to review request'
+    });
+  }
+});
+
 // Handle 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
@@ -164,9 +209,9 @@ app.use((req, res) => {
 // Start server - THIS KEEPS IT RUNNING
 app.listen(PORT, () => {
   console.log('=================================');
-  console.log(`✅ Backend server running`);
-  console.log(`📍 URL: http://localhost:${PORT}`);
-  console.log(`📊 Database: ${dbPath}`);
+  console.log(`Backend server running`);
+  console.log(` URL: http://localhost:${PORT}`);
+  console.log(`Database: ${dbPath}`);
   console.log('=================================');
   console.log('Available endpoints:');
   console.log(`  GET    /health`);
