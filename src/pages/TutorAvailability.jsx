@@ -122,7 +122,7 @@ const TutorAvailability = () => {
           <Link to="/" className="nav-item">Dashboard</Link>
           <Link to="/session" className="nav-item">Sessions</Link>
           <Link to="/availability" className="nav-item active">Availability</Link>
-          <a href="#schedule-builder" className="nav-item">Schedule Builder</a>
+          <a href="#schedule-builder" className="nav-item">Schedule</a>
           <Link to="/requests" className="nav-item">Requests</Link>
           <a href="#messages" className="nav-item">Messages</a>
         </nav>
