@@ -19,7 +19,7 @@ const DashboardPage = () => {
           <Link to="/session" className="nav-item">Sessions</Link>
           <Link to="/availability" className="nav-item">Availability</Link>
           <a href="#schedule-builder" className="nav-item">Schedule Builder</a>
-          <a href="#requests" className="nav-item">Requests</a>
+          <Link to="/requests" className="nav-item">Requests</Link>
           <a href="#messages" className="nav-item">Messages</a>
         </nav>
 

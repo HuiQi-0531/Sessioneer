@@ -168,9 +168,9 @@ const TutorSession = () => {
                             Schedule
                         </a>
 
-                        <a href="#requests" className="nav-item">
+                        <Link to="/requests" className="nav-item">
                             Requests
-                        </a>
+                        </Link>
 
                         <a href="#messages" className="nav-item">
                             Messages

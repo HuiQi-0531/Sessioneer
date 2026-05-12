@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage.jsx'
 import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
+import TutorRequests from './pages/TutorRequests.jsx';
 import './App.css'
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/availability" element={<TutorAvailability />} />
           <Route path="/session" element={<TutorSession />} />
+          <Route path="/requests" element={<TutorRequests />} />
         </Routes>
       </div>
     </Router>
