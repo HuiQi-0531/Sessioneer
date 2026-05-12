@@ -214,13 +214,12 @@
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 80px 40px;
+  padding: 100px 40px;
   text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .empty-title {
@@ -298,18 +297,21 @@
 .delete-btn {
   background: none;
   border: none;
-  font-size: 20px;
   cursor: pointer;
-  padding: 6px;
+  padding: 8px;
   border-radius: 6px;
   transition: all 0.2s;
-  opacity: 0.6;
+  opacity: 0.5;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delete-btn:hover {
   background-color: #fee2e2;
   opacity: 1;
-  transform: scale(1.1);
+  color: #ef4444;
 }
 
 .badge {
