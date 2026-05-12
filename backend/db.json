@@ -1,0 +1,56 @@
+{
+  "requests": [
+    {
+      "id": 1778591176199,
+      "unitCode": "IFB388",
+      "requestType": "Session swap",
+      "priority": "Urgent",
+      "currentSession": "IFB388 - Mon TUT-01 8am Tutorial 01",
+      "preferredSwapTo": "IFB388 - Mon TUT-02 10am Tutorial 02",
+      "reason": "asdfghjk,",
+      "submittedDate": "2026-05-12T13:06:16.199Z",
+      "status": "Pending"
+    },
+    {
+      "id": 1778591146155,
+      "unitCode": "IFB388",
+      "requestType": "Session change",
+      "priority": "Normal",
+      "currentSession": "IFB388 - Mon TUT-01 8am Tutorial 01",
+      "preferredSwapTo": "IFB388 - Mon TUT-02 10am Tutorial 02",
+      "reason": "s",
+      "submittedDate": "2026-05-12T13:05:46.155Z",
+      "status": "Pending"
+    }
+  ],
+  "sessions": [
+    {
+      "id": 1,
+      "value": "IFB388 - Mon TUT-01 8am Tutorial 01"
+    },
+    {
+      "id": 2,
+      "value": "IFB388 - Mon TUT-02 10am Tutorial 02"
+    },
+    {
+      "id": 3,
+      "value": "CAB201 - Tue TUT-01 9am Tutorial 01"
+    },
+    {
+      "id": 4,
+      "value": "CAB201 - Wed TUT-02 11am Tutorial 02"
+    },
+    {
+      "id": 5,
+      "value": "IFN503 - Wed TUT-03 2pm Tutorial 03"
+    },
+    {
+      "id": 6,
+      "value": "ITB100 - Thu TUT-01 1pm Tutorial 01"
+    },
+    {
+      "id": 7,
+      "value": "MXB107 - Fri TUT-02 3pm Tutorial 02"
+    }
+  ]
+}

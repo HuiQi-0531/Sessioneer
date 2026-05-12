@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { requestsAPI } from '../config/api';
 import '../styles/TutorRequests.css';
 
 const TutorRequests = () => {
@@ -31,6 +32,21 @@ const TutorRequests = () => {
     'MXB107 - Fri TUT-02 3pm Tutorial 02'
   ];
 
+  // Load requests when component mounts
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  // Fetch requests from backend
+  const fetchRequests = async () => {
+    try {
+      const data = await requestsAPI.getAll();
+      setRequests(data);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -39,7 +55,7 @@ const TutorRequests = () => {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation - check if required fields are filled
     const newErrors = {};
     
@@ -71,41 +87,38 @@ const TutorRequests = () => {
     
     // Create new request object
     const newRequest = {
-      id: Date.now(),
       unitCode: unitCode,
-      submittedDate: new Date(), // Store as Date object for time ago calculation
       requestType: formData.requestType,
       priority: formData.priority,
       currentSession: formData.currentSession,
       preferredSwapTo: formData.preferredSwapTo,
-      reason: formData.reason,
-      status: 'Pending'
+      reason: formData.reason
     };
 
-    // Add to requests list (Urgent requests go to top)
-    setRequests(prev => {
-      const newList = [newRequest, ...prev];
-      // Sort: Urgent first, then Normal
-      return newList.sort((a, b) => {
-        if (a.priority === 'Urgent' && b.priority === 'Normal') return -1;
-        if (a.priority === 'Normal' && b.priority === 'Urgent') return 1;
-        return 0;
+    try {
+      // POST to backend
+      await requestsAPI.create(newRequest);
+      
+      // Refresh the list from backend
+      await fetchRequests();
+
+      // Show success message
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+
+      // Close modal and reset form
+      setShowModal(false);
+      setFormData({
+        requestType: 'Session swap',
+        priority: 'Normal',
+        currentSession: '',
+        preferredSwapTo: '',
+        reason: ''
       });
-    });
-
-    // Show success message
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
-
-    // Close modal and reset form
-    setShowModal(false);
-    setFormData({
-      requestType: 'Session swap',
-      priority: 'Normal',
-      currentSession: '',
-      preferredSwapTo: '',
-      reason: ''
-    });
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      alert('Failed to submit request. Please try again.');
+    }
   };
 
   const handleCancel = () => {
@@ -120,9 +133,15 @@ const TutorRequests = () => {
     });
   };
 
-  const handleDelete = (requestId) => {
+  const handleDelete = async (requestId) => {
     if (window.confirm('Are you sure you want to delete this request?')) {
-      setRequests(prev => prev.filter(req => req.id !== requestId));
+      try {
+        await requestsAPI.delete(requestId);
+        setRequests(prev => prev.filter(req => req.id !== requestId));
+      } catch (error) {
+        console.error('Error deleting request:', error);
+        alert('Failed to delete request. Please try again.');
+      }
     }
   };
 
@@ -211,6 +230,7 @@ const TutorRequests = () => {
           {/* Empty State or Requests List */}
           {requests.length === 0 ? (
             <div className="empty-state">
+              <div className="empty-icon">📝</div>
               <p className="empty-title">No requests yet</p>
               <p className="empty-subtitle">Click "+ Request" to create your first swap or change request</p>
             </div>
@@ -238,10 +258,7 @@ const TutorRequests = () => {
                         onClick={() => handleDelete(request.id)}
                         title="Delete request"
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                        🗑️
                       </button>
                     </div>
                   </div>
