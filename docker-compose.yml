@@ -1,0 +1,23 @@
+version: 
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: sessioneer_postgres
+    environment:
+      POSTGRES_DB: sessioneer_db
+      POSTGRES_USER: sessioneer
+      POSTGRES_PASSWORD: sessioneer123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/setup-db.sql:/docker-entrypoint-initdb.d/01-setup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sessioneer -d sessioneer_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

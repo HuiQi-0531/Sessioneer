@@ -21,3 +21,25 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+
+# Database files
+*.db
+*.sqlite
+db.json
+EOF
+
+# Node modules
+node_modules/
+
+cd ~/Desktop/cap-proj
+
+# Add to .gitignore
+cat >> .gitignore << 'EOF'
+
+# Docker volumes
+postgres_data/
+
