@@ -82,9 +82,9 @@ const Login = () => {
                     </div>
 
                     <div className="forgot-password-row">
-                        <button type="button" className="forgot-password-btn">
+                        <Link to="/reset-password" className="forgot-password-btn">
                             Forgot password?
-                        </button>
+                        </Link>
                     </div>
 
                     {error && (
