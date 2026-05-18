@@ -1,8 +1,25 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/Dashboard.css';
 
 const DashboardPage = () => {
+
+  const currentUser = useMemo(() => {
+    const savedUser = localStorage.getItem('currentUser');
+
+    if (!savedUser) {
+      return null;
+    }
+
+    return JSON.parse(savedUser);
+  }, []);
+
+  const displayName = currentUser?.name || 'Guest';
+  const displayRole = currentUser?.role === 'coordinator'
+    ? 'Unit Coordinator'
+    : 'Tutor';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+
   return (
     <div className="dashboard-container">
       {/* Sidebar */}
@@ -24,10 +41,10 @@ const DashboardPage = () => {
         </nav>
 
         <div className="user-profile">
-          <div className="user-avatar">L</div>
+          <div className="user-avatar">{avatarLetter}</div>
           <div className="user-info">
-            <p className="user-name">Elaine Lee</p>
-            <p className="user-role">Tutor</p>
+            <p className="user-name">{displayName}</p>
+            <p className="user-role">{displayRole}</p>
           </div>
         </div>
       </aside>
@@ -40,7 +57,7 @@ const DashboardPage = () => {
         </header>
 
         <div className="welcome-section">
-          <h2>Welcome back, Miss Lee 👋</h2>
+          <h2>Welcome back, {displayName} 👋</h2>
           <p className="course-info">
             IFB422 Software Engineering: Architecture and Design · QUT-YOU-001: The art of pitching · Semester 1 2025
           </p>

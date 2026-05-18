@@ -4,6 +4,8 @@ import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests';
+import Register from './pages/Register';
+import Login from './pages/Login';
 import './App.css'
 
 function App() {
@@ -16,6 +18,8 @@ function App() {
           <Route path="/session" element={<TutorSession />} />
           <Route path="/requests" element={<TutorRequests />} />
           <Route path="/uc-requests" element={<UCRequests />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </div>
     </Router>
