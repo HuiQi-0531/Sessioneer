@@ -6,6 +6,8 @@ import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests';
 import Register from './pages/Register';
 import Login from './pages/Login';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+
 import './App.css'
 
 function App() {
@@ -20,6 +22,7 @@ function App() {
           <Route path="/uc-requests" element={<UCRequests />} />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Routes>
       </div>
     </Router>
