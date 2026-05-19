@@ -21,6 +21,17 @@ export const requestsAPI = {
     return response.json();
   },
 
+  // Update request
+  update: async (id, data) => {
+    const res = await fetch(`${API_URL}/requests/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update');
+    return res.json();
+  },
+
   // Delete request
   delete: async (id) => {
     const response = await fetch(`${API_URL}/requests/${id}`, {

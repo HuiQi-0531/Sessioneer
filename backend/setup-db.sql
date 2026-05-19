@@ -146,7 +146,20 @@ CREATE INDEX IF NOT EXISTS idx_sessions_assigned_tutor ON sessions(assigned_tuto
 -- Insert sample data
 INSERT INTO users (email, password_hash, role, name) VALUES
 ('sarah.kim@uni.edu', '$2a$10$dummy_hash', 'coordinator', 'Dr. Sarah Kim'),
-('elaine.lee@student.edu', '$2a$10$dummy_hash', 'tutor', 'Elaine Lee')
+('elaine.lee@student.edu', '$2a$10$dummy_hash', 'tutor', 'Elaine Lee'),
+('jordan.yu@student.edu', '$2a$10$dummy_hash', 'tutor', 'Jordan Yu'),
+('casey.huang@student.edu', '$2a$10$dummy_hash', 'tutor', 'Casey Huang'),
+('alex.morgan@student.edu', '$2a$10$dummy_hash', 'tutor', 'Alex Morgan'),
+('sam.rivera@student.edu', '$2a$10$dummy_hash', 'tutor', 'Sam Rivera'),
+('riley.chen@student.edu', '$2a$10$dummy_hash', 'tutor', 'Riley Chen'),
+('taylor.kim@student.edu', '$2a$10$dummy_hash', 'tutor', 'Taylor Kim'),
+('jamie.park@student.edu', '$2a$10$dummy_hash', 'tutor', 'Jamie Park'),
+('morgan.lee@student.edu', '$2a$10$dummy_hash', 'tutor', 'Morgan Lee'),
+('avery.jones@student.edu', '$2a$10$dummy_hash', 'tutor', 'Avery Jones'),
+('dakota.smith@student.edu', '$2a$10$dummy_hash', 'tutor', 'Dakota Smith'),
+('phoenix.lee@student.edu', '$2a$10$dummy_hash', 'tutor', 'Phoenix Lee'),
+('sage.wilson@student.edu', '$2a$10$dummy_hash', 'tutor', 'Sage Wilson'),
+('river.martinez@student.edu', '$2a$10$dummy_hash', 'tutor', 'River Martinez')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO units (unit_coordinator_id, unit_code, unit_name, semester, year)
@@ -183,3 +196,4 @@ SELECT 'Setup complete!' as message;
 SELECT COUNT(*) as user_count FROM users;
 SELECT COUNT(*) as unit_count FROM units;
 SELECT COUNT(*) as session_count FROM sessions;
+SELECT COUNT(*) as tutor_count FROM users WHERE role = 'tutor';

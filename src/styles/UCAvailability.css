@@ -1,0 +1,766 @@
+
+/* ── Tokens ── */
+:root {
+  --uca-font:            'DM Sans', 'Segoe UI', sans-serif;
+
+  --uca-preferred-bg:    #22c55e;
+  --uca-preferred-text:  #fff;
+  --uca-available-bg:    #60a5fa;
+  --uca-available-text:  #fff;
+  --uca-avoid-bg:        #f87171;
+  --uca-avoid-text:      #fff;
+
+  --uca-submitted-bg:    #22c55e;
+  --uca-submitted-text:  #fff;
+  --uca-pending-bg:      #f87171;
+  --uca-pending-text:    #fff;
+
+  --uca-active-tab-bg:   #6366f1;
+  --uca-active-tab-text: #fff;
+  --uca-tab-bg:          #f1f5f9;
+  --uca-tab-text:        #475569;
+  --uca-tab-hover-bg:    #e2e8f0;
+
+  --uca-tutor-color:     #6366f1;
+
+  --uca-card-bg:         #fff;
+  --uca-card-radius:     12px;
+  --uca-card-shadow:     0 1px 4px rgba(0,0,0,.08);
+  --uca-card-border:     1px solid #e5e7eb;
+
+  --uca-grid-border:     #e5e7eb;
+  --uca-grid-header-bg:  #fafbfc;
+  --uca-grid-stripe:     #f8f9fa;
+  --uca-grid-time-color: #5f6368;
+
+  --uca-toolbar-btn-bg:       #f1f5f9;
+  --uca-toolbar-btn-hover-bg: #e2e8f0;
+  --uca-toolbar-btn-color:    #374151;
+
+  --uca-bell-color:      #f59e0b;
+  --uca-bell-sent-color: #adb5bd;
+
+  --uca-empty-color:     #9ca3af;
+  
+  --uca-sidebar-bg:      #fff;
+  --uca-sidebar-width:   228px;
+  --uca-nav-active:      #1967d2;
+  --uca-nav-hover:       #f1f3f4;
+}
+
+/* ── Root wrapper ── */
+.uca-root {
+  font-family: var(--uca-font);
+  display: flex;
+  min-height: 100vh;
+  background: #f5f7fa;
+  box-sizing: border-box;
+}
+
+/* ── Sidebar ── */
+.uca-sidebar {
+  width: var(--uca-sidebar-width);
+  background: var(--uca-sidebar-bg);
+  border-right: 1px solid #e9ecef;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  z-index: 100;
+}
+
+.uca-sidebar__header {
+  padding: 28px 20px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uca-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uca-logo__icon {
+  width: 40px;
+  height: 40px;
+  background: #e8f0fe;
+  color: #4285f4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.uca-logo__text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #202124;
+  margin: 0;
+}
+
+/* Active Unit Section */
+.uca-active-unit {
+  padding: 16px 20px;
+  background: #e8f0fe;
+  margin: 0 12px 20px 12px;
+  border-radius: 8px;
+}
+
+.uca-active-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 4px 0;
+}
+
+.uca-unit-code {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1967d2;
+  margin: 0 0 2px 0;
+}
+
+.uca-unit-semester {
+  font-size: 12px;
+  color: #5f6368;
+  margin: 0;
+}
+
+.uca-nav {
+  flex: 1;
+  padding: 0 12px;
+  gap: 4px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.uca-nav__item {
+  display: block;
+  padding: 12px 16px;
+  color: #5f6368;
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  border-radius: 8px;
+}
+
+.uca-nav__item:hover {
+  background: var(--uca-nav-hover);
+}
+
+.uca-nav__item--active {
+  background: #e8f0fe;
+  color: var(--uca-nav-active);
+  font-weight: 500;
+}
+
+.uca-sidebar__footer {
+  padding: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.uca-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uca-user__avatar {
+  width: 36px;
+  height: 36px;
+  background: #e8f0fe;
+  color: #1967d2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.uca-user__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.uca-user__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.uca-user__role {
+  font-size: 12px;
+  color: #5f6368;
+  margin: 0;
+}
+
+/* ── Main content ── */
+.uca-main {
+  flex: 1;
+  margin-left: var(--uca-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: #f5f7fa;
+}
+
+/* ── Top bar ── */
+.uca-topbar {
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.uca-topbar__title {
+  font-size: 24px;
+  font-weight: 400;
+  color: #202124;
+  margin: 0;
+}
+
+.uca-topbar__notification {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  color: #5f6368;
+  font-size: 20px;
+}
+
+.uca-topbar__notification:hover {
+  background: #f1f3f4;
+}
+
+/* ── Content area ── */
+.uca-content {
+  flex: 1;
+  padding: 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* ── Card ── */
+.uca-card {
+  background: var(--uca-card-bg);
+  border: var(--uca-card-border);
+  border-radius: var(--uca-card-radius);
+  box-shadow: var(--uca-card-shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Fullscreen mode for entire availability card */
+.uca-card--fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  border-radius: 0;
+  background: #fff;
+  padding: 24px;
+  overflow: auto;
+}
+
+.uca-card--status {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  max-height: 165px;
+  overflow: hidden;
+}
+
+/* ── Controls Row (Day tabs + Legend + Toolbar) ── */
+.uca-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.uca-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Day tabs ── */
+.uca-day-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.uca-day-tab {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--uca-font);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--uca-tab-bg);
+  color: var(--uca-tab-text);
+  transition: background 0.15s, color 0.15s;
+}
+
+.uca-day-tab:hover:not(.uca-day-tab--active) {
+  background: var(--uca-tab-hover-bg);
+}
+
+.uca-day-tab--active {
+  background: var(--uca-active-tab-bg);
+  color: var(--uca-active-tab-text);
+}
+
+/* ── Legend ── */
+.uca-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.uca-legend__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.uca-legend__dot--preferred { background: var(--uca-preferred-bg); }
+.uca-legend__dot--available { background: var(--uca-available-bg); }
+.uca-legend__dot--avoid     { background: var(--uca-avoid-bg); }
+
+.uca-legend__label {
+  font-size: 12px;
+  color: #5f6368;
+  margin-right: 8px;
+}
+
+/* ── Toolbar ── */
+.uca-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.uca-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: var(--uca-toolbar-btn-bg);
+  color: var(--uca-toolbar-btn-color);
+  font-family: var(--uca-font);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+  line-height: 1;
+}
+
+.uca-toolbar__btn:hover {
+  background: var(--uca-toolbar-btn-hover-bg);
+}
+
+.uca-toolbar__btn--text {
+  font-size: 14px;
+  padding: 0 14px;
+}
+
+.uca-toolbar__btn--icon {
+  padding: 0;
+  width: 36px;
+}
+
+.uca-toolbar__zoom {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  padding: 0 8px;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* ── Grid outer ── */
+.uca-grid-outer {
+  border: 1px solid var(--uca-grid-border);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Grid scroller ── */
+.uca-grid-scroller {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Scrollbar styling to match UCRequests */
+.uca-grid-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.uca-grid-scroller::-webkit-scrollbar-track {
+  background: #f1f3f4;
+  border-radius: 4px;
+}
+
+.uca-grid-scroller::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.uca-grid-scroller::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.uca-card--fullscreen .uca-grid-scroller {
+  max-height: calc(100vh - 200px);
+}
+
+/* ── Grid table ── */
+.uca-grid {
+  border-collapse: collapse;
+  width: auto;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.uca-grid thead tr {
+  background: var(--uca-grid-header-bg);
+  border-bottom: 1px solid var(--uca-grid-border);
+}
+
+.uca-grid__corner {
+  width: 70px;
+  min-width: 70px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--uca-grid-border);
+  background: var(--uca-grid-header-bg);
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  font-size: 11px;
+  color: #5f6368;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.uca-grid__tutor-header {
+  padding: 10px 8px;
+  text-align: center;
+  border-right: 1px solid var(--uca-grid-border);
+  white-space: nowrap;
+  background: var(--uca-grid-header-bg);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  min-width: 130px;
+  width: 130px;
+}
+
+.uca-grid__tutor-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--uca-tutor-color);
+  display: block;
+}
+
+/* Time column */
+.uca-grid__time {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--uca-grid-time-color);
+  padding: 10px 12px;
+  text-align: right;
+  white-space: nowrap;
+  border-right: 1px solid var(--uca-grid-border);
+  border-bottom: 1px solid var(--uca-grid-border);
+  background: var(--uca-grid-header-bg);
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 70px;
+  min-width: 70px;
+}
+
+/* Data cells */
+.uca-grid__cell {
+  padding: 8px 6px;
+  text-align: center;
+  border-right: 1px solid var(--uca-grid-border);
+  border-bottom: 1px solid var(--uca-grid-border);
+  height: 45px;
+  vertical-align: middle;
+  min-width: 130px;
+  width: 130px;
+  background: #fff;
+}
+
+.uca-grid tbody tr:nth-child(even) .uca-grid__cell {
+  background: var(--uca-grid-stripe);
+}
+
+/* ── Badges ── */
+.uca-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.badge--preferred {
+  background: var(--uca-preferred-bg);
+  color: var(--uca-preferred-text);
+}
+
+.badge--available {
+  background: var(--uca-available-bg);
+  color: var(--uca-available-text);
+}
+
+.badge--avoid {
+  background: var(--uca-avoid-bg);
+  color: var(--uca-avoid-text);
+}
+
+/* ── Submission status ── */
+.uca-status__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #5f6368;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.uca-status__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Scrollbar styling */
+.uca-status__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.uca-status__list::-webkit-scrollbar-track {
+  background: #f1f3f4;
+  border-radius: 4px;
+}
+
+.uca-status__list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.uca-status__list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.uca-status__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f1f3;
+  flex-shrink: 0;
+}
+
+.uca-status__row:last-child {
+  border-bottom: none;
+}
+
+.uca-status__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+}
+
+.uca-status__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Pill badges */
+.uca-status__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.uca-status__pill--submitted {
+  background: var(--uca-submitted-bg);
+  color: var(--uca-submitted-text);
+}
+
+.uca-status__pill--pending {
+  background: var(--uca-pending-bg);
+  color: var(--uca-pending-text);
+}
+
+/* Bell button */
+.uca-bell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  padding: 0;
+}
+
+.uca-bell:hover:not(:disabled):not(.uca-bell--sent) {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  transform: scale(1.08);
+}
+
+.uca-bell--sent {
+  cursor: not-allowed;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.uca-bell--sent:hover {
+  transform: none;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+/* ── Empty states ── */
+.uca-empty {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--uca-empty-color);
+  font-size: 15px;
+}
+
+.uca-empty--status {
+  padding: 40px 24px;
+}
+
+/* ── Tutor name + icon row ── */
+.uca-grid__tutor-namerow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+}
+
+.uca-grid__tutor-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .uca-sidebar {
+    width: 70px;
+  }
+  
+  .uca-sidebar__header,
+  .uca-sidebar__footer {
+    padding: 16px 10px;
+  }
+  
+  .uca-logo__text,
+  .uca-user__info,
+  .uca-active-unit {
+    display: none;
+  }
+  
+  .uca-nav__item {
+    padding: 12px 10px;
+    font-size: 11px;
+    text-align: center;
+  }
+  
+  .uca-main {
+    margin-left: 70px;
+  }
+  
+  :root {
+    --uca-sidebar-width: 70px;
+  }
+}

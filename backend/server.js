@@ -20,6 +20,37 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
+// Add missing columns if they don't exist
+pool.query(`
+  DO $$ 
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name = 'change_requests' AND column_name = 'current_session'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN current_session TEXT;
+    END IF;
+    
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name = 'change_requests' AND column_name = 'preferred_swap_to'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN preferred_swap_to TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name = 'change_requests' AND column_name = 'priority'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN priority TEXT DEFAULT 'Normal';
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('✓ Database schema checked and updated');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -53,16 +84,19 @@ app.get('/requests', async (req, res) => {
         cr.request_type as "requestType",
         cr.reason,
         cr.status,
+        cr.review_notes as "reviewNotes",
         cr.created_at as "submittedDate",
+        cr.current_session as "currentSession",
+        cr.preferred_swap_to as "preferredSwapTo",
+        cr.priority,
         u.name as "tutorName",
-        un.unit_code as "unitCode",
-        'Normal' as priority,
-        '' as "currentSession",
-        '' as "preferredSwapTo"
+        un.unit_code as "unitCode"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       LEFT JOIN units un ON cr.unit_id = un.id
-      ORDER BY cr.created_at DESC
+      ORDER BY 
+        CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
+        cr.created_at DESC
     `);
     res.json(result.rows);
   } catch (error) {
@@ -100,29 +134,30 @@ app.post('/requests', async (req, res) => {
     
     const unit_id = unitResult.rows[0]?.id;
     
+    const priorityValue = priority || 'Normal';
+
     // Insert request
     const result = await pool.query(`
       INSERT INTO change_requests 
-      (tutor_id, unit_id, request_type, reason, status, created_at)
-      VALUES ($1, $2, $3, $4, $5, NOW())
+      (tutor_id, unit_id, request_type, reason, status, current_session, preferred_swap_to, priority, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       RETURNING 
         id,
         request_type as "requestType",
         reason,
         status,
+        priority,
+        current_session as "currentSession",
+        preferred_swap_to as "preferredSwapTo",
         created_at as "submittedDate"
-    `, [tutor_id, unit_id, requestType, reason, 'Pending']);
+    `, [tutor_id, unit_id, requestType, reason, 'Pending', currentSession, preferredSwapTo, priorityValue]);
     
-    console.log(' New request created:', result.rows[0].id);
+    console.log(' New request created:', result.rows[0].id, 'priority:', priorityValue);
     
-    // Return formatted response matching frontend expectations
     const newRequest = {
       ...result.rows[0],
       tutorName: tutorName || 'Elaine Lee',
       unitCode,
-      currentSession,
-      preferredSwapTo,
-      priority: priority || 'Normal'
     };
     
     res.status(201).json(newRequest);
@@ -136,7 +171,7 @@ app.post('/requests', async (req, res) => {
 app.patch('/requests/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { status, reviewNotes } = req.body;
     
     const result = await pool.query(`
       UPDATE change_requests 
@@ -144,14 +179,23 @@ app.patch('/requests/:id', async (req, res) => {
         status = COALESCE($1, status),
         review_notes = COALESCE($2, review_notes)
       WHERE id = $3
-      RETURNING *
-    `, [updates.status, updates.reviewNotes, id]);
+      RETURNING 
+        id,
+        request_type as "requestType",
+        reason,
+        status,
+        priority,
+        review_notes as "reviewNotes",
+        current_session as "currentSession",
+        preferred_swap_to as "preferredSwapTo",
+        created_at as "submittedDate"
+    `, [status, reviewNotes, id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    console.log('Request updated:', id);
+    console.log('✓ Request updated:', id);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating request:', error);
@@ -211,19 +255,17 @@ app.get('/uc/requests', async (req, res) => {
         cr.status,
         cr.review_notes as "reviewNotes",
         cr.created_at as "submittedDate",
+        cr.current_session as "currentSession",
+        cr.preferred_swap_to as "preferredSwapTo",
+        cr.priority,
         u.name as "tutorName",
-        un.unit_code as "unitCode",
-        'Normal' as priority,
-        '' as "currentSession",
-        '' as "preferredSwapTo"
+        un.unit_code as "unitCode"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       LEFT JOIN units un ON cr.unit_id = un.id
       ORDER BY 
-        CASE 
-          WHEN cr.status = 'Pending' THEN 0 
-          ELSE 1 
-        END,
+        CASE WHEN cr.status = 'Pending' THEN 0 ELSE 1 END,
+        CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
         cr.created_at DESC
     `);
     
@@ -240,7 +282,6 @@ app.patch('/uc/requests/:id/review', async (req, res) => {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
     
-    // Get UC user ID (Dr. Sarah Kim)
     const ucResult = await pool.query(
       "SELECT id FROM users WHERE role = 'coordinator' LIMIT 1"
     );
@@ -259,6 +300,7 @@ app.patch('/uc/requests/:id/review', async (req, res) => {
         request_type as "requestType",
         reason,
         status,
+        priority,
         review_notes as "reviewNotes",
         created_at as "submittedDate"
     `, [status, reviewNotes, reviewed_by_id, id]);
@@ -272,6 +314,167 @@ app.patch('/uc/requests/:id/review', async (req, res) => {
   } catch (error) {
     console.error('Error reviewing request:', error);
     res.status(500).json({ error: 'Failed to review request' });
+  }
+});
+
+// ========== AVAILABILITY ENDPOINTS ==========
+
+// Helper: convert "8am"/"12pm" to TIME string "08:00:00"/"12:00:00"
+const slotToTime = (slot) => {
+  const match = slot.match(/^(\d+)(am|pm)$/);
+  if (!match) return null;
+  let hour = parseInt(match[1]);
+  const period = match[2];
+  if (period === 'pm' && hour !== 12) hour += 12;
+  if (period === 'am' && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, '0')}:00:00`;
+};
+
+// Helper: convert TIME string "08:00:00" back to "8am"
+const timeToSlot = (timeStr) => {
+  const [h] = timeStr.split(':');
+  const hour = parseInt(h);
+  if (hour === 0) return '12am';
+  if (hour < 12) return `${hour}am`;
+  if (hour === 12) return '12pm';
+  return `${hour - 12}pm`;
+};
+
+// Helper: normalise day "Monday" -> "MON"
+const DAY_MAP = {
+  Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI',
+  MON: 'MON', TUE: 'TUE', WED: 'WED', THU: 'THU', FRI: 'FRI',
+};
+
+/**
+ * GET /availability/tutors?unitCode=FIT3077
+ * UC page uses this to get all tutors, their submission status,
+ * and their submitted availability slots.
+ */
+app.get('/availability', async (req, res) => {
+  try {
+    const { unitCode } = req.query;
+
+    const unitResult = await pool.query(
+      'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
+      [unitCode || 'FIT3077']
+    );
+    if (!unitResult.rows.length) return res.status(404).json({ error: 'Unit not found' });
+    const unit_id = unitResult.rows[0].id;
+
+    // All tutors
+    const tutorResult = await pool.query(
+      "SELECT id, name FROM users WHERE role = 'tutor' ORDER BY name"
+    );
+    const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
+
+    // Who has submitted
+    const submittedResult = await pool.query(
+      'SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
+      [unit_id]
+    );
+    const submittedIds = new Set(submittedResult.rows.map(r => r.tutor_id));
+
+    const submissionStatus = tutors.map(t => ({
+      tutorId: t.id,
+      submitted: submittedIds.has(t.id),
+    }));
+
+    // All submitted availability rows
+    const availResult = await pool.query(
+      'SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
+      [unit_id]
+    );
+
+    // Build { MON: { tutorId: { "8am": "preferred" } }, ... }
+    const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
+    for (const row of availResult.rows) {
+      const day = DAY_MAP[row.day];
+      //console.log('DEBUG:', row.day, row.start_time, typeof row.start_time);
+      if (!day) continue;
+      const slot = timeToSlot(row.start_time);
+      if (!availability[day][row.tutor_id]) availability[day][row.tutor_id] = {};
+      availability[day][row.tutor_id][slot] = row.preference;
+    }
+
+    res.json({ tutors, submissionStatus, availability });
+  } catch (error) {
+    console.error('Error fetching availability:', error);
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
+/**
+ * POST /availability/submit
+ * Tutor submits their availability.
+ * Body: { tutorEmail, unitCode, slots: { "Monday-8:00am": "preferred", ... } }
+ */
+app.post('/availability/submit', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { tutorEmail, unitCode, slots } = req.body;
+    if (!tutorEmail || !unitCode || !slots) {
+      return res.status(400).json({ error: 'tutorEmail, unitCode, and slots are required' });
+    }
+
+    const tutorResult = await client.query(
+      'SELECT id FROM users WHERE email = $1 LIMIT 1', [tutorEmail]
+    );
+    if (!tutorResult.rows.length) return res.status(404).json({ error: 'Tutor not found' });
+    const tutor_id = tutorResult.rows[0].id;
+
+    const unitResult = await client.query(
+      'SELECT id FROM units WHERE unit_code = $1 LIMIT 1', [unitCode]
+    );
+    if (!unitResult.rows.length) return res.status(404).json({ error: 'Unit not found' });
+    const unit_id = unitResult.rows[0].id;
+
+    await client.query('BEGIN');
+
+    // Delete old slots for this tutor + unit
+    await client.query(
+      'DELETE FROM availability WHERE tutor_id = $1 AND unit_id = $2',
+      [tutor_id, unit_id]
+    );
+
+    // Insert new slots
+    // Key format from TutorAvailability.jsx localStorage: "Monday-8:00am"
+    for (const [key, preference] of Object.entries(slots)) {
+      const dashIdx = key.indexOf('-');
+      if (dashIdx === -1) continue;
+      const dayRaw  = key.slice(0, dashIdx);   // "Monday"
+      const timeRaw = key.slice(dashIdx + 1);  // "8:00am"
+
+      const day = DAY_MAP[dayRaw];
+      if (!day) continue;
+      if (!['preferred', 'available', 'avoid'].includes(preference)) continue;
+
+      // Convert "8:00am" -> "08:00:00", end time is start + 1 hour
+      const timeMatch = timeRaw.match(/^(\d+):(\d+)(am|pm)$/);
+      if (!timeMatch) continue;
+      let hour = parseInt(timeMatch[1]);
+      const period = timeMatch[3];
+      if (period === 'pm' && hour !== 12) hour += 12;
+      if (period === 'am' && hour === 12) hour = 0;
+      const startTime = `${String(hour).padStart(2, '0')}:00:00`;
+      const endTime   = `${String(hour + 1).padStart(2, '0')}:00:00`;
+
+      await client.query(`
+        INSERT INTO availability (tutor_id, unit_id, day, start_time, end_time, preference, is_submitted, submitted_at)
+        VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+      `, [tutor_id, unit_id, day, startTime, endTime, preference]);
+    }
+
+    await client.query('COMMIT');
+    console.log(`✓ Availability submitted: ${tutorEmail} for ${unitCode}`);
+    res.status(201).json({ success: true, message: 'Availability submitted successfully' });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error submitting availability:', error);
+    res.status(500).json({ error: 'Failed to submit availability' });
+  } finally {
+    client.release();
   }
 });
 
@@ -296,6 +499,8 @@ app.listen(PORT, () => {
   console.log(`  GET    /sessions`);
   console.log(`  GET    /uc/requests`);
   console.log(`  PATCH  /uc/requests/:id/review`);
+  console.log(`  GET    /availability`);
+  console.log(`  POST   /availability/submit`);
   console.log('=================================');
   console.log('Server is now waiting for requests...');
   console.log('Press Ctrl+C to stop');

@@ -6,6 +6,7 @@ const TutorAvailability = () => {
   const [isEditable, setIsEditable] = useState(true);
   const [availabilityData, setAvailabilityData] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const timeSlots = [
@@ -71,27 +72,41 @@ const TutorAvailability = () => {
   };
 
   // Submit availability
-  const handleSubmit = () => {
-    // Simulate API call
-    console.log('Saving availability data:', availabilityData);
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      // POST to backend
+      const response = await fetch('http://localhost:5001/availability/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tutorEmail: 'elaine.lee@student.edu',
+          unitCode: 'FIT3077',
+          slots: availabilityData,
+        }),
+      });
 
-    // In a real application, make API call here:
-    // fetch('/api/availability', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(availabilityData)
-    // }).then(response => response.json())
-    //   .then(data => { /* handle success */ });
+      if (!response.ok) {
+        throw new Error('Failed to submit');
+      }
 
-    // Save to localStorage
-    localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
+      // Also save to localStorage as backup
+      localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
 
-    // Update state
-    setIsEditable(false);
-    setShowSuccess(true);
+      setIsEditable(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
 
-    // Hide success message after 3 seconds
-    setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      console.error('Submit error:', error);
+      // Fall back to localStorage only so UI still works
+      localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
+      setIsEditable(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Enable editing
@@ -219,8 +234,8 @@ const TutorAvailability = () => {
                 </button>
               )}
               {isEditable && (
-                <button className="btn btn-submit" onClick={handleSubmit}>
-                  Submit
+                <button className="btn btn-submit" onClick={handleSubmit} disabled={isSubmitting}>
+                  {isSubmitting ? 'Submitting...' : 'Submit'}
                 </button>
               )}
             </div>

@@ -3,7 +3,8 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
-import UCRequests from './pages/UCRequests';
+import UCRequests from './pages/UCRequests.jsx';
+import UCAvailability from './pages/UCAvailability.jsx';
 import './App.css'
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route path="/session" element={<TutorSession />} />
           <Route path="/requests" element={<TutorRequests />} />
           <Route path="/uc-requests" element={<UCRequests />} />
+          <Route path="/uc-availability" element={<UCAvailability />} />
         </Routes>
       </div>
     </Router>
