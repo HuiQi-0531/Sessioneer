@@ -145,3 +145,82 @@ export const ucAPI = {
   }
 
 };
+export const availabilityAPI = {
+  get: async (unitCode) => {
+    const response = await fetch(`${API_URL}/availability?unitCode=${unitCode}`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch availability');
+    return response.json();
+  },
+
+  submit: async (unitCode, slots) => {
+    const savedUser = localStorage.getItem('currentUser');
+    const currentUser = savedUser ? JSON.parse(savedUser) : null;
+
+    const response = await fetch(`${API_URL}/availability/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({
+        tutorEmail: currentUser?.email,
+        unitCode,
+        slots
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to submit availability');
+    }
+
+    return response.json();
+  }
+};
+
+export const unitsAPI = {
+  getAll: async () => {
+    const response = await fetch(`${API_URL}/units`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch units');
+    return response.json();
+  },
+
+  getOne: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch unit');
+    return response.json();
+  },
+
+  create: async (unitData) => {
+    const response = await fetch(`${API_URL}/units`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(unitData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create unit');
+    return data;
+  },
+
+  update: async (id, unitData) => {
+    const response = await fetch(`${API_URL}/units/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(unitData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to update unit');
+    return data;
+  },
+
+  delete: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to delete unit');
+    return response.json();
+  }
+};

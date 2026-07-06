@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { availabilityAPI } from '../config/api';
 import '../styles/TutorAvailability.css';
 
 const TutorAvailability = () => {
@@ -7,6 +8,14 @@ const TutorAvailability = () => {
   const [availabilityData, setAvailabilityData] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const currentUser = useMemo(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  }, []);
+
+  const displayName = currentUser?.name || 'Guest';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const timeSlots = [
@@ -75,22 +84,10 @@ const TutorAvailability = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // POST to backend
-      const response = await fetch('http://localhost:5001/availability/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tutorEmail: 'elaine.lee@student.edu',
-          unitCode: 'FIT3077',
-          slots: availabilityData,
-        }),
-      });
+      // Goes through availabilityAPI, which attaches the auth token
+      // and uses the real logged-in user's email instead of a hardcoded one.
+      await availabilityAPI.submit('FIT3077', availabilityData);
 
-      if (!response.ok) {
-        throw new Error('Failed to submit');
-      }
-
-      // Also save to localStorage as backup
       localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
 
       setIsEditable(false);
@@ -99,11 +96,7 @@ const TutorAvailability = () => {
 
     } catch (error) {
       console.error('Submit error:', error);
-      // Fall back to localStorage only so UI still works
-      localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
-      setIsEditable(false);
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      alert('Failed to submit availability. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -143,9 +136,9 @@ const TutorAvailability = () => {
         </nav>
 
         <div className="user-profile">
-          <div className="user-avatar">L</div>
+          <div className="user-avatar">{avatarLetter}</div>
           <div className="user-info">
-            <p className="user-name">Elaine Lee</p>
+            <p className="user-name">{displayName}</p>
             <p className="user-role">Tutor</p>
           </div>
         </div>
@@ -162,7 +155,7 @@ const TutorAvailability = () => {
 
         <div className="content-area">
           <div className="availability-card">
-            <div className="unit-info">My Unit: IFB398 / QUT YOU – OO6</div>
+            <div className="unit-info">My Unit: IFB398 / QUT YOU - OO6</div>
 
             <div className="legend">
               <div className="legend-item">
@@ -181,7 +174,7 @@ const TutorAvailability = () => {
 
             {isEditable ? (
               <div className="warning-message">
-                <span className="warning-icon">⚠</span>
+                <span className="warning-icon">!</span>
                 <span>Please select your preferred time before the due date!</span>
               </div>
             ) : (
@@ -246,7 +239,7 @@ const TutorAvailability = () => {
       {/* Success Message */}
       {showSuccess && (
         <div className="success-message">
-          ✓ Availability saved successfully!
+          Availability saved successfully!
         </div>
       )}
     </div>

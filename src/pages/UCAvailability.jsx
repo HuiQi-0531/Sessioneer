@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";  
+import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { availabilityAPI } from "../config/api";
 import "../styles/UCAvailability.css";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
@@ -49,12 +50,19 @@ export default function UCAvailability({ onSendReminder }) {
   const [availability,     setAvailability]     = useState({});
   const [submissionStatus, setSubmissionStatus] = useState([]);
 
+  const currentUser = useMemo(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  }, []);
+
+  const displayName = currentUser?.name || 'Guest';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('http://localhost:5001/availability');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
+        // Goes through availabilityAPI so the auth token is attached.
+        const data = await availabilityAPI.get('FIT3077');
         setTutors(data.tutors ?? []);
         setAvailability(data.availability ?? {});
         setSubmissionStatus(data.submissionStatus ?? []);
@@ -109,7 +117,7 @@ export default function UCAvailability({ onSendReminder }) {
         </div>
         <nav className="uc-navigation">
           <a href="#dashboard" className="uc-nav-item">Dashboard</a>
-          <a href="#unit-setup" className="uc-nav-item">Unit Setup</a>
+          <Link to="/unit-setup" className="uc-nav-item">Unit Setup</Link>
           <a href="#sessions" className="uc-nav-item">Sessions</a>
           <a href="#tutors" className="uc-nav-item">Tutors</a>
           <Link to="/uc-availability" className="uc-nav-item active">Availability</Link>
@@ -119,9 +127,9 @@ export default function UCAvailability({ onSendReminder }) {
         </nav>
         <div className="uca-sidebar__footer">
           <div className="uca-user">
-            <div className="uca-user__avatar">D</div>
+            <div className="uca-user__avatar">{avatarLetter}</div>
             <div className="uca-user__info">
-              <div className="uca-user__name">Dr. Sarah Kim</div>
+              <div className="uca-user__name">{displayName}</div>
               <div className="uca-user__role">Unit Coordinator</div>
             </div>
           </div>

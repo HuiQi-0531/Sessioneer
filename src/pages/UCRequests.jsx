@@ -123,7 +123,7 @@ const UCRequests = () => {
 
         <nav className="uc-navigation">
           <a href="#dashboard"        className="uc-nav-item">Dashboard</a>
-          <a href="#unit-setup"       className="uc-nav-item">Unit Setup</a>
+          <Link to="/unit-setup" className="uc-nav-item">Unit Setup</Link>
           <a href="#sessions"         className="uc-nav-item">Sessions</a>
           <a href="#tutors"           className="uc-nav-item">Tutors</a>
           <Link to="/uc-availability" className="uc-nav-item">Availability</Link>

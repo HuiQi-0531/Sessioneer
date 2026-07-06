@@ -5,6 +5,8 @@ import TutorSession from './pages/TutorSession.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
+import UnitSetup from './pages/UnitSetup.jsx';
+import CreateUnit from './pages/CreateUnit.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -33,6 +35,15 @@ function App() {
           } />
           <Route path="/uc-availability" element={
             <ProtectedRoute allowedRoles={['coordinator']}><UCAvailability /></ProtectedRoute>
+          } />
+          <Route path="/unit-setup" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><UnitSetup /></ProtectedRoute>
+          } />
+          <Route path="/unit-setup/create" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><CreateUnit /></ProtectedRoute>
+          } />
+          <Route path="/unit-setup/edit/:id" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><CreateUnit /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
