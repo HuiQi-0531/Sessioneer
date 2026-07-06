@@ -36,6 +36,7 @@ const Login = () => {
             const data = await authAPI.login(formData);
 
             localStorage.setItem('currentUser', JSON.stringify(data.user));
+            localStorage.setItem('token', data.token);
 
             if (data.user.role === 'coordinator') {
                 navigate('/uc-requests');

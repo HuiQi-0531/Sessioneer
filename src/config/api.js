@@ -1,6 +1,13 @@
 // API Configuration
 export const API_URL = 'http://localhost:5001';
 
+// Reads the saved token and returns the Authorization header,
+// or an empty object if there is no token (e.g. not logged in).
+const authHeader = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -42,7 +49,9 @@ export const authAPI = {
 export const requestsAPI = {
   // Get all requests
   getAll: async () => {
-    const response = await fetch(`${API_URL}/requests`);
+    const response = await fetch(`${API_URL}/requests`, {
+      headers: authHeader()
+    });
     if (!response.ok) throw new Error('Failed to fetch requests');
     return response.json();
   },
@@ -51,7 +60,7 @@ export const requestsAPI = {
   create: async (requestData) => {
     const response = await fetch(`${API_URL}/requests`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(requestData)
     });
     if (!response.ok) throw new Error('Failed to create request');
@@ -62,7 +71,7 @@ export const requestsAPI = {
   update: async (id, data) => {
     const res = await fetch(`${API_URL}/requests/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update');
@@ -72,7 +81,8 @@ export const requestsAPI = {
   // Delete request
   delete: async (id) => {
     const response = await fetch(`${API_URL}/requests/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to delete request');
     return response.json();
@@ -85,7 +95,10 @@ export const ucAPI = {
   getAllRequests: async () => {
 
     const response = await fetch(
-      `${API_URL}/uc/requests`
+      `${API_URL}/uc/requests`,
+      {
+        headers: authHeader()
+      }
     );
 
     if (!response.ok) {
@@ -110,7 +123,8 @@ export const ucAPI = {
         method: 'PATCH',
 
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authHeader()
         },
 
         body: JSON.stringify({

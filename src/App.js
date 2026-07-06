@@ -8,6 +8,7 @@ import UCAvailability from './pages/UCAvailability.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 import './App.css'
 
 function App() {
@@ -15,12 +16,24 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/availability" element={<TutorAvailability />} />
-          <Route path="/session" element={<TutorSession />} />
-          <Route path="/requests" element={<TutorRequests />} />
-          <Route path="/uc-requests" element={<UCRequests />} />
-          <Route path="/uc-availability" element={<UCAvailability />} />
+          <Route path="/" element={
+            <ProtectedRoute><DashboardPage /></ProtectedRoute>
+          } />
+          <Route path="/availability" element={
+            <ProtectedRoute><TutorAvailability /></ProtectedRoute>
+          } />
+          <Route path="/session" element={
+            <ProtectedRoute><TutorSession /></ProtectedRoute>
+          } />
+          <Route path="/requests" element={
+            <ProtectedRoute><TutorRequests /></ProtectedRoute>
+          } />
+          <Route path="/uc-requests" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><UCRequests /></ProtectedRoute>
+          } />
+          <Route path="/uc-availability" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><UCAvailability /></ProtectedRoute>
+          } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

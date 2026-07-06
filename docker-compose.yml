@@ -7,9 +7,9 @@ services:
     environment:
       POSTGRES_DB: sessioneer_db
       POSTGRES_USER: sessioneer
-      POSTGRES_PASSWORD: sessioneer123
+      POSTGRES_PASSWORD: newSecurePass2026xyz
     ports:
-      - "5432:5432"
+        - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/setup-db.sql:/docker-entrypoint-initdb.d/01-setup.sql

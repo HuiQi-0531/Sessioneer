@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 require('dotenv').config();
+const { verifyToken, requireRole } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -15,9 +17,9 @@ const pool = new Pool({
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error(' Database connection error:', err);
+    console.error('Database connection error:', err);
   } else {
-    console.log(' Database connected at:', res.rows[0].now);
+    console.log('Database connected at:', res.rows[0].now);
   }
 });
 
@@ -47,7 +49,7 @@ pool.query(`
     END IF;
   END $$;
 `).then(() => {
-  console.log('✓ Database schema checked and updated');
+  console.log('Database schema checked and updated');
 }).catch(err => {
   console.error('Schema update error:', err);
 });
@@ -84,7 +86,7 @@ const formatUser = (user) => ({
   role: user.role
 });
 
-// ========== AUTH ROUTES ==========
+// ========== AUTH ROUTES (no token required) ==========
 
 app.post('/auth/register', async (req, res) => {
   try {
@@ -170,9 +172,16 @@ app.post('/auth/login', async (req, res) => {
       });
     }
 
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
     res.json({
       message: 'Login successful',
-      user: formatUser(user)
+      user: formatUser(user),
+      token
     });
 
   } catch (error) {
@@ -184,7 +193,7 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check endpoint (no token required)
 app.get('/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW(), current_database()');
@@ -202,8 +211,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// ========== REQUESTS ENDPOINTS (any logged-in user) ==========
+
 // Get all requests (Tutor view)
-app.get('/requests', async (req, res) => {
+app.get('/requests', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -233,7 +244,7 @@ app.get('/requests', async (req, res) => {
 });
 
 // Create new request
-app.post('/requests', async (req, res) => {
+app.post('/requests', verifyToken, async (req, res) => {
   try {
     const {
       tutorName,
@@ -279,7 +290,7 @@ app.post('/requests', async (req, res) => {
         created_at as "submittedDate"
     `, [tutor_id, unit_id, requestType, reason, 'Pending', currentSession, preferredSwapTo, priorityValue]);
     
-    console.log(' New request created:', result.rows[0].id, 'priority:', priorityValue);
+    console.log('New request created:', result.rows[0].id, 'priority:', priorityValue);
     
     const newRequest = {
       ...result.rows[0],
@@ -295,7 +306,7 @@ app.post('/requests', async (req, res) => {
 });
 
 // Update request
-app.patch('/requests/:id', async (req, res) => {
+app.patch('/requests/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
@@ -322,7 +333,7 @@ app.patch('/requests/:id', async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    console.log('✓ Request updated:', id);
+    console.log('Request updated:', id);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating request:', error);
@@ -331,7 +342,7 @@ app.patch('/requests/:id', async (req, res) => {
 });
 
 // Delete request
-app.delete('/requests/:id', async (req, res) => {
+app.delete('/requests/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM change_requests WHERE id = $1 RETURNING id', [id]);
@@ -349,7 +360,7 @@ app.delete('/requests/:id', async (req, res) => {
 });
 
 // Get available sessions
-app.get('/sessions', async (req, res) => {
+app.get('/sessions', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -369,10 +380,10 @@ app.get('/sessions', async (req, res) => {
   }
 });
 
-// ========== UC ENDPOINTS ==========
+// ========== UC ENDPOINTS (coordinator only) ==========
 
 // Get all requests for UC review
-app.get('/uc/requests', async (req, res) => {
+app.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -404,7 +415,7 @@ app.get('/uc/requests', async (req, res) => {
 });
 
 // Review a request (approve/reject/suggest)
-app.patch('/uc/requests/:id/review', async (req, res) => {
+app.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
@@ -436,7 +447,7 @@ app.patch('/uc/requests/:id/review', async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
 
-    console.log(' Request reviewed:', id, status);
+    console.log('Request reviewed:', id, status);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error reviewing request:', error);
@@ -444,7 +455,7 @@ app.patch('/uc/requests/:id/review', async (req, res) => {
   }
 });
 
-// ========== AVAILABILITY ENDPOINTS ==========
+// ========== AVAILABILITY ENDPOINTS (any logged-in user) ==========
 
 // Helper: convert "8am"/"12pm" to TIME string "08:00:00"/"12:00:00"
 const slotToTime = (slot) => {
@@ -478,7 +489,7 @@ const DAY_MAP = {
  * UC page uses this to get all tutors, their submission status,
  * and their submitted availability slots.
  */
-app.get('/availability', async (req, res) => {
+app.get('/availability', verifyToken, async (req, res) => {
   try {
     const { unitCode } = req.query;
 
@@ -517,7 +528,6 @@ app.get('/availability', async (req, res) => {
     const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
     for (const row of availResult.rows) {
       const day = DAY_MAP[row.day];
-      //console.log('DEBUG:', row.day, row.start_time, typeof row.start_time);
       if (!day) continue;
       const slot = timeToSlot(row.start_time);
       if (!availability[day][row.tutor_id]) availability[day][row.tutor_id] = {};
@@ -536,7 +546,7 @@ app.get('/availability', async (req, res) => {
  * Tutor submits their availability.
  * Body: { tutorEmail, unitCode, slots: { "Monday-8:00am": "preferred", ... } }
  */
-app.post('/availability/submit', async (req, res) => {
+app.post('/availability/submit', verifyToken, async (req, res) => {
   const client = await pool.connect();
   try {
     const { tutorEmail, unitCode, slots } = req.body;
@@ -593,7 +603,7 @@ app.post('/availability/submit', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`✓ Availability submitted: ${tutorEmail} for ${unitCode}`);
+    console.log(`Availability submitted: ${tutorEmail} for ${unitCode}`);
     res.status(201).json({ success: true, message: 'Availability submitted successfully' });
 
   } catch (error) {
@@ -613,9 +623,9 @@ app.use((req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log('=================================');
-  console.log(` Backend server running`);
-  console.log(` URL: http://localhost:${PORT}`);
-  console.log(`  Database: PostgreSQL (sessioneer_db)`);
+  console.log(`Backend server running`);
+  console.log(`URL: http://localhost:${PORT}`);
+  console.log(`Database: PostgreSQL (sessioneer_db)`);
   console.log('=================================');
   console.log('Available endpoints:');
   console.log(`  GET    /health`);
