@@ -8,6 +8,7 @@ import UCAvailability from './pages/UCAvailability.jsx';
 import UnitSetup from './pages/UnitSetup.jsx';
 import CreateUnit from './pages/CreateUnit.jsx';
 import Sessions from './pages/Sessions.jsx';
+import ImportSessions from './pages/ImportSessions.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -50,6 +51,9 @@ function App() {
           } />
           <Route path="/sessions/:unitId" element={
             <ProtectedRoute allowedRoles={['coordinator']}><Sessions /></ProtectedRoute>
+          } />
+          <Route path="/sessions/:unitId/import" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><ImportSessions /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
