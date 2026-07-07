@@ -10,6 +10,8 @@ const sessionsRoutes = require('./routes/sessions.routes');
 const tutorsRoutes = require('./routes/tutors.routes');
 const requestsRoutes = require('./routes/requests.routes');
 const availabilityRoutes = require('./routes/availability.routes');
+const messagesRoutes = require('./routes/messages.routes');
+const unitMessagesRoutes = require('./routes/unitMessages.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -105,9 +107,6 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
-// Create the tutor_unit_markers table if it doesn't exist yet.
-// Stores per-unit priority tags, internal notes, and free-text tags for
-// tutors (used by the Tutors page and the schedule builder).
 pool.query(`
   CREATE TABLE IF NOT EXISTS tutor_unit_markers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -124,7 +123,6 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
-// Add the free-text tags column if this table was created before it existed
 pool.query(`
   DO $$
   BEGIN
@@ -137,6 +135,39 @@ pool.query(`
   END $$;
 `).then(() => {
   console.log('tutor_unit_markers tags column OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Add unit_id to messages so a message can belong to a unit's group chat
+// instead of (or as well as) being a 1-on-1 direct message.
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'unit_id'
+    ) THEN
+      ALTER TABLE messages ADD COLUMN unit_id UUID REFERENCES units(id) ON DELETE CASCADE;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('messages unit_id column OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Tracks each user's last-read timestamp per unit's group chat
+pool.query(`
+  CREATE TABLE IF NOT EXISTS group_chat_reads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(unit_id, user_id)
+  );
+`).then(() => {
+  console.log('group_chat_reads schema OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });
@@ -168,6 +199,8 @@ app.use('/auth', authRoutes);
 app.use('/units', unitsRoutes);
 app.use('/units/:unitId/sessions', sessionsRoutes);
 app.use('/units/:unitId/tutors', tutorsRoutes);
+app.use('/units/:unitId/messages', unitMessagesRoutes);
+app.use('/messages', messagesRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 
@@ -201,6 +234,15 @@ app.listen(PORT, () => {
   console.log(`  PATCH  /units/:unitId/sessions/:sessionId/assign`);
   console.log(`  GET    /units/:unitId/tutors`);
   console.log(`  PUT    /units/:unitId/tutors/:tutorId/marker`);
+  console.log(`  GET    /units/:unitId/messages/contacts`);
+  console.log(`  GET    /units/:unitId/messages/group-unread-count`);
+  console.log(`  GET    /messages/thread/:otherUserId`);
+  console.log(`  POST   /messages`);
+  console.log(`  PATCH  /messages/thread/:otherUserId/read`);
+  console.log(`  GET    /messages/my-contacts`);
+  console.log(`  GET    /messages/group/:unitId`);
+  console.log(`  POST   /messages/group/:unitId`);
+  console.log(`  PATCH  /messages/group/:unitId/read`);
   console.log(`  GET    /requests`);
   console.log(`  POST   /requests`);
   console.log(`  PATCH  /requests/:id`);

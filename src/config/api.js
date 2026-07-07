@@ -318,3 +318,85 @@ export const tutorsAPI = {
     return data;
   }
 };
+
+export const messagesAPI = {
+  getGroupThread: async (unitId) => {
+    const response = await fetch(`${API_URL}/messages/group/${unitId}`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch group chat');
+    return response.json();
+  },
+
+  sendGroup: async (unitId, content) => {
+    const response = await fetch(`${API_URL}/messages/group/${unitId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ content })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to send message');
+    return data;
+  },
+
+  markGroupRead: async (unitId) => {
+    const response = await fetch(`${API_URL}/messages/group/${unitId}/read`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to mark as read');
+    return response.json();
+  },
+
+  getGroupUnreadCount: async (unitId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/messages/group-unread-count`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch unread count');
+    return response.json();
+  },
+
+  getUnitContacts: async (unitId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/messages/contacts`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch contacts');
+    return response.json();
+  },
+
+  getMyContacts: async () => {
+    const response = await fetch(`${API_URL}/messages/my-contacts`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch contacts');
+    return response.json();
+  },
+
+  getThread: async (otherUserId) => {
+    const response = await fetch(`${API_URL}/messages/thread/${otherUserId}`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch messages');
+    return response.json();
+  },
+
+  send: async (recipientId, content) => {
+    const response = await fetch(`${API_URL}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ recipientId, content })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to send message');
+    return data;
+  },
+
+  markRead: async (otherUserId) => {
+    const response = await fetch(`${API_URL}/messages/thread/${otherUserId}/read`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to mark as read');
+    return response.json();
+  }
+};

@@ -90,7 +90,7 @@ const UCSidebar = ({ activePage }) => {
         {navItem('Availability', '/uc-availability', 'availability')}
         {navItem('Schedule Builder', activeUnit ? `/schedule-builder/${activeUnit.id}` : '/unit-setup', 'schedule-builder')}
         {navItem('Requests', '/uc-requests', 'requests')}
-        {navItem('Messages', '#messages', 'messages')}
+        {navItem('Messages', '/messages', 'messages')}
       </nav>
 
       <div className="uc-user-profile">

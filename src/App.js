@@ -11,6 +11,7 @@ import Sessions from './pages/Sessions.jsx';
 import ImportSessions from './pages/ImportSessions.jsx';
 import Tutors from './pages/Tutors.jsx';
 import ScheduleBuilder from './pages/ScheduleBuilder.jsx';
+import Messages from './pages/Messages.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -62,6 +63,9 @@ function App() {
           } />
           <Route path="/schedule-builder/:unitId" element={
             <ProtectedRoute allowedRoles={['coordinator']}><ScheduleBuilder /></ProtectedRoute>
+          } />
+          <Route path="/messages" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><Messages /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
