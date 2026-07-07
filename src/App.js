@@ -7,16 +7,19 @@ import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
 import UnitSetup from './pages/UnitSetup.jsx';
 import CreateUnit from './pages/CreateUnit.jsx';
+import Sessions from './pages/Sessions.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { ActiveUnitProvider } from './context/ActiveUnitContext.jsx';
 import './App.css'
 
 function App() {
   return (
     <Router>
       <div className="App">
+        <ActiveUnitProvider>
         <Routes>
           <Route path="/" element={
             <ProtectedRoute><DashboardPage /></ProtectedRoute>
@@ -45,10 +48,14 @@ function App() {
           <Route path="/unit-setup/edit/:id" element={
             <ProtectedRoute allowedRoles={['coordinator']}><CreateUnit /></ProtectedRoute>
           } />
+          <Route path="/sessions/:unitId" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><Sessions /></ProtectedRoute>
+          } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Routes>
+        </ActiveUnitProvider>
       </div>
     </Router>
   );

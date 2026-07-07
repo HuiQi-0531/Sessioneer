@@ -224,3 +224,55 @@ export const unitsAPI = {
     return response.json();
   }
 };
+
+export const sessionsAPI = {
+  getAll: async (unitId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch sessions');
+    return response.json();
+  },
+
+  create: async (unitId, sessionData) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(sessionData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create session');
+    return data;
+  },
+
+  update: async (unitId, sessionId, sessionData) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(sessionData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to update session');
+    return data;
+  },
+
+  delete: async (unitId, sessionId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to delete session');
+    return response.json();
+  },
+
+  import: async (unitId, sessions, replace) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ sessions, replace })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to import sessions');
+    return data;
+  }
+};

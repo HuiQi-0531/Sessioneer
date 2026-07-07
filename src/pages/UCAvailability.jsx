@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { availabilityAPI } from "../config/api";
+import { useActiveUnit } from "../context/ActiveUnitContext";
+import UCSidebar from "../components/UCSidebar";
 import "../styles/UCAvailability.css";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
@@ -42,6 +43,8 @@ function TutorIcon({ type }) {
 }
 
 export default function UCAvailability({ onSendReminder }) {
+  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+
   const [activeDay,      setActiveDay]      = useState("MON");
   const [zoom,           setZoom]           = useState(100);
   const [isFullscreen,   setIsFullscreen]   = useState(false);
@@ -49,29 +52,29 @@ export default function UCAvailability({ onSendReminder }) {
   const [tutors,           setTutors]           = useState([]);
   const [availability,     setAvailability]     = useState({});
   const [submissionStatus, setSubmissionStatus] = useState([]);
-
-  const currentUser = useMemo(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
-  }, []);
-
-  const displayName = currentUser?.name || 'Guest';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   useEffect(() => {
+    if (!activeUnit) {
+      setIsLoadingData(false);
+      return;
+    }
+
     const fetchData = async () => {
+      setIsLoadingData(true);
       try {
-        // Goes through availabilityAPI so the auth token is attached.
-        const data = await availabilityAPI.get('FIT3077');
+        const data = await availabilityAPI.get(activeUnit.unitCode);
         setTutors(data.tutors ?? []);
         setAvailability(data.availability ?? {});
         setSubmissionStatus(data.submissionStatus ?? []);
       } catch (err) {
         console.error('Could not load availability data:', err);
+      } finally {
+        setIsLoadingData(false);
       }
     };
     fetchData();
-  }, []);
+  }, [activeUnit]);
 
   const zoomIn    = () => setZoom(z => Math.min(z + 10, 200));
   const zoomOut   = () => setZoom(z => Math.max(z - 10, 50));
@@ -103,38 +106,35 @@ export default function UCAvailability({ onSendReminder }) {
     return val ? BADGE_MAP[val] : null;
   };
 
+  if (unitLoading || isLoadingData) {
+    return (
+      <div className="uca-root">
+        <UCSidebar activePage="availability" />
+        <main className="uca-main">
+          <header className="uca-topbar"><h1 className="uca-topbar__title">Tutor Availability</h1></header>
+          <div className="uca-content"><p style={{ padding: 24 }}>Loading...</p></div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!activeUnit) {
+    return (
+      <div className="uca-root">
+        <UCSidebar activePage="availability" />
+        <main className="uca-main">
+          <header className="uca-topbar"><h1 className="uca-topbar__title">Tutor Availability</h1></header>
+          <div className="uca-content">
+            <p style={{ padding: 24 }}>No unit selected. Choose one from the Active Unit menu, or create one first.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="uca-root">
-      <aside className="uca-sidebar">
-        <div className="uca-sidebar__header">
-          <div className="uca-logo"><span className="uca-logo__icon">S</span></div>
-          <h2 className="uca-logo__text">Sessioneer</h2>
-        </div>
-        <div className="uca-active-unit">
-          <p className="uca-active-label">Active Unit</p>
-          <p className="uca-unit-code">FIT3077</p>
-          <p className="uca-unit-semester">Semester 1, 2025</p>
-        </div>
-        <nav className="uc-navigation">
-          <a href="#dashboard" className="uc-nav-item">Dashboard</a>
-          <Link to="/unit-setup" className="uc-nav-item">Unit Setup</Link>
-          <a href="#sessions" className="uc-nav-item">Sessions</a>
-          <a href="#tutors" className="uc-nav-item">Tutors</a>
-          <Link to="/uc-availability" className="uc-nav-item active">Availability</Link>
-          <a href="#schedule-builder" className="uc-nav-item">Schedule Builder</a>
-          <Link to="/uc-requests" className="uc-nav-item">Requests</Link>
-          <a href="#messages" className="uc-nav-item">Messages</a>
-        </nav>
-        <div className="uca-sidebar__footer">
-          <div className="uca-user">
-            <div className="uca-user__avatar">{avatarLetter}</div>
-            <div className="uca-user__info">
-              <div className="uca-user__name">{displayName}</div>
-              <div className="uca-user__role">Unit Coordinator</div>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <UCSidebar activePage="availability" />
 
       <main className="uca-main">
         <header className="uca-topbar">

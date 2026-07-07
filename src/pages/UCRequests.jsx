@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { ucAPI } from '../config/api';
+import UCSidebar from '../components/UCSidebar';
 import '../styles/UCRequests.css';
 
 const labelFromValue = (value) => {
@@ -109,37 +109,7 @@ const UCRequests = () => {
 
   return (
     <div className="uc-dashboard-container">
-      <aside className="uc-sidebar">
-        <div className="uc-logo-section">
-          <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
-          <h2 className="uc-brand-name">Sessioneer</h2>
-        </div>
-
-        <div className="uc-active-unit">
-          <p className="uc-active-label">Active Unit</p>
-          <p className="uc-unit-code">FIT3077</p>
-          <p className="uc-unit-semester">Semester 1, 2025</p>
-        </div>
-
-        <nav className="uc-navigation">
-          <a href="#dashboard"        className="uc-nav-item">Dashboard</a>
-          <Link to="/unit-setup" className="uc-nav-item">Unit Setup</Link>
-          <a href="#sessions"         className="uc-nav-item">Sessions</a>
-          <a href="#tutors"           className="uc-nav-item">Tutors</a>
-          <Link to="/uc-availability" className="uc-nav-item">Availability</Link>
-          <a href="#schedule-builder" className="uc-nav-item">Schedule Builder</a>
-          <Link to="/uc-requests"     className="uc-nav-item active">Requests</Link>
-          <a href="#messages"         className="uc-nav-item">Messages</a>
-        </nav>
-
-        <div className="uc-user-profile">
-          <div className="uc-user-avatar">D</div>
-          <div className="uc-user-info">
-            <p className="uc-user-name">Dr. Sarah Kim</p>
-            <p className="uc-user-role">Unit Coordinator</p>
-          </div>
-        </div>
-      </aside>
+      <UCSidebar activePage="requests" />
 
       <main className="uc-main-content">
         <header className="uc-header">
@@ -153,7 +123,7 @@ const UCRequests = () => {
         </button>
       </header>
 
-        {/* ── Pending Status ── */}
+        {/* Pending Status */}
         <section className="uc-section">
           <div className="uc-section-header">
             <div className="uc-section-title-row">
@@ -217,7 +187,7 @@ const UCRequests = () => {
           )}
         </section>
 
-        {/* ── Confirmation Status ── */}
+        {/* Confirmation Status */}
         <section className="uc-section">
           <div className="uc-section-header">
             <h2>Confirmation Status</h2>
