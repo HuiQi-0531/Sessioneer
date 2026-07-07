@@ -80,4 +80,52 @@ const isUnitActive = (semester, year) => {
   return currentMonth >= 6; // Jul-Dec
 };
 
-module.exports = { normaliseDay, normaliseTime, isUnitActive };
+// Converts a "HH:MM:SS" string to total minutes since midnight.
+const timeToMinutes = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// Converts a "HH:MM:SS" time into the availability grid's slot label,
+// e.g. "08:00:00" -> "8am", "13:00:00" -> "1pm".
+const timeToSlot = (timeStr) => {
+  const hour = parseInt(timeStr.split(':')[0], 10);
+  if (hour === 0) return '12am';
+  if (hour < 12) return `${hour}am`;
+  if (hour === 12) return '12pm';
+  return `${hour - 12}pm`;
+};
+
+// Returns the list of hourly slot labels a session's time range covers.
+// e.g. start "10:00:00", end "12:00:00" -> ["10am", "11am"]
+const getHourlySlotsInRange = (startTime, endTime) => {
+  const startMin = timeToMinutes(startTime);
+  const endMin = timeToMinutes(endTime);
+  const slots = [];
+  for (let m = startMin; m < endMin; m += 60) {
+    const hourStr = `${String(Math.floor(m / 60)).padStart(2, '0')}:00:00`;
+    slots.push(timeToSlot(hourStr));
+  }
+  return slots;
+};
+
+// Duration of a session in hours, e.g. "10:00:00" to "12:00:00" -> 2
+const sessionDurationHours = (startTime, endTime) => {
+  return (timeToMinutes(endTime) - timeToMinutes(startTime)) / 60;
+};
+
+// Do two time ranges on the same day overlap?
+const timeRangesOverlap = (startA, endA, startB, endB) => {
+  return timeToMinutes(startA) < timeToMinutes(endB) && timeToMinutes(startB) < timeToMinutes(endA);
+};
+
+module.exports = {
+  normaliseDay,
+  normaliseTime,
+  isUnitActive,
+  timeToMinutes,
+  timeToSlot,
+  getHourlySlotsInRange,
+  sessionDurationHours,
+  timeRangesOverlap
+};

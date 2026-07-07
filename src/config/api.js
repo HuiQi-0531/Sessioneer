@@ -276,3 +276,45 @@ export const sessionsAPI = {
     return data;
   }
 };
+
+export const scheduleAPI = {
+  getCandidates: async (unitId, sessionId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}/candidates`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch candidates');
+    return response.json();
+  },
+
+  assignTutor: async (unitId, sessionId, tutorId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}/assign`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ tutorId })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to assign tutor');
+    return data;
+  }
+};
+
+export const tutorsAPI = {
+  getAll: async (unitId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/tutors`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch tutors');
+    return response.json();
+  },
+
+  updateMarker: async (unitId, tutorId, priorityTag, internalNotes) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/tutors/${tutorId}/marker`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ priorityTag, internalNotes })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to update tutor marker');
+    return data;
+  }
+};

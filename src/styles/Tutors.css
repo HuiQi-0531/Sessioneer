@@ -1,0 +1,109 @@
+.tt-content {
+  padding: 24px 32px;
+}
+
+.tt-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.tt-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+}
+
+.tt-table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tt-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+  color: #1f2937;
+  vertical-align: middle;
+}
+
+.tt-name {
+  font-weight: 600;
+}
+
+.tt-email {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tt-tag-select {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 130px;
+}
+
+.tt-tag-select.preferred {
+  background-color: #d1fae5;
+  border-color: #6ee7b7;
+  color: #059669;
+}
+
+.tt-tag-select.standard {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.tt-tag-select.backup {
+  background-color: #fef3c7;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+
+.tt-tag-select.risk {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.tt-notes-input {
+  width: 100%;
+  min-width: 220px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tt-save-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: #4f46e5;
+  color: #fff;
+}
+
+.tt-save-btn:hover {
+  background-color: #4338ca;
+}
+
+.tt-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tt-saved-label {
+  font-size: 12px;
+  color: #059669;
+  font-weight: 600;
+  margin-left: 8px;
+}
