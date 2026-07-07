@@ -307,11 +307,11 @@ export const tutorsAPI = {
     return response.json();
   },
 
-  updateMarker: async (unitId, tutorId, priorityTag, internalNotes) => {
+  updateMarker: async (unitId, tutorId, priorityTag, internalNotes, tags) => {
     const response = await fetch(`${API_URL}/units/${unitId}/tutors/${tutorId}/marker`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ priorityTag, internalNotes })
+      body: JSON.stringify({ priorityTag, internalNotes, tags })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update tutor marker');

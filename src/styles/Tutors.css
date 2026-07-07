@@ -2,94 +2,273 @@
   padding: 24px 32px;
 }
 
+.tt-search-row {
+  margin-bottom: 20px;
+}
+
+.tt-search-input {
+  width: 100%;
+  max-width: 360px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.tt-search-input:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
 .tt-empty-state {
   text-align: center;
   padding: 60px 20px;
   color: #6b7280;
 }
 
-.tt-table {
-  width: 100%;
-  border-collapse: collapse;
+.tt-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tt-card {
   background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
 }
 
-.tt-table th {
-  text-align: left;
-  font-size: 12px;
-  text-transform: uppercase;
+.tt-card:hover {
+  border-color: #c7d2fe;
+}
+
+.tt-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tt-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.tt-card-meta {
+  font-size: 13px;
   color: #6b7280;
-  padding: 10px 14px;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 10px;
 }
 
-.tt-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+.tt-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tt-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 5px;
+}
+
+.tt-badge.preferred { background-color: #d1fae5; color: #059669; }
+.tt-badge.standard { background-color: #f3f4f6; color: #6b7280; }
+.tt-badge.backup { background-color: #fef3c7; color: #b45309; }
+.tt-badge.risk { background-color: #fee2e2; color: #b91c1c; }
+.tt-badge.tag { background-color: #ede9fe; color: #6d28d9; }
+
+/* Profile modal */
+.tt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+
+.tt-modal-content {
+  background-color: #fff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.tt-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #9ca3af;
+  line-height: 1;
+}
+
+.tt-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.tt-modal-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: #ede9fe;
+  color: #6d28d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.tt-modal-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.tt-modal-role {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.tt-readonly-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background-color: #f9fafb;
+  border-radius: 10px;
+}
+
+.tt-readonly-item {
+  min-width: 0;
+}
+
+.tt-readonly-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #9ca3af;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.tt-readonly-value {
   font-size: 14px;
   color: #1f2937;
-  vertical-align: middle;
+  word-break: break-word;
 }
 
-.tt-name {
-  font-weight: 600;
-}
-
-.tt-email {
+.tt-readonly-note {
+  grid-column: 1 / -1;
   font-size: 12px;
-  color: #6b7280;
+  color: #9ca3af;
+  margin-top: 4px;
 }
 
-.tt-tag-select {
-  padding: 7px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+.tt-field {
+  margin-bottom: 16px;
+}
+
+.tt-field label {
+  display: block;
   font-size: 13px;
   font-weight: 600;
-  min-width: 130px;
-}
-
-.tt-tag-select.preferred {
-  background-color: #d1fae5;
-  border-color: #6ee7b7;
-  color: #059669;
-}
-
-.tt-tag-select.standard {
-  background-color: #f3f4f6;
-  border-color: #d1d5db;
   color: #374151;
+  margin-bottom: 6px;
 }
 
-.tt-tag-select.backup {
-  background-color: #fef3c7;
-  border-color: #fcd34d;
-  color: #b45309;
-}
-
-.tt-tag-select.risk {
-  background-color: #fee2e2;
-  border-color: #fca5a5;
-  color: #b91c1c;
-}
-
-.tt-notes-input {
+.tt-field select,
+.tt-field textarea,
+.tt-field input {
   width: 100%;
-  min-width: 220px;
-  padding: 7px 10px;
+  padding: 9px 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
+}
+
+.tt-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.tt-tags-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tt-tags-input-row input {
+  flex: 1;
+}
+
+.tt-tag-add-btn {
+  border: none;
+  background-color: #4f46e5;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tt-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tt-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ede9fe;
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 6px 4px 10px;
+  border-radius: 6px;
+}
+
+.tt-tag-remove {
+  background: none;
+  border: none;
+  color: #6d28d9;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
 }
 
 .tt-save-btn {
+  width: 100%;
   border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
+  border-radius: 10px;
+  padding: 12px;
   font-weight: 600;
   cursor: pointer;
   background-color: #4f46e5;
   color: #fff;
+  margin-top: 8px;
 }
 
 .tt-save-btn:hover {
@@ -101,9 +280,51 @@
   cursor: not-allowed;
 }
 
-.tt-saved-label {
-  font-size: 12px;
-  color: #059669;
+/* Confirm sub-modal */
+.tt-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 70;
+}
+
+.tt-confirm-content {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px 28px;
+  max-width: 340px;
+  width: 90%;
+  text-align: center;
+}
+
+.tt-confirm-content p {
+  margin-bottom: 20px;
+  color: #374151;
+}
+
+.tt-confirm-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.tt-confirm-buttons button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
   font-weight: 600;
-  margin-left: 8px;
+  cursor: pointer;
+  border: none;
+}
+
+.tt-confirm-buttons .confirm {
+  background-color: #4f46e5;
+  color: #fff;
+}
+
+.tt-confirm-buttons .cancel {
+  background-color: #f3f4f6;
+  color: #374151;
 }

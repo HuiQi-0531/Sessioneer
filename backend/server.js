@@ -106,8 +106,8 @@ pool.query(`
 });
 
 // Create the tutor_unit_markers table if it doesn't exist yet.
-// Stores per-unit priority tags and internal notes for tutors
-// (used by the Tutors page and later by the schedule builder).
+// Stores per-unit priority tags, internal notes, and free-text tags for
+// tutors (used by the Tutors page and the schedule builder).
 pool.query(`
   CREATE TABLE IF NOT EXISTS tutor_unit_markers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -120,6 +120,23 @@ pool.query(`
   );
 `).then(() => {
   console.log('tutor_unit_markers schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Add the free-text tags column if this table was created before it existed
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_unit_markers' AND column_name = 'tags'
+    ) THEN
+      ALTER TABLE tutor_unit_markers ADD COLUMN tags TEXT[] DEFAULT '{}';
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('tutor_unit_markers tags column OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });
@@ -180,6 +197,8 @@ app.listen(PORT, () => {
   console.log(`  PUT    /units/:unitId/sessions/:sessionId`);
   console.log(`  DELETE /units/:unitId/sessions/:sessionId`);
   console.log(`  POST   /units/:unitId/sessions/import`);
+  console.log(`  GET    /units/:unitId/sessions/:sessionId/candidates`);
+  console.log(`  PATCH  /units/:unitId/sessions/:sessionId/assign`);
   console.log(`  GET    /units/:unitId/tutors`);
   console.log(`  PUT    /units/:unitId/tutors/:tutorId/marker`);
   console.log(`  GET    /requests`);

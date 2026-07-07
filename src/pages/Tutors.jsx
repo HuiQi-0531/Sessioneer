@@ -14,9 +14,13 @@ const Tutors = () => {
 
   const [tutors, setTutors] = useState([]);
   const [isLoadingTutors, setIsLoadingTutors] = useState(true);
-  const [drafts, setDrafts] = useState({}); // tutorId -> { priorityTag, internalNotes }
-  const [savingId, setSavingId] = useState(null);
-  const [savedId, setSavedId] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const [selectedTutor, setSelectedTutor] = useState(null);
+  const [draft, setDraft] = useState({ priorityTag: 'Standard', internalNotes: '', tags: [] });
+  const [newTagText, setNewTagText] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (unitIdFromUrl && unitIdFromUrl !== activeUnitId) {
@@ -39,11 +43,6 @@ const Tutors = () => {
     try {
       const data = await tutorsAPI.getAll(unitId);
       setTutors(data);
-      const initialDrafts = {};
-      data.forEach(t => {
-        initialDrafts[t.id] = { priorityTag: t.priorityTag, internalNotes: t.internalNotes };
-      });
-      setDrafts(initialDrafts);
     } catch (err) {
       console.error('Error loading tutors:', err);
     } finally {
@@ -51,35 +50,65 @@ const Tutors = () => {
     }
   };
 
-  const updateDraft = (tutorId, field, value) => {
-    setDrafts(prev => ({
-      ...prev,
-      [tutorId]: { ...prev[tutorId], [field]: value }
-    }));
+  const openProfile = (tutor) => {
+    setSelectedTutor(tutor);
+    setDraft({
+      priorityTag: tutor.priorityTag,
+      internalNotes: tutor.internalNotes || '',
+      tags: [...(tutor.tags || [])]
+    });
+    setNewTagText('');
   };
 
-  const handleSave = async (tutorId) => {
-    setSavingId(tutorId);
-    setSavedId(null);
+  const closeProfile = () => {
+    setSelectedTutor(null);
+    setShowConfirm(false);
+  };
+
+  const handleAddTag = () => {
+    const value = newTagText.trim();
+    if (!value) return;
+    if (draft.tags.includes(value)) {
+      setNewTagText('');
+      return;
+    }
+    setDraft(prev => ({ ...prev, tags: [...prev.tags, value] }));
+    setNewTagText('');
+  };
+
+  const handleRemoveTag = (tag) => {
+    setDraft(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
+  };
+
+  const handleSaveClick = () => {
+    setShowConfirm(true);
+  };
+
+  const confirmSave = async () => {
+    setIsSaving(true);
     try {
-      const draft = drafts[tutorId];
-      await tutorsAPI.updateMarker(activeUnit.id, tutorId, draft.priorityTag, draft.internalNotes);
-      setSavedId(tutorId);
-      setTimeout(() => setSavedId(null), 2000);
+      await tutorsAPI.updateMarker(activeUnit.id, selectedTutor.id, draft.priorityTag, draft.internalNotes, draft.tags);
+      setShowConfirm(false);
+      closeProfile();
+      await loadTutors(activeUnit.id);
     } catch (err) {
       console.error('Error saving tutor marker:', err);
       alert('Failed to save. Please try again.');
     } finally {
-      setSavingId(null);
+      setIsSaving(false);
     }
   };
+
+  const filteredTutors = tutors.filter(t =>
+    t.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   if (unitLoading) {
     return (
       <div className="uc-dashboard-container">
         <UCSidebar activePage="tutors" />
         <main className="uc-main-content">
-          <div className="tt-content"><div className="tt-empty-state"><p>Loading...</p></div></div>
+          <div className="tt-content"><div className="tt-empty-state">Loading...</div></div>
         </main>
       </div>
     );
@@ -92,9 +121,7 @@ const Tutors = () => {
         <main className="uc-main-content">
           <header className="uc-header"><h1>Tutors</h1></header>
           <div className="tt-content">
-            <div className="tt-empty-state">
-              <p>No unit selected. Choose one from the Active Unit menu, or create one first.</p>
-            </div>
+            <div className="tt-empty-state">No unit selected. Choose one from the Active Unit menu, or create one first.</div>
           </div>
         </main>
       </div>
@@ -111,70 +138,147 @@ const Tutors = () => {
         </header>
 
         <div className="tt-content">
+          <div className="tt-search-row">
+            <input
+              type="text"
+              className="tt-search-input"
+              placeholder="Search tutors..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
           {isLoadingTutors ? (
-            <div className="tt-empty-state"><p>Loading tutors...</p></div>
-          ) : tutors.length === 0 ? (
-            <div className="tt-empty-state"><p>No tutors have registered yet.</p></div>
+            <div className="tt-empty-state">Loading tutors...</div>
+          ) : filteredTutors.length === 0 ? (
+            <div className="tt-empty-state">No tutors found.</div>
           ) : (
-            <table className="tt-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Max Hours</th>
-                  <th>Priority</th>
-                  <th>Notes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tutors.map(tutor => {
-                  const draft = drafts[tutor.id] || { priorityTag: 'Standard', internalNotes: '' };
-                  const isDirty = draft.priorityTag !== tutor.priorityTag || draft.internalNotes !== tutor.internalNotes;
-                  return (
-                    <tr key={tutor.id}>
-                      <td>
-                        <div className="tt-name">{tutor.name}</div>
-                        <div className="tt-email">{tutor.email}</div>
-                      </td>
-                      <td>{tutor.maximumHours != null ? `${tutor.maximumHours} hrs/week` : 'Not set'}</td>
-                      <td>
-                        <select
-                          className={`tt-tag-select ${draft.priorityTag.toLowerCase()}`}
-                          value={draft.priorityTag}
-                          onChange={(e) => updateDraft(tutor.id, 'priorityTag', e.target.value)}
-                        >
-                          {PRIORITY_OPTIONS.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="tt-notes-input"
-                          value={draft.internalNotes || ''}
-                          onChange={(e) => updateDraft(tutor.id, 'internalNotes', e.target.value)}
-                          placeholder="e.g. experienced, dependable"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          className="tt-save-btn"
-                          onClick={() => handleSave(tutor.id)}
-                          disabled={!isDirty || savingId === tutor.id}
-                        >
-                          {savingId === tutor.id ? 'Saving...' : 'Save'}
-                        </button>
-                        {savedId === tutor.id && <span className="tt-saved-label">Saved</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="tt-card-list">
+              {filteredTutors.map(tutor => (
+                <div key={tutor.id} className="tt-card" onClick={() => openProfile(tutor)}>
+                  <div className="tt-card-top">
+                    <span className="tt-card-name">{tutor.name}</span>
+                  </div>
+                  <div className="tt-card-meta">
+                    {tutor.workExperience ? tutor.workExperience.slice(0, 80) : 'No experience notes yet'}
+                    {tutor.maximumHours != null ? ` - Max ${tutor.maximumHours} hrs/week` : ''}
+                    {tutor.contractType ? ` - ${tutor.contractType}` : ''}
+                  </div>
+                  <div className="tt-card-badges">
+                    <span className={`tt-badge ${tutor.priorityTag.toLowerCase()}`}>{tutor.priorityTag}</span>
+                    {(tutor.tags || []).map(tag => (
+                      <span key={tag} className="tt-badge tag">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </main>
+
+      {selectedTutor && (
+        <div className="tt-modal-overlay" onClick={closeProfile}>
+          <div className="tt-modal-content" onClick={e => e.stopPropagation()}>
+            <button className="tt-modal-close" onClick={closeProfile}>&times;</button>
+
+            <div className="tt-modal-header">
+              <div className="tt-modal-avatar">{selectedTutor.name.charAt(0).toUpperCase()}</div>
+              <div>
+                <div className="tt-modal-name">{selectedTutor.name}</div>
+                <div className="tt-modal-role">Tutor</div>
+              </div>
+            </div>
+
+            <div className="tt-readonly-grid">
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Email</div>
+                <div className="tt-readonly-value">{selectedTutor.email}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Phone</div>
+                <div className="tt-readonly-value">{selectedTutor.phoneNumber || 'Not provided'}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Maximum Hours</div>
+                <div className="tt-readonly-value">{selectedTutor.maximumHours != null ? `${selectedTutor.maximumHours} hrs/week` : 'Not set'}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Contract Type</div>
+                <div className="tt-readonly-value">{selectedTutor.contractType || 'Not set'}</div>
+              </div>
+              <div className="tt-readonly-item" style={{ gridColumn: '1 / -1' }}>
+                <div className="tt-readonly-label">Experience</div>
+                <div className="tt-readonly-value">{selectedTutor.workExperience || 'Not provided'}</div>
+              </div>
+              <p className="tt-readonly-note">These fields are set by the tutor and can't be edited here.</p>
+            </div>
+
+            <div className="tt-field">
+              <label>Priority</label>
+              <select
+                value={draft.priorityTag}
+                onChange={(e) => setDraft(prev => ({ ...prev, priorityTag: e.target.value }))}
+              >
+                {PRIORITY_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="tt-field">
+              <label>Tags</label>
+              <div className="tt-tags-input-row">
+                <input
+                  type="text"
+                  placeholder="e.g. Friendly, Experienced"
+                  value={newTagText}
+                  onChange={(e) => setNewTagText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+                />
+                <button type="button" className="tt-tag-add-btn" onClick={handleAddTag}>Add</button>
+              </div>
+              {draft.tags.length > 0 && (
+                <div className="tt-tags-list">
+                  {draft.tags.map(tag => (
+                    <span key={tag} className="tt-tag-pill">
+                      {tag}
+                      <button type="button" className="tt-tag-remove" onClick={() => handleRemoveTag(tag)}>&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="tt-field">
+              <label>Notes</label>
+              <textarea
+                value={draft.internalNotes}
+                onChange={(e) => setDraft(prev => ({ ...prev, internalNotes: e.target.value }))}
+                placeholder="Internal notes about this tutor..."
+              />
+            </div>
+
+            <button className="tt-save-btn" onClick={handleSaveClick}>
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showConfirm && (
+        <div className="tt-confirm-overlay" onClick={() => setShowConfirm(false)}>
+          <div className="tt-confirm-content" onClick={e => e.stopPropagation()}>
+            <p>Save changes to {selectedTutor?.name}'s profile?</p>
+            <div className="tt-confirm-buttons">
+              <button className="cancel" onClick={() => setShowConfirm(false)}>Cancel</button>
+              <button className="confirm" onClick={confirmSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
