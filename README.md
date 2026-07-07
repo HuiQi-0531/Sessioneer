@@ -9,7 +9,6 @@ Group Members:
 - GAN CHUN YANG (n12086215)
 
 
-cat > README.md << 'EOF'
 # Sessioneer - Session Management System
 
 ## Prerequisites
@@ -106,4 +105,3 @@ docker exec -it sessioneer_postgres psql -U sessioneer -d sessioneer_db
 **"Failed to fetch requests"?**
 - Make sure backend is running on port 5001
 - Check `http://localhost:5001/health` shows status "ok"
-EOF
