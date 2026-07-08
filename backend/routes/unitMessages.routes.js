@@ -13,50 +13,104 @@ const getOwnedUnitId = async (unitId, coordinatorId) => {
   return result.rows[0]?.id || null;
 };
 
+const isTutorLinkedToUnit = async (tutorId, unitId) => {
+  const result = await pool.query(
+    `
+    SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+      UNION
+      SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+    )
+    `,
+    [tutorId, unitId]
+  );
+  return result.rows.length > 0;
+};
+
+const buildContact = async (currentUserId, otherUserId, name, email) => {
+  const lastMsgResult = await pool.query(
+    `
+    SELECT content, sent_at
+    FROM messages
+    WHERE unit_id IS NULL
+      AND ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
+    ORDER BY sent_at DESC
+    LIMIT 1
+    `,
+    [currentUserId, otherUserId]
+  );
+
+  const unreadResult = await pool.query(
+    `SELECT COUNT(*) FROM messages WHERE unit_id IS NULL AND sender_id = $1 AND recipient_id = $2 AND is_read = FALSE`,
+    [otherUserId, currentUserId]
+  );
+
+  return {
+    userId: otherUserId,
+    name,
+    email,
+    lastMessage: lastMsgResult.rows[0]?.content || null,
+    lastMessageAt: lastMsgResult.rows[0]?.sent_at || null,
+    unreadCount: parseInt(unreadResult.rows[0].count, 10)
+  };
+};
+
 /**
  * GET /units/:unitId/messages/contacts
- * Returns every tutor as a potential 1-on-1 contact for this unit, each
- * with a last-message preview and unread count against the logged-in coordinator.
+ * Coordinator: every tutor, as a potential 1-on-1 contact.
+ * Tutor: the unit's coordinator, plus every other tutor linked to the
+ * same unit (peer-to-peer messaging).
  */
-router.get('/contacts', verifyToken, requireRole('coordinator'), async (req, res) => {
+router.get('/contacts', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
-    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
-    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const tutorsResult = await pool.query(
-      `SELECT id, name, email FROM users WHERE role = 'tutor' ORDER BY name`
-    );
+    if (req.user.role === 'coordinator') {
+      const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+      if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const contacts = await Promise.all(tutorsResult.rows.map(async (tutor) => {
-      const lastMsgResult = await pool.query(
+      const tutorsResult = await pool.query(
+        `SELECT id, name, email FROM users WHERE role = 'tutor' ORDER BY name`
+      );
+
+      const contacts = await Promise.all(
+        tutorsResult.rows.map(t => buildContact(req.user.id, t.id, t.name, t.email))
+      );
+      return res.json(contacts);
+    }
+
+    if (req.user.role === 'tutor') {
+      const linked = await isTutorLinkedToUnit(req.user.id, unitId);
+      if (!linked) return res.status(403).json({ error: 'You are not linked to this unit' });
+
+      const unitResult = await pool.query(
         `
-        SELECT content, sent_at
-        FROM messages
-        WHERE unit_id IS NULL
-          AND ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
-        ORDER BY sent_at DESC
-        LIMIT 1
+        SELECT c.id, c.name, c.email
+        FROM units u
+        JOIN users c ON c.id = u.unit_coordinator_id
+        WHERE u.id = $1
         `,
-        [req.user.id, tutor.id]
+        [unitId]
+      );
+      const coordinator = unitResult.rows[0];
+
+      const peerTutorsResult = await pool.query(
+        `SELECT id, name, email FROM users WHERE role = 'tutor' AND id != $1 ORDER BY name`,
+        [req.user.id]
       );
 
-      const unreadResult = await pool.query(
-        `SELECT COUNT(*) FROM messages WHERE unit_id IS NULL AND sender_id = $1 AND recipient_id = $2 AND is_read = FALSE`,
-        [tutor.id, req.user.id]
-      );
+      const contacts = [];
+      if (coordinator) {
+        contacts.push(await buildContact(req.user.id, coordinator.id, coordinator.name, coordinator.email));
+      }
+      for (const t of peerTutorsResult.rows) {
+        contacts.push(await buildContact(req.user.id, t.id, t.name, t.email));
+      }
 
-      return {
-        userId: tutor.id,
-        name: tutor.name,
-        email: tutor.email,
-        lastMessage: lastMsgResult.rows[0]?.content || null,
-        lastMessageAt: lastMsgResult.rows[0]?.sent_at || null,
-        unreadCount: parseInt(unreadResult.rows[0].count, 10)
-      };
-    }));
+      return res.json(contacts);
+    }
 
-    res.json(contacts);
+    return res.status(403).json({ error: 'Forbidden' });
   } catch (error) {
     console.error('Error fetching unit contacts:', error);
     res.status(500).json({ error: 'Failed to fetch contacts' });

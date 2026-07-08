@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import RoleBasedHome from './components/RoleBasedHome.jsx'
 import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
+import TutorMessages from './pages/TutorMessages.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -70,6 +71,9 @@ function App() {
           } />
           <Route path="/tutor-sessions/:unitId" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>
+          } />
+          <Route path="/tutor-messages" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorMessages /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
