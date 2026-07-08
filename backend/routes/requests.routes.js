@@ -35,19 +35,15 @@ router.get('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
   }
 });
 
-// Create new request
-router.post('/requests', verifyToken, async (req, res) => {
+// Create new request (uses the logged-in tutor's own id, not a name lookup)
+router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
   try {
     const {
-      tutorName, unitCode, requestType, priority,
+      unitCode, requestType, priority,
       currentSession, preferredSwapTo, reason
     } = req.body;
 
-    const tutorResult = await pool.query(
-      'SELECT id FROM users WHERE name = $1 LIMIT 1',
-      [tutorName || 'Elaine Lee']
-    );
-    const tutor_id = tutorResult.rows[0]?.id;
+    const tutor_id = req.user.id;
 
     const unitResult = await pool.query(
       'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
