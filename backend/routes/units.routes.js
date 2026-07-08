@@ -42,6 +42,36 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
 });
 
 // Get a single unit (must belong to the logged-in coordinator)
+/**
+ * GET /units/my-units (tutor only)
+ * Every unit this tutor is connected to (submitted availability for,
+ * or been assigned a session in), with the same isActive flag the
+ * coordinator's unit list uses.
+ */
+router.get('/my-units', verifyToken, requireRole('tutor'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT DISTINCT u.id, u.unit_code, u.unit_name, u.semester, u.year,
+             u.campus, u.delivery_mode, u.availability_deadline, u.availability_locked
+      FROM units u
+      WHERE u.id IN (
+        SELECT unit_id FROM availability WHERE tutor_id = $1
+        UNION
+        SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
+      )
+      ORDER BY u.year DESC, u.semester DESC
+      `,
+      [req.user.id]
+    );
+
+    res.json(result.rows.map(formatUnit));
+  } catch (error) {
+    console.error('Error fetching tutor units:', error);
+    res.status(500).json({ error: 'Failed to fetch units' });
+  }
+});
+
 router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;

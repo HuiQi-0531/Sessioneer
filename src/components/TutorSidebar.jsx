@@ -1,0 +1,102 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useActiveUnit } from '../context/ActiveUnitContext';
+import '../styles/UCSidebar.css';
+
+const TutorSidebar = ({ activePage }) => {
+  const { activeUnit, allUnits, setActiveUnitId, isLoading } = useActiveUnit();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const currentUser = useMemo(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  }, []);
+
+  const displayName = currentUser?.name || 'Guest';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectUnit = (unitId) => {
+    setActiveUnitId(unitId);
+    setShowDropdown(false);
+  };
+
+  const navItem = (label, path, key) => {
+    if (activePage === key) {
+      return <span className="uc-nav-item active">{label}</span>;
+    }
+    return <Link to={path} className="uc-nav-item">{label}</Link>;
+  };
+
+  return (
+    <aside className="uc-sidebar">
+      <div className="uc-logo-section">
+        <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
+        <h2 className="uc-brand-name">Sessioneer</h2>
+      </div>
+
+      <div className="ucs-active-unit-wrapper" ref={dropdownRef}>
+        <button
+          className="ucs-active-unit-btn"
+          onClick={() => setShowDropdown(!showDropdown)}
+          disabled={isLoading || allUnits.length === 0}
+        >
+          <div className="ucs-active-unit-text">
+            <p className="uc-active-label">Active Unit</p>
+            <p className="uc-unit-code">
+              {isLoading ? 'Loading...' : (activeUnit ? activeUnit.unitCode : 'No unit yet')}
+            </p>
+            {activeUnit && (
+              <p className="uc-unit-semester">{activeUnit.semester}, {activeUnit.year}</p>
+            )}
+          </div>
+          {allUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
+        </button>
+
+        {showDropdown && (
+          <div className="ucs-dropdown">
+            {allUnits.map(unit => (
+              <button
+                key={unit.id}
+                className={`ucs-dropdown-item ${unit.id === activeUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                onClick={() => handleSelectUnit(unit.id)}
+              >
+                <span className="ucs-dropdown-code">{unit.unitCode}</span>
+                <span className="ucs-dropdown-meta">{unit.semester}, {unit.year}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <nav className="uc-navigation">
+        {navItem('Dashboard', '#dashboard', 'dashboard')}
+        {navItem('Sessions', activeUnit ? `/tutor-sessions/${activeUnit.id}` : '#sessions', 'sessions')}
+        {navItem('Availability', '/availability', 'availability')}
+        {navItem('Schedule', activeUnit ? `/tutor-schedule/${activeUnit.id}` : '#schedule', 'schedule')}
+        {navItem('Requests', '/requests', 'requests')}
+        {navItem('Messages', '/tutor-messages', 'messages')}
+      </nav>
+
+      <div className="uc-user-profile">
+        <div className="uc-user-avatar">{avatarLetter}</div>
+        <div className="uc-user-info">
+          <p className="uc-user-name">{displayName}</p>
+          <p className="uc-user-role">Tutor</p>
+        </div>
+      </div>
+    </aside>
+  );
+};
+
+export default TutorSidebar;

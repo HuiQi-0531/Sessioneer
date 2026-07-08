@@ -1,21 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { availabilityAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
+import TutorSidebar from '../components/TutorSidebar';
+import UCPageHeader from '../components/UCPageHeader';
+import '../styles/UCRequests.css';
 import '../styles/TutorAvailability.css';
 
 const TutorAvailability = () => {
+  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+
   const [isEditable, setIsEditable] = useState(true);
   const [availabilityData, setAvailabilityData] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const currentUser = useMemo(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
-  }, []);
-
-  const displayName = currentUser?.name || 'Guest';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const timeSlots = [
@@ -24,16 +21,22 @@ const TutorAvailability = () => {
     '6:00pm', '7:00pm', '8:00pm', '9:00pm'
   ];
 
-  // Load saved data on component mount
+  // The saved-availability cache is scoped per unit, so switching units
+  // via the sidebar doesn't show another unit's selections.
+  const storageKey = activeUnit ? `availabilityData_${activeUnit.id}` : null;
+
   useEffect(() => {
-    const savedData = localStorage.getItem('availabilityData');
+    if (!storageKey) return;
+    const savedData = localStorage.getItem(storageKey);
     if (savedData) {
       setAvailabilityData(JSON.parse(savedData));
       setIsEditable(false);
+    } else {
+      setAvailabilityData({});
+      setIsEditable(true);
     }
-  }, []);
+  }, [storageKey]);
 
-  // Handle slot click - cycle through states
   const handleSlotClick = (day, time) => {
     if (!isEditable) return;
 
@@ -69,7 +72,6 @@ const TutorAvailability = () => {
     });
   };
 
-  // Calculate status counts
   const getStatusCounts = () => {
     const counts = { preferred: 0, available: 0, avoid: 0 };
     Object.values(availabilityData).forEach(state => {
@@ -80,20 +82,16 @@ const TutorAvailability = () => {
     return counts;
   };
 
-  // Submit availability
   const handleSubmit = async () => {
+    if (!activeUnit) return;
     setIsSubmitting(true);
     try {
-      // Goes through availabilityAPI, which attaches the auth token
-      // and uses the real logged-in user's email instead of a hardcoded one.
-      await availabilityAPI.submit('FIT3077', availabilityData);
-
-      localStorage.setItem('availabilityData', JSON.stringify(availabilityData));
+      await availabilityAPI.submit(activeUnit.unitCode, availabilityData);
+      localStorage.setItem(storageKey, JSON.stringify(availabilityData));
 
       setIsEditable(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-
     } catch (error) {
       console.error('Submit error:', error);
       alert('Failed to submit availability. Please try again.');
@@ -102,12 +100,10 @@ const TutorAvailability = () => {
     }
   };
 
-  // Enable editing
   const handleEdit = () => {
     setIsEditable(true);
   };
 
-  // Get slot state
   const getSlotState = (day, time) => {
     const slotKey = `${day}-${time}`;
     return availabilityData[slotKey] || 'unselected';
@@ -115,47 +111,41 @@ const TutorAvailability = () => {
 
   const counts = getStatusCounts();
 
+  if (unitLoading) {
+    return (
+      <div className="dashboard-container">
+        <TutorSidebar activePage="availability" />
+        <main className="main-content">
+          <div className="content-area">Loading...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!activeUnit) {
+    return (
+      <div className="dashboard-container">
+        <TutorSidebar activePage="availability" />
+        <main className="main-content">
+          <UCPageHeader title="My availability" />
+          <div className="content-area">
+            <p>No unit selected. Once you're linked to a unit, it'll show up here.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="logo-section">
-          <div className="logo">
-            <span className="logo-icon">S</span>
-          </div>
-          <h2 className="brand-name">Sessioneer</h2>
-        </div>
+      <TutorSidebar activePage="availability" />
 
-        <nav className="navigation">
-          <Link to="/" className="nav-item">Dashboard</Link>
-          <Link to="/session" className="nav-item">Sessions</Link>
-          <Link to="/availability" className="nav-item active">Availability</Link>
-          <a href="#schedule-builder" className="nav-item">Schedule</a>
-          <Link to="/requests" className="nav-item">Requests</Link>
-          <a href="#messages" className="nav-item">Messages</a>
-        </nav>
-
-        <div className="user-profile">
-          <div className="user-avatar">{avatarLetter}</div>
-          <div className="user-info">
-            <p className="user-name">{displayName}</p>
-            <p className="user-role">Tutor</p>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
       <main className="main-content">
-        <header className="header">
-          <h1>My availability</h1>
-          <button className="notification-icon">
-            <span className="notification-badge"></span>
-          </button>
-        </header>
+        <UCPageHeader title="My availability" />
 
         <div className="content-area">
           <div className="availability-card">
-            <div className="unit-info">My Unit: IFB398 / QUT YOU - OO6</div>
+            <div className="unit-info">My Unit: {activeUnit.unitCode}</div>
 
             <div className="legend">
               <div className="legend-item">
@@ -236,7 +226,6 @@ const TutorAvailability = () => {
         </div>
       </main>
 
-      {/* Success Message */}
       {showSuccess && (
         <div className="success-message">
           Availability saved successfully!

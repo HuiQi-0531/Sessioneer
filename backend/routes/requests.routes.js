@@ -4,8 +4,8 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all requests (Tutor view)
-router.get('/requests', verifyToken, async (req, res) => {
+// Get the logged-in tutor's own requests only
+router.get('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -23,10 +23,11 @@ router.get('/requests', verifyToken, async (req, res) => {
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       LEFT JOIN units un ON cr.unit_id = un.id
+      WHERE cr.tutor_id = $1
       ORDER BY 
         CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
         cr.created_at DESC
-    `);
+    `, [req.user.id]);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching requests:', error);
@@ -75,7 +76,7 @@ router.post('/requests', verifyToken, async (req, res) => {
 
     res.status(201).json({
       ...result.rows[0],
-      tutorName: tutorName || 'Elaine Lee',
+      tutorName: req.user.email,
       unitCode,
     });
   } catch (error) {
@@ -85,7 +86,7 @@ router.post('/requests', verifyToken, async (req, res) => {
 });
 
 // Update request
-router.patch('/requests/:id', verifyToken, async (req, res) => {
+router.patch('/requests/:id', verifyToken, requireRole('tutor'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
@@ -95,7 +96,7 @@ router.patch('/requests/:id', verifyToken, async (req, res) => {
       SET 
         status = COALESCE($1, status),
         review_notes = COALESCE($2, review_notes)
-      WHERE id = $3
+      WHERE id = $3 AND tutor_id = $4
       RETURNING 
         id,
         request_type as "requestType",
@@ -106,7 +107,7 @@ router.patch('/requests/:id', verifyToken, async (req, res) => {
         current_session as "currentSession",
         preferred_swap_to as "preferredSwapTo",
         created_at as "submittedDate"
-    `, [status, reviewNotes, id]);
+    `, [status, reviewNotes, id, req.user.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });
@@ -121,10 +122,10 @@ router.patch('/requests/:id', verifyToken, async (req, res) => {
 });
 
 // Delete request
-router.delete('/requests/:id', verifyToken, async (req, res) => {
+router.delete('/requests/:id', verifyToken, requireRole('tutor'), async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('DELETE FROM change_requests WHERE id = $1 RETURNING id', [id]);
+    const result = await pool.query('DELETE FROM change_requests WHERE id = $1 AND tutor_id = $2 RETURNING id', [id, req.user.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });

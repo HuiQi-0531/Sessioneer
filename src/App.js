@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import DashboardPage from './pages/DashboardPage.jsx'
+import RoleBasedHome from './components/RoleBasedHome.jsx'
 import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
@@ -12,6 +12,7 @@ import ImportSessions from './pages/ImportSessions.jsx';
 import Tutors from './pages/Tutors.jsx';
 import ScheduleBuilder from './pages/ScheduleBuilder.jsx';
 import Messages from './pages/Messages.jsx';
+import TutorSchedule from './pages/TutorSchedule.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -26,13 +27,10 @@ function App() {
         <ActiveUnitProvider>
         <Routes>
           <Route path="/" element={
-            <ProtectedRoute><DashboardPage /></ProtectedRoute>
+            <ProtectedRoute><RoleBasedHome /></ProtectedRoute>
           } />
           <Route path="/availability" element={
             <ProtectedRoute><TutorAvailability /></ProtectedRoute>
-          } />
-          <Route path="/session" element={
-            <ProtectedRoute><TutorSession /></ProtectedRoute>
           } />
           <Route path="/requests" element={
             <ProtectedRoute><TutorRequests /></ProtectedRoute>
@@ -66,6 +64,12 @@ function App() {
           } />
           <Route path="/messages" element={
             <ProtectedRoute allowedRoles={['coordinator']}><Messages /></ProtectedRoute>
+          } />
+          <Route path="/tutor-schedule/:unitId" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorSchedule /></ProtectedRoute>
+          } />
+          <Route path="/tutor-sessions/:unitId" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

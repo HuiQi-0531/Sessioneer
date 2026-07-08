@@ -42,12 +42,32 @@ const formatSessionRow = (s) => ({
   unitCode: s.unit_code || null
 });
 
-// Get all sessions for a unit (coordinator view)
-router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
+// Get all sessions for a unit. Coordinators must own the unit; tutors
+// must be linked to it (via availability or an assigned session).
+router.get('/', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
-    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
-    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    if (req.user.role === 'coordinator') {
+      const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+      if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+    } else if (req.user.role === 'tutor') {
+      const linkedResult = await pool.query(
+        `
+        SELECT 1 WHERE EXISTS (
+          SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+          UNION
+          SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+        )
+        `,
+        [req.user.id, unitId]
+      );
+      if (linkedResult.rows.length === 0) {
+        return res.status(403).json({ error: 'You are not linked to this unit' });
+      }
+    } else {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const result = await pool.query(
       `

@@ -177,6 +177,14 @@ export const availabilityAPI = {
 };
 
 export const unitsAPI = {
+  getMyUnits: async () => {
+    const response = await fetch(`${API_URL}/units/my-units`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch units');
+    return response.json();
+  },
+
   getAll: async () => {
     const response = await fetch(`${API_URL}/units`, {
       headers: authHeader()
@@ -226,6 +234,25 @@ export const unitsAPI = {
 };
 
 export const sessionsAPI = {
+  getMyAssigned: async (unitId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/my-assigned`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch your sessions');
+    return response.json();
+  },
+
+  confirmSession: async (unitId, sessionId, confirmed, reason) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}/confirm`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ confirmed, reason })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to update session');
+    return data;
+  },
+
   getAll: async (unitId) => {
     const response = await fetch(`${API_URL}/units/${unitId}/sessions`, {
       headers: authHeader()
@@ -316,6 +343,16 @@ export const tutorsAPI = {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update tutor marker');
     return data;
+  }
+};
+
+export const tutorDashboardAPI = {
+  getSummary: async () => {
+    const response = await fetch(`${API_URL}/tutor/dashboard-summary`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
+    return response.json();
   }
 };
 

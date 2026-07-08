@@ -1,0 +1,320 @@
+.ts-content {
+  padding: 24px 32px;
+}
+
+.ts-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.ts-toggle-btn {
+  border: 1px solid #d1d5db;
+  background-color: #fff;
+  color: #374151;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ts-toggle-btn.active {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.ts-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  background-color: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.ts-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.ts-table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.ts-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.ts-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ts-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.ts-status-badge.pending {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.ts-status-badge.confirmed {
+  background-color: #d1fae5;
+  color: #059669;
+}
+
+.ts-status-badge.declined {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.ts-action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ts-confirm-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: #22c55e;
+  color: #fff;
+  font-size: 13px;
+}
+
+.ts-confirm-btn:hover {
+  background-color: #16a34a;
+}
+
+.ts-decline-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.ts-decline-btn:hover {
+  background-color: #fecaca;
+}
+
+.ts-reject-reason {
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: 4px;
+}
+
+/* Modal */
+.ts-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+
+.ts-modal-content {
+  background-color: #fff;
+  border-radius: 14px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.ts-modal-content h3 {
+  margin-bottom: 6px;
+}
+
+.ts-modal-session-info {
+  color: #6b7280;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.ts-modal-content textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.ts-modal-error {
+  color: #b91c1c;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.ts-modal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ts-modal-buttons button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.ts-modal-buttons .cancel {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.ts-modal-buttons .confirm {
+  background-color: #b91c1c;
+  color: #fff;
+}
+
+/* Grid view - reuses the same layout technique as the coordinator's Schedule Builder */
+.ts-grid-legend {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.ts-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.ts-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.ts-legend-dot.confirmed { background-color: #22c55e; }
+.ts-legend-dot.pending { background-color: #f59e0b; }
+.ts-legend-dot.declined { background-color: #ef4444; }
+
+.ts-grid-wrapper {
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.ts-grid {
+  display: grid;
+  grid-template-columns: 70px repeat(5, 1fr);
+  min-width: 700px;
+  border-top: 1px solid #f3f4f6;
+  border-left: 1px solid #f3f4f6;
+}
+
+.ts-grid-corner {
+  grid-column: 1;
+  grid-row: 1;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f3f4f6;
+}
+
+.ts-grid-day-header {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f3f4f6;
+}
+
+.ts-grid-time-label {
+  grid-column: 1;
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f3f4f6;
+  display: flex;
+  align-items: flex-start;
+}
+
+.ts-grid-block {
+  margin: 2px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  padding: 6px 8px;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ts-grid-block.confirmed {
+  background-color: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.ts-grid-block.pending {
+  background-color: #fef3c7;
+  border: 1px solid #fcd34d;
+}
+
+.ts-grid-block.declined {
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+}
+
+.ts-grid-block-time {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.ts-grid-block-type {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.ts-grid-block-status {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ts-grid-note {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 10px;
+}

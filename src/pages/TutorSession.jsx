@@ -1,324 +1,166 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { sessionsAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
+import TutorSidebar from '../components/TutorSidebar';
+import UCPageHeader from '../components/UCPageHeader';
 import '../styles/TutorSession.css';
 
+const DAY_TO_INDEX = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4 };
+
 const TutorSession = () => {
+  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
 
-    const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [rawSessions, setRawSessions] = useState([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-    const compactTimeSlots = [
-        '8am',
-        '9am',
-        '10am',
-        '11am',
-        '12pm',
-        '1pm',
-        '2pm',
-        '3pm',
-        '4pm',
-        '5pm'
-    ];
+  const compactTimeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'];
+  const fullTimeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm', '8pm', '9pm'];
+  const timeSlots = fullscreen ? fullTimeSlots : compactTimeSlots;
 
-    const fullTimeSlots = [
-        '8am',
-        '9am',
-        '10am',
-        '11am',
-        '12pm',
-        '1pm',
-        '2pm',
-        '3pm',
-        '4pm',
-        '5pm',
-        '6pm',
-        '7pm',
-        '8pm',
-        '9pm'
-    ];
+  useEffect(() => {
+    if (!activeUnit) {
+      setIsLoadingSessions(false);
+      return;
+    }
+    loadSessions(activeUnit.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit]);
 
-    const timeSlots = fullscreen
-        ? fullTimeSlots
-        : compactTimeSlots;
+  const loadSessions = async (unitId) => {
+    setIsLoadingSessions(true);
+    try {
+      const data = await sessionsAPI.getAll(unitId);
+      setRawSessions(data);
+    } catch (err) {
+      console.error('Error loading unit sessions:', err);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
 
-    const sessions = [
-        {
-            title: 'Lecture',
-            code: 'GP-0603',
-            tutor: 'Alex Chen',
-            day: 0,
-            start: 0,
-            duration: 2,
-            color: 'green'
-        },
-        {
-            title: 'Lecture',
-            code: 'GP-0407',
-            tutor: 'Unassigned',
-            day: 2,
-            start: 1,
-            duration: 2,
-            color: 'red'
-        },
-        {
-            title: 'TUT02',
-            code: 'GP-0407',
-            tutor: 'Michael',
-            day: 4,
-            start: 0,
-            duration: 2,
-            color: 'yellow'
-        },
-        {
-            title: 'TUT02',
-            code: 'GP-0407',
-            tutor: 'Sam Rivera',
-            day: 1,
-            start: 2,
-            duration: 2,
-            color: 'yellow'
-        },
-        {
-            title: 'TUT03',
-            code: 'GP-0407',
-            tutor: 'Jordan Yu',
-            day: 2,
-            start: 3,
-            duration: 2,
-            color: 'green'
-        },
-        {
-            title: 'TUT06',
-            code: 'GP-0407',
-            tutor: 'Unassigned',
-            day: 3,
-            start: 4,
-            duration: 2,
-            color: 'red'
-        },
-        {
-            title: 'TUT05',
-            code: 'GP-0603',
-            tutor: 'Jordan Yu',
-            day: 1,
-            start: 5,
-            duration: 2,
-            color: 'green'
-        },
-        {
-            title: 'TUT05',
-            code: 'GP-0603',
-            tutor: 'Michael',
-            day: 3,
-            start: 6,
-            duration: 2,
-            color: 'green'
-        },
-        {
-            title: 'TUT04',
-            code: 'GP-0407',
-            tutor: 'Unassigned',
-            day: 2,
-            start: 7,
-            duration: 2,
-            color: 'yellow'
-        },
-        {
-            title: 'TUT04',
-            code: 'GP-0407',
-            tutor: 'Unassigned',
-            day: 0,
-            start: 8,
-            duration: 2,
-            color: 'yellow'
-        }
-    ];
+  // Convert real session records into the {title, code, tutor, day, start, duration, color}
+  // shape the existing grid renderer expects.
+  const sessions = rawSessions
+    .filter(s => DAY_TO_INDEX[s.day] !== undefined)
+    .map(s => {
+      const startHour = parseInt(s.startTime.split(':')[0], 10);
+      const endHour = parseInt(s.endTime.split(':')[0], 10);
+      let color;
+      if (!s.isAssigned) color = 'red';
+      else if (s.tutorConfirmed === true) color = 'green';
+      else color = 'yellow';
 
+      return {
+        title: s.sessionType || 'Session',
+        code: s.location || '-',
+        tutor: s.isAssigned ? (s.assignedTutorName || 'Assigned') : 'Unassigned',
+        day: DAY_TO_INDEX[s.day],
+        start: Math.max(0, startHour - 8),
+        duration: Math.max(1, endHour - startHour),
+        color
+      };
+    });
+
+  if (unitLoading) {
     return (
-        <div className="dashboard-container">
+      <div className="dashboard-container">
+        <TutorSidebar activePage="sessions" />
+        <main className="main-content"><div style={{ padding: 32 }}>Loading...</div></main>
+      </div>
+    );
+  }
 
-            {/* Sidebar */}
-            {!fullscreen && (
-                <aside className="sidebar">
+  if (!activeUnit) {
+    return (
+      <div className="dashboard-container">
+        <TutorSidebar activePage="sessions" />
+        <main className="main-content">
+          <UCPageHeader title="Sessions" />
+          <div style={{ padding: 32 }}>No unit selected. Once you're linked to a unit, it'll show up here.</div>
+        </main>
+      </div>
+    );
+  }
 
-                    <div className="logo-section">
-                        <div className="logo">
-                            <span className="logo-icon">S</span>
-                        </div>
+  return (
+    <div className="dashboard-container">
+      {!fullscreen && <TutorSidebar activePage="sessions" />}
 
-                        <h2 className="brand-name">Sessioneer</h2>
-                    </div>
+      <main className={`main-content ${fullscreen ? 'fullscreen-main' : ''}`}>
+        {!fullscreen && <UCPageHeader title="Sessions" />}
 
-                    <nav className="navigation">
+        <div className={`sessions-wrapper ${fullscreen ? 'fullscreen-wrapper' : ''}`}>
+          <div className={`sessions-card ${fullscreen ? 'fullscreen-card' : ''}`}>
+            <div className="sessions-top">
+              <div>
+                <h3 className="sessions-title">{activeUnit.unitCode} - Session Schedule</h3>
+                <p className="sessions-subtitle">View all classes and tutoring sessions in this unit</p>
+              </div>
+            </div>
 
-                        <Link to="/" className="nav-item">
-                            Dashboard
-                        </Link>
-
-                        <Link to="/sessions" className="nav-item active">
-                            Sessions
-                        </Link>
-
-                        <Link to="/availability" className="nav-item">
-                            Availability
-                        </Link>
-
-                        <a href="#schedule-builder" className="nav-item">
-                            Schedule
-                        </a>
-
-                        <Link to="/requests" className="nav-item">
-                            Requests
-                        </Link>
-
-                        <a href="#messages" className="nav-item">
-                            Messages
-                        </a>
-
-                    </nav>
-
-                    <div className="user-profile">
-
-                        <div className="user-avatar">
-                            L
-                        </div>
-
-                        <div className="user-info">
-                            <p className="user-name">Elaine Lee</p>
-                            <p className="user-role">Tutor</p>
-                        </div>
-
-                    </div>
-
-                </aside>
-            )}
-
-            {/* Main Content */}
-            <main className={`main-content ${fullscreen ? 'fullscreen-main' : ''}`}>
-
-                {!fullscreen && (
-                    <header className="header">
-
-                        <h1>Sessions</h1>
-
-                        <button className="notification-btn">
-                            🔔
-                        </button>
-
-                    </header>
-                )}
-
-                <div className={`sessions-wrapper ${fullscreen ? 'fullscreen-wrapper' : ''}`}>
-
-                    <div className={`sessions-card ${fullscreen ? 'fullscreen-card' : ''}`}>
-
-                        <div className="sessions-top">
-
-                            <div>
-                                <h3 className="sessions-title">
-                                    Session Schedule
-                                </h3>
-
-                                <p className="sessions-subtitle">
-                                    View your allocated classes and tutoring sessions
-                                </p>
-                            </div>
-
-                        </div>
-
-                        {/* Timetable */}
-                        <div className="timetable-wrapper">
-
-                            {/* Header */}
-                            <div className="timetable-days">
-
-                                <div className="time-header"></div>
-
-                                {days.map((day) => (
-                                    <div key={day} className="day-header">
-                                        {day}
-                                    </div>
-                                ))}
-
-                            </div>
-
-                            {/* Grid */}
-                            <div className="timetable-grid">
-
-                                {/* Time */}
-                                <div className="time-column">
-
-                                    {timeSlots.map((time) => (
-                                        <div key={time} className="time-slot-label">
-                                            {time}
-                                        </div>
-                                    ))}
-
-                                </div>
-
-                                {/* Calendar */}
-                                <div className="calendar-grid">
-
-                                    {days.map((day, dayIndex) => (
-                                        <div key={dayIndex} className="calendar-column">
-
-                                            {timeSlots.map((time, index) => (
-                                                <div key={index} className="calendar-cell"></div>
-                                            ))}
-
-                                            {sessions
-                                                .filter((session) => session.day === dayIndex)
-                                                .map((session, index) => (
-
-                                                    <div
-                                                        key={index}
-                                                        className={`session-event-card ${session.color}`}
-                                                        style={{
-                                                            top: `${session.start * (fullscreen ? 50 : 70)}px`,
-                                                            height: `${session.duration * (fullscreen ? 50 : 70)}px`
-                                                        }}
-                                                    >
-
-                                                        <h4>{session.title}</h4>
-
-                                                        <p>{session.code}</p>
-
-                                                        <span>{session.tutor}</span>
-
-                                                    </div>
-
-                                                ))}
-
-                                        </div>
-                                    ))}
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        {/* Fullscreen Button */}
-                        <div className="fullscreen-btn-container">
-
-                            <button
-                                className="fullscreen-btn"
-                                onClick={() => setFullscreen(!fullscreen)}
-                            >
-                                {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                            </button>
-
-                        </div>
-
-                    </div>
-
+            {isLoadingSessions ? (
+              <p style={{ padding: 20, color: '#6b7280' }}>Loading sessions...</p>
+            ) : sessions.length === 0 ? (
+              <p style={{ padding: 20, color: '#6b7280' }}>No sessions have been added to this unit yet.</p>
+            ) : (
+              <div className="timetable-wrapper">
+                <div className="timetable-days">
+                  <div className="time-header"></div>
+                  {days.map((day) => (
+                    <div key={day} className="day-header">{day}</div>
+                  ))}
                 </div>
 
-            </main>
+                <div className="timetable-grid">
+                  <div className="time-column">
+                    {timeSlots.map((time) => (
+                      <div key={time} className="time-slot-label">{time}</div>
+                    ))}
+                  </div>
 
+                  <div className="calendar-grid">
+                    {days.map((day, dayIndex) => (
+                      <div key={dayIndex} className="calendar-column">
+                        {timeSlots.map((time, index) => (
+                          <div key={index} className="calendar-cell"></div>
+                        ))}
+
+                        {sessions
+                          .filter((session) => session.day === dayIndex)
+                          .map((session, index) => (
+                            <div
+                              key={index}
+                              className={`session-event-card ${session.color}`}
+                              style={{
+                                top: `${session.start * (fullscreen ? 50 : 70)}px`,
+                                height: `${session.duration * (fullscreen ? 50 : 70)}px`
+                              }}
+                            >
+                              <h4>{session.title}</h4>
+                              <p>{session.code}</p>
+                              <span>{session.tutor}</span>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="fullscreen-btn-container">
+              <button className="fullscreen-btn" onClick={() => setFullscreen(!fullscreen)}>
+                {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              </button>
+            </div>
+          </div>
         </div>
-    );
+      </main>
+    </div>
+  );
 };
 
 export default TutorSession;

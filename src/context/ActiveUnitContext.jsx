@@ -17,10 +17,10 @@ export const ActiveUnitProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   })();
 
-  const isCoordinator = currentUser?.role === 'coordinator';
+  const role = currentUser?.role;
 
   const refreshUnits = useCallback(async () => {
-    if (!isCoordinator) {
+    if (role !== 'coordinator' && role !== 'tutor') {
       setAllUnits([]);
       setIsLoading(false);
       return;
@@ -28,7 +28,9 @@ export const ActiveUnitProvider = ({ children }) => {
 
     setIsLoading(true);
     try {
-      const units = await unitsAPI.getAll();
+      const units = role === 'coordinator'
+        ? await unitsAPI.getAll()
+        : await unitsAPI.getMyUnits();
       setAllUnits(units);
 
       setActiveUnitIdState(prevId => {
@@ -44,7 +46,7 @@ export const ActiveUnitProvider = ({ children }) => {
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     refreshUnits();

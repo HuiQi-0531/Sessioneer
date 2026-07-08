@@ -13,6 +13,7 @@ const availabilityRoutes = require('./routes/availability.routes');
 const messagesRoutes = require('./routes/messages.routes');
 const unitMessagesRoutes = require('./routes/unitMessages.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -236,6 +237,7 @@ app.use('/units/:unitId/tutors', tutorsRoutes);
 app.use('/units/:unitId/messages', unitMessagesRoutes);
 app.use('/messages', messagesRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/tutor', dashboardRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 
