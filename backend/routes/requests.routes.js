@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { createNotification } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -46,10 +47,11 @@ router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => 
     const tutor_id = req.user.id;
 
     const unitResult = await pool.query(
-      'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
+      'SELECT id, unit_coordinator_id FROM units WHERE unit_code = $1 LIMIT 1',
       [unitCode]
     );
     const unit_id = unitResult.rows[0]?.id;
+    const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
 
     const priorityValue = priority || 'Normal';
 
@@ -69,6 +71,17 @@ router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => 
     `, [tutor_id, unit_id, requestType, reason, 'Pending', currentSession, preferredSwapTo, priorityValue]);
 
     console.log('New request created:', result.rows[0].id, 'priority:', priorityValue);
+
+    if (coordinatorId) {
+      await createNotification({
+        userId: coordinatorId,
+        type: 'request_submitted',
+        title: 'New swap/change request',
+        content: `${req.user.email} submitted a ${requestType || 'session'} request in ${unitCode}.`,
+        unitId: unit_id,
+        actionUrl: '/uc-requests'
+      });
+    }
 
     res.status(201).json({
       ...result.rows[0],
@@ -189,7 +202,7 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
   }
 });
 
-// Review a request (approve/reject/suggest)
+// Review a request (approve/reject/suggest) - notifies the tutor either way
 router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -215,15 +228,49 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
         status,
         priority,
         review_notes as "reviewNotes",
-        created_at as "submittedDate"
+        created_at as "submittedDate",
+        tutor_id,
+        unit_id
     `, [status, reviewNotes, reviewed_by_id, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });
     }
 
+    const updated = result.rows[0];
+
+    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [updated.unit_id]);
+    const unitCode = unitResult.rows[0]?.unit_code || 'your unit';
+
+    const statusLower = (status || '').toLowerCase();
+    let title, content;
+    if (statusLower === 'accepted') {
+      title = 'Request approved';
+      content = `Your request in ${unitCode} was approved.`;
+    } else if (statusLower === 'rejected') {
+      title = 'Request rejected';
+      content = `Your request in ${unitCode} was rejected.${reviewNotes ? ` Note: ${reviewNotes}` : ''}`;
+    } else if (statusLower === 'suggested') {
+      title = 'Alternative session suggested';
+      content = `Your coordinator suggested an alternative session for your request in ${unitCode}.`;
+    } else {
+      title = 'Request updated';
+      content = `Your request in ${unitCode} was updated to "${status}".`;
+    }
+
+    if (updated.tutor_id) {
+      await createNotification({
+        userId: updated.tutor_id,
+        type: `request_${statusLower || 'updated'}`,
+        title,
+        content,
+        unitId: updated.unit_id,
+        actionUrl: '/requests'
+      });
+    }
+
     console.log('Request reviewed:', id, status);
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (error) {
     console.error('Error reviewing request:', error);
     res.status(500).json({ error: 'Failed to review request' });
