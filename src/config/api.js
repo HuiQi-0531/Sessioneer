@@ -400,3 +400,31 @@ export const messagesAPI = {
     return response.json();
   }
 };
+
+export const notificationsAPI = {
+  getAll: async () => {
+    const response = await fetch(`${API_URL}/notifications`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch notifications');
+    return response.json();
+  },
+
+  markRead: async (id) => {
+    const response = await fetch(`${API_URL}/notifications/${id}/read`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to mark notification as read');
+    return response.json();
+  },
+
+  markAllRead: async () => {
+    const response = await fetch(`${API_URL}/notifications/read-all`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to mark notifications as read');
+    return response.json();
+  }
+};

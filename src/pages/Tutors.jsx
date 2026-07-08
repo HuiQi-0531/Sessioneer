@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { tutorsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
+import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/Tutors.css';
 
@@ -119,7 +120,7 @@ const Tutors = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="tutors" />
         <main className="uc-main-content">
-          <header className="uc-header"><h1>Tutors</h1></header>
+          <UCPageHeader title="Tutors" />
           <div className="tt-content">
             <div className="tt-empty-state">No unit selected. Choose one from the Active Unit menu, or create one first.</div>
           </div>
@@ -133,9 +134,7 @@ const Tutors = () => {
       <UCSidebar activePage="tutors" />
 
       <main className="uc-main-content">
-        <header className="uc-header">
-          <h1>Tutors</h1>
-        </header>
+        <UCPageHeader title="Tutors" />
 
         <div className="tt-content">
           <div className="tt-search-row">

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unitsAPI } from '../config/api';
 import '../styles/UCRequests.css';
 import '../styles/CreateUnit.css';
+import UCPageHeader from '../components/UCPageHeader';
 
 // Builds semester options like "Semester 1, 2025" through a few years ahead,
 // stored internally as "Semester 1|2025" so it can be split into
@@ -160,9 +161,7 @@ const CreateUnit = () => {
       </aside>
 
       <main className="uc-main-content">
-        <header className="uc-header">
-          <h1>Unit</h1>
-        </header>
+        <UCPageHeader title="Unit" />
 
         <div className="cu-content">
           <div className="cu-form-card">

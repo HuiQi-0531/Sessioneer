@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
+import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/Messages.css';
 
@@ -191,9 +192,7 @@ const Messages = () => {
       <UCSidebar activePage="messages" />
 
       <main className="uc-main-content">
-        <header className="uc-header">
-          <h1>Messages</h1>
-        </header>
+        <UCPageHeader title="Messages" />
 
         <div className="msg-container">
           <div className="msg-units-col">

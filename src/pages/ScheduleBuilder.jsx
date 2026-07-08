@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI, scheduleAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
+import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/ScheduleBuilder.css';
 
@@ -195,7 +196,7 @@ const ScheduleBuilder = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="schedule-builder" />
         <main className="uc-main-content">
-          <header className="uc-header"><h1>Schedule Builder</h1></header>
+          <UCPageHeader title="Schedule Builder" />
           <div className="sb-content">
             <div className="sb-empty-state">No unit selected. Choose one from the Active Unit menu, or create one first.</div>
           </div>
@@ -209,9 +210,7 @@ const ScheduleBuilder = () => {
       <UCSidebar activePage="schedule-builder" />
 
       <main className="uc-main-content">
-        <header className="uc-header">
-          <h1>Schedule Builder</h1>
-        </header>
+        <UCPageHeader title="Schedule Builder" />
 
         <div className="sb-content">
           <div className="sb-stats-row">

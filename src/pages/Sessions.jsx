@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
+import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/Sessions.css';
 
@@ -172,7 +173,7 @@ const Sessions = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="sessions" />
         <main className="uc-main-content">
-          <header className="uc-header"><h1>Sessions</h1></header>
+          <UCPageHeader title="Sessions" />
           <div className="ss-content">
             <div className="ss-empty-state">
               <p>No unit selected. Choose one from the Active Unit menu, or create one first.</p>
@@ -188,9 +189,7 @@ const Sessions = () => {
       <UCSidebar activePage="sessions" />
 
       <main className="uc-main-content">
-        <header className="uc-header">
-          <h1>Sessions</h1>
-        </header>
+        <UCPageHeader title="Sessions" />
 
         <div className="ss-content">
           <div className="ss-top-row">

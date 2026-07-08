@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { availabilityAPI } from "../config/api";
 import { useActiveUnit } from "../context/ActiveUnitContext";
 import UCSidebar from "../components/UCSidebar";
+import UCPageHeader from "../components/UCPageHeader";
 import "../styles/UCAvailability.css";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
@@ -111,7 +112,7 @@ export default function UCAvailability({ onSendReminder }) {
       <div className="uca-root">
         <UCSidebar activePage="availability" />
         <main className="uca-main">
-          <header className="uca-topbar"><h1 className="uca-topbar__title">Tutor Availability</h1></header>
+          <UCPageHeader title="Tutor Availability" />
           <div className="uca-content"><p style={{ padding: 24 }}>Loading...</p></div>
         </main>
       </div>
@@ -123,7 +124,7 @@ export default function UCAvailability({ onSendReminder }) {
       <div className="uca-root">
         <UCSidebar activePage="availability" />
         <main className="uca-main">
-          <header className="uca-topbar"><h1 className="uca-topbar__title">Tutor Availability</h1></header>
+          <UCPageHeader title="Tutor Availability" />
           <div className="uca-content">
             <p style={{ padding: 24 }}>No unit selected. Choose one from the Active Unit menu, or create one first.</p>
           </div>
@@ -137,10 +138,7 @@ export default function UCAvailability({ onSendReminder }) {
       <UCSidebar activePage="availability" />
 
       <main className="uca-main">
-        <header className="uca-topbar">
-          <h1 className="uca-topbar__title">Tutor Availability</h1>
-          <button className="uca-topbar__notification"><NotificationIcon /></button>
-        </header>
+        <UCPageHeader title="Tutor Availability" />
 
         <div className="uca-content">
           <div className={`uca-card ${isFullscreen ? 'uca-card--fullscreen' : ''}`}>
