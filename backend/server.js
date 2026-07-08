@@ -12,6 +12,7 @@ const requestsRoutes = require('./routes/requests.routes');
 const availabilityRoutes = require('./routes/availability.routes');
 const messagesRoutes = require('./routes/messages.routes');
 const unitMessagesRoutes = require('./routes/unitMessages.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -100,6 +101,20 @@ pool.query(`
     ) THEN
       ALTER TABLE sessions ADD COLUMN staff_note TEXT;
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'sessions' AND column_name = 'tutor_confirmed'
+    ) THEN
+      ALTER TABLE sessions ADD COLUMN tutor_confirmed BOOLEAN DEFAULT NULL;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'sessions' AND column_name = 'tutor_reject_reason'
+    ) THEN
+      ALTER TABLE sessions ADD COLUMN tutor_reject_reason TEXT;
+    END IF;
   END $$;
 `).then(() => {
   console.log('sessions schema OK');
@@ -139,8 +154,6 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
-// Add unit_id to messages so a message can belong to a unit's group chat
-// instead of (or as well as) being a 1-on-1 direct message.
 pool.query(`
   DO $$
   BEGIN
@@ -157,7 +170,6 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
-// Tracks each user's last-read timestamp per unit's group chat
 pool.query(`
   CREATE TABLE IF NOT EXISTS group_chat_reads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -168,6 +180,28 @@ pool.query(`
   );
 `).then(() => {
   console.log('group_chat_reads schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Safety net: notifications table should already exist from the original
+// schema, but create it if a deployment is missing it.
+pool.query(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    notification_type VARCHAR(50),
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    related_unit_id UUID REFERENCES units(id),
+    related_session_id UUID REFERENCES sessions(id),
+    action_url VARCHAR(255),
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`).then(() => {
+  console.log('notifications schema OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });
@@ -201,6 +235,7 @@ app.use('/units/:unitId/sessions', sessionsRoutes);
 app.use('/units/:unitId/tutors', tutorsRoutes);
 app.use('/units/:unitId/messages', unitMessagesRoutes);
 app.use('/messages', messagesRoutes);
+app.use('/notifications', notificationsRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 
@@ -215,43 +250,6 @@ app.listen(PORT, () => {
   console.log(`Backend server running`);
   console.log(`URL: http://localhost:${PORT}`);
   console.log(`Database: PostgreSQL (sessioneer_db)`);
-  console.log('=================================');
-  console.log('Available endpoints:');
-  console.log(`  GET    /health`);
-  console.log(`  POST   /auth/register`);
-  console.log(`  POST   /auth/login`);
-  console.log(`  GET    /units`);
-  console.log(`  GET    /units/:id`);
-  console.log(`  POST   /units`);
-  console.log(`  PUT    /units/:id`);
-  console.log(`  DELETE /units/:id`);
-  console.log(`  GET    /units/:unitId/sessions`);
-  console.log(`  POST   /units/:unitId/sessions`);
-  console.log(`  PUT    /units/:unitId/sessions/:sessionId`);
-  console.log(`  DELETE /units/:unitId/sessions/:sessionId`);
-  console.log(`  POST   /units/:unitId/sessions/import`);
-  console.log(`  GET    /units/:unitId/sessions/:sessionId/candidates`);
-  console.log(`  PATCH  /units/:unitId/sessions/:sessionId/assign`);
-  console.log(`  GET    /units/:unitId/tutors`);
-  console.log(`  PUT    /units/:unitId/tutors/:tutorId/marker`);
-  console.log(`  GET    /units/:unitId/messages/contacts`);
-  console.log(`  GET    /units/:unitId/messages/group-unread-count`);
-  console.log(`  GET    /messages/thread/:otherUserId`);
-  console.log(`  POST   /messages`);
-  console.log(`  PATCH  /messages/thread/:otherUserId/read`);
-  console.log(`  GET    /messages/my-contacts`);
-  console.log(`  GET    /messages/group/:unitId`);
-  console.log(`  POST   /messages/group/:unitId`);
-  console.log(`  PATCH  /messages/group/:unitId/read`);
-  console.log(`  GET    /requests`);
-  console.log(`  POST   /requests`);
-  console.log(`  PATCH  /requests/:id`);
-  console.log(`  DELETE /requests/:id`);
-  console.log(`  GET    /sessions`);
-  console.log(`  GET    /uc/requests`);
-  console.log(`  PATCH  /uc/requests/:id/review`);
-  console.log(`  GET    /availability`);
-  console.log(`  POST   /availability/submit`);
   console.log('=================================');
   console.log('Server is now waiting for requests...');
   console.log('Press Ctrl+C to stop');

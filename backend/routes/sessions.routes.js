@@ -6,8 +6,10 @@ const {
   normaliseTime,
   getHourlySlotsInRange,
   sessionDurationHours,
-  timeRangesOverlap
+  timeRangesOverlap,
+  timeToSlot
 } = require('../utils/normalise');
+const { createNotification } = require('../utils/notify');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -34,10 +36,13 @@ const formatSessionRow = (s) => ({
   staffNote: s.staff_note,
   isAssigned: s.is_assigned,
   assignedTutorId: s.assigned_tutor_id,
-  assignedTutorName: s.assigned_tutor_name || null
+  assignedTutorName: s.assigned_tutor_name || null,
+  tutorConfirmed: s.tutor_confirmed,
+  tutorRejectReason: s.tutor_reject_reason,
+  unitCode: s.unit_code || null
 });
 
-// Get all sessions for a unit
+// Get all sessions for a unit (coordinator view)
 router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { unitId } = req.params;
@@ -64,6 +69,38 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+/**
+ * GET /units/:unitId/sessions/my-assigned (tutor only)
+ * The logged-in tutor's own assigned sessions in this unit, including
+ * ones still awaiting their confirmation.
+ */
+router.get('/my-assigned', verifyToken, requireRole('tutor'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT s.*, un.unit_code
+      FROM sessions s
+      LEFT JOIN units un ON s.unit_id = un.id
+      WHERE s.unit_id = $1 AND s.assigned_tutor_id = $2
+      ORDER BY
+        CASE s.day
+          WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3
+          WHEN 'THU' THEN 4 WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6 ELSE 7
+        END,
+        s.start_time
+      `,
+      [unitId, req.user.id]
+    );
+
+    res.json(result.rows.map(formatSessionRow));
+  } catch (error) {
+    console.error('Error fetching assigned sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch assigned sessions' });
   }
 });
 
@@ -234,12 +271,7 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
 
 /**
  * GET /units/:unitId/sessions/:sessionId/candidates
- * Returns every tutor with a computed suitability ranking for this
- * specific session: their availability for the hours it covers, whether
- * they conflict with an already-assigned session, whether assigning them
- * would exceed their weekly max hours, and their priority tag.
- * Tutors who are hard-blocked (conflict or over max hours) are still
- * included but flagged, so the UI can grey them out with a clear reason.
+ * Returns every tutor with a computed suitability ranking for this session.
  */
 router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
@@ -287,14 +319,11 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [unitId, sessionId]
     );
 
-    const { timeToSlot } = require('../utils/normalise');
-
     const candidates = tutorsResult.rows.map(tutor => {
-      // Availability for the slots this session covers
       const tutorAvail = availResult.rows.filter(a => a.tutor_id === tutor.id);
       const slotPreferences = coveredSlots.map(slot => {
         const match = tutorAvail.find(a => timeToSlot(a.start_time) === slot);
-        return match ? match.preference : null; // null = no data submitted
+        return match ? match.preference : null;
       });
 
       const hasAnyAvailabilityData = tutorAvail.length > 0;
@@ -302,14 +331,12 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const allPreferred = slotPreferences.length > 0 && slotPreferences.every(p => p === 'preferred');
       const allKnown = slotPreferences.every(p => p !== null);
 
-      // Conflict check: same tutor already assigned to an overlapping session, same day
       const conflict = otherSessionsResult.rows.some(other =>
         other.assigned_tutor_id === tutor.id &&
         other.day === session.day &&
         timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
       );
 
-      // Hours check: sum of this tutor's other assigned sessions in this unit
       const existingHours = otherSessionsResult.rows
         .filter(other => other.assigned_tutor_id === tutor.id)
         .reduce((sum, other) => sum + sessionDurationHours(other.start_time, other.end_time), 0);
@@ -324,8 +351,6 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       if (!hasAnyAvailabilityData) warnings.push('No availability submitted');
       if ((tutor.priority_tag || 'Standard') === 'Risk') warnings.push('Flagged as risk');
 
-      // Scoring for sort order (higher is better); hard-blocked candidates
-      // are still scored so they sort sensibly within the blocked group.
       let availabilityScore = 0;
       slotPreferences.forEach(p => {
         if (p === 'preferred') availabilityScore += 2;
@@ -354,7 +379,6 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       };
     });
 
-    // Sort: available candidates first (by score desc), hard-blocked ones last
     candidates.sort((a, b) => {
       if (a.hardBlocked !== b.hardBlocked) return a.hardBlocked ? 1 : -1;
       return b.score - a.score;
@@ -373,9 +397,8 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 /**
  * PATCH /units/:unitId/sessions/:sessionId/assign
  * Body: { tutorId } to assign, or { tutorId: null } to unassign.
- * Refuses the assignment if it would create a hard-blocked conflict or
- * exceed the tutor's max hours (the UI should already prevent this via
- * the candidates list, but the server re-checks so it can't be bypassed).
+ * Assigning resets tutor_confirmed to pending (NULL) and notifies the tutor
+ * that they need to confirm or decline the session.
  */
 router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
@@ -389,7 +412,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       const result = await pool.query(
         `
         UPDATE sessions
-        SET assigned_tutor_id = NULL, is_assigned = FALSE
+        SET assigned_tutor_id = NULL, is_assigned = FALSE, tutor_confirmed = NULL, tutor_reject_reason = NULL
         WHERE id = $1 AND unit_id = $2
         RETURNING *
         `,
@@ -407,7 +430,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     const session = sessionResult.rows[0];
 
     const tutorResult = await pool.query(
-      'SELECT id, maximum_hours FROM users WHERE id = $1 AND role = $2',
+      'SELECT id, name, maximum_hours FROM users WHERE id = $1 AND role = $2',
       [tutorId, 'tutor']
     );
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Tutor not found' });
@@ -444,7 +467,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     const result = await pool.query(
       `
       UPDATE sessions
-      SET assigned_tutor_id = $1, is_assigned = TRUE
+      SET assigned_tutor_id = $1, is_assigned = TRUE, tutor_confirmed = NULL, tutor_reject_reason = NULL
       WHERE id = $2 AND unit_id = $3
       RETURNING *
       `,
@@ -461,10 +484,80 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       [sessionId]
     );
 
+    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [unitId]);
+    const unitCode = unitResult.rows[0]?.unit_code || 'a unit';
+
+    await createNotification({
+      userId: tutorId,
+      type: 'session_assigned',
+      title: 'New session assignment',
+      content: `You've been assigned to a ${session.day} session in ${unitCode}. Please confirm or decline it.`,
+      unitId,
+      sessionId,
+      actionUrl: `/tutor-schedule/${unitId}`
+    });
+
     res.json(formatSessionRow(withName.rows[0]));
   } catch (error) {
     console.error('Error assigning tutor:', error);
     res.status(500).json({ error: 'Failed to assign tutor' });
+  }
+});
+
+/**
+ * PATCH /units/:unitId/sessions/:sessionId/confirm (tutor only)
+ * Body: { confirmed: true } or { confirmed: false, reason: '...' }
+ * The tutor accepting or declining a session they were assigned to.
+ */
+router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor'), async (req, res) => {
+  try {
+    const { unitId, sessionId } = req.params;
+    const { confirmed, reason } = req.body;
+
+    const sessionResult = await pool.query(
+      'SELECT * FROM sessions WHERE id = $1 AND unit_id = $2 AND assigned_tutor_id = $3',
+      [sessionId, unitId, req.user.id]
+    );
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found or not assigned to you' });
+    }
+    const session = sessionResult.rows[0];
+
+    if (confirmed === false && (!reason || !reason.trim())) {
+      return res.status(400).json({ error: 'Please provide a reason for declining' });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE sessions
+      SET tutor_confirmed = $1, tutor_reject_reason = $2
+      WHERE id = $3
+      RETURNING *
+      `,
+      [confirmed, confirmed ? null : reason.trim(), sessionId]
+    );
+
+    const unitResult = await pool.query('SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1', [unitId]);
+    const unit = unitResult.rows[0];
+
+    if (unit) {
+      await createNotification({
+        userId: unit.unit_coordinator_id,
+        type: confirmed ? 'session_confirmed' : 'session_declined',
+        title: confirmed ? 'Tutor confirmed a session' : 'Tutor declined a session',
+        content: confirmed
+          ? `${req.user.email} confirmed their ${session.day} session in ${unit.unit_code}.`
+          : `${req.user.email} declined their ${session.day} session in ${unit.unit_code}: "${reason.trim()}"`,
+        unitId,
+        sessionId,
+        actionUrl: `/schedule-builder/${unitId}`
+      });
+    }
+
+    res.json(formatSessionRow(result.rows[0]));
+  } catch (error) {
+    console.error('Error confirming session:', error);
+    res.status(500).json({ error: 'Failed to update session confirmation' });
   }
 });
 

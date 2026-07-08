@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/Login.css';
 
 const Login = () => {
     const navigate = useNavigate();
+    const { refreshUnits } = useActiveUnit();
 
     const [formData, setFormData] = useState({
         email: '',
@@ -39,6 +41,7 @@ const Login = () => {
             localStorage.setItem('token', data.token);
 
             if (data.user.role === 'coordinator') {
+                await refreshUnits();
                 navigate('/uc-requests');
             } else {
                 navigate('/');
