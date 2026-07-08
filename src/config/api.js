@@ -1,5 +1,5 @@
 // API Configuration
-export const API_URL = 'http://localhost:5001';
+export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // Reads the saved token and returns the Authorization header,
 // or an empty object if there is no token (e.g. not logged in).
