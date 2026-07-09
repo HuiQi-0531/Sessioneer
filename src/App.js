@@ -5,6 +5,7 @@ import TutorSession from './pages/TutorSession.jsx';
 import TutorMessages from './pages/TutorMessages.jsx';
 import UCDashboard from './pages/UCDashboard.jsx';
 import Profile from './pages/Profile.jsx';
+import LogoutConfirm from './pages/LogoutConfirm.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -82,6 +83,9 @@ function App() {
           } />
           <Route path="/profile" element={
             <ProtectedRoute><Profile /></ProtectedRoute>
+          } />
+          <Route path="/logout" element={
+            <ProtectedRoute><LogoutConfirm /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

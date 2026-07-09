@@ -461,3 +461,29 @@
   .uc-section-title-row { flex-direction: column; align-items: flex-start; gap: 12px; }
   .uc-card-list    { max-height: none; }
 }
+.uc-user-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uc-user-footer-row .uc-user-profile {
+  flex: 1;
+  min-width: 0;
+}
+
+.uc-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.uc-logout-btn:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}

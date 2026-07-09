@@ -88,13 +88,23 @@ const TutorSidebar = ({ activePage }) => {
         {navItem('Messages', '/tutor-messages', 'messages')}
       </nav>
 
-      <Link to="/profile" className="uc-user-profile" style={{ textDecoration: 'none' }}>
-        <div className="uc-user-avatar">{avatarLetter}</div>
-        <div className="uc-user-info">
-          <p className="uc-user-name">{displayName}</p>
-          <p className="uc-user-role">Tutor</p>
-        </div>
-      </Link>
+      <div className="uc-user-footer-row">
+        <Link to="/profile" className="uc-user-profile" style={{ textDecoration: 'none' }}>
+          <div className="uc-user-avatar">{avatarLetter}</div>
+          <div className="uc-user-info">
+            <p className="uc-user-name">{displayName}</p>
+            <p className="uc-user-role">Tutor</p>
+          </div>
+        </Link>
+        <Link to="/logout" className="uc-logout-btn" aria-label="Log out" title="Log out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </Link>
+      </div>
     </aside>
   );
 };

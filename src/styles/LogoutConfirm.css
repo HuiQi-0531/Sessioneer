@@ -1,0 +1,76 @@
+.lo-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f7fa;
+  padding: 20px;
+}
+
+.lo-card {
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 40px 36px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.lo-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px auto;
+}
+
+.lo-card h1 {
+  font-size: 20px;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+
+.lo-card p {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 28px;
+}
+
+.lo-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.lo-buttons button {
+  flex: 1;
+  padding: 11px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+
+.lo-btn-cancel {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.lo-btn-cancel:hover {
+  background-color: #e5e7eb;
+}
+
+.lo-btn-confirm {
+  background-color: #b91c1c;
+  color: #fff;
+}
+
+.lo-btn-confirm:hover {
+  background-color: #991b1b;
+}
