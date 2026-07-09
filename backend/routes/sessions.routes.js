@@ -23,6 +23,11 @@ const getOwnedUnitId = async (unitId, coordinatorId) => {
   return result.rows[0]?.id || null;
 };
 
+const isScheduleLocked = async (unitId) => {
+  const result = await pool.query('SELECT schedule_locked FROM units WHERE id = $1', [unitId]);
+  return result.rows[0]?.schedule_locked || false;
+};
+
 const formatSessionRow = (s) => ({
   id: s.id,
   day: s.day,
@@ -417,14 +422,17 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 /**
  * PATCH /units/:unitId/sessions/:sessionId/assign
  * Body: { tutorId } to assign, or { tutorId: null } to unassign.
- * Assigning resets tutor_confirmed to pending (NULL) and notifies the tutor
- * that they need to confirm or decline the session.
+ * Refuses if the unit's schedule has been locked/finalised.
  */
 router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { unitId, sessionId } = req.params;
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    if (await isScheduleLocked(unitId)) {
+      return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
+    }
 
     const { tutorId } = req.body;
 
@@ -527,12 +535,16 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
 /**
  * PATCH /units/:unitId/sessions/:sessionId/confirm (tutor only)
  * Body: { confirmed: true } or { confirmed: false, reason: '...' }
- * The tutor accepting or declining a session they were assigned to.
+ * Refuses if the unit's schedule has been locked/finalised.
  */
 router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor'), async (req, res) => {
   try {
     const { unitId, sessionId } = req.params;
     const { confirmed, reason } = req.body;
+
+    if (await isScheduleLocked(unitId)) {
+      return res.status(409).json({ error: 'This schedule has been finalised and locked, so it can no longer be changed.' });
+    }
 
     const sessionResult = await pool.query(
       'SELECT * FROM sessions WHERE id = $1 AND unit_id = $2 AND assigned_tutor_id = $3',

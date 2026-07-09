@@ -207,6 +207,30 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Add schedule locking columns to units if they don't exist
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'schedule_locked'
+    ) THEN
+      ALTER TABLE units ADD COLUMN schedule_locked BOOLEAN DEFAULT FALSE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'schedule_locked_at'
+    ) THEN
+      ALTER TABLE units ADD COLUMN schedule_locked_at TIMESTAMP;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('units schedule_locked columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));

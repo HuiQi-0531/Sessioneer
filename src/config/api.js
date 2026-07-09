@@ -230,6 +230,30 @@ export const unitsAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete unit');
     return response.json();
+  },
+
+  lockSchedule: async (id, force) => {
+    const response = await fetch(`${API_URL}/units/${id}/lock-schedule`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ force })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const err = new Error(data.error || 'Failed to lock schedule');
+      err.details = data;
+      throw err;
+    }
+    return data;
+  },
+
+  unlockSchedule: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}/unlock-schedule`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to unlock schedule');
+    return response.json();
   }
 };
 
