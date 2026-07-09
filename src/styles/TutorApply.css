@@ -1,0 +1,158 @@
+.ta-page {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  padding: 40px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.ta-card {
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 36px 40px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  height: fit-content;
+}
+
+.ta-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.ta-logo-icon {
+  width: 36px;
+  height: 36px;
+  background-color: #e8f0fe;
+  color: #4285f4;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.ta-logo-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.ta-card h1 {
+  font-size: 22px;
+  color: #1f2937;
+  margin-bottom: 6px;
+}
+
+.ta-card > p {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 28px;
+}
+
+.ta-field {
+  margin-bottom: 18px;
+}
+
+.ta-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.ta-field input,
+.ta-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.ta-field textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.ta-file-input {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.ta-file-input:hover {
+  border-color: #4f46e5;
+}
+
+.ta-file-input input {
+  display: none;
+}
+
+.ta-file-name {
+  font-size: 13px;
+  color: #4f46e5;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.ta-file-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.ta-submit-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background-color: #4f46e5;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.ta-submit-btn:hover {
+  background-color: #4338ca;
+}
+
+.ta-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ta-error {
+  color: #b91c1c;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.ta-success-card {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.ta-success-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #d1fae5;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+}

@@ -1,0 +1,211 @@
+.tap-content {
+  padding: 24px 32px;
+}
+
+.tap-top-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.tap-direct-invite-btn {
+  border: 1px solid #d1d5db;
+  background-color: #fff;
+  color: #374151;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tap-direct-invite-btn:hover {
+  background-color: #f9fafb;
+}
+
+.tap-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  background-color: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.tap-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tap-card {
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.tap-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.tap-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.tap-card-email {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.tap-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.tap-badge.pending { background-color: #fef3c7; color: #b45309; }
+.tap-badge.invited { background-color: #dbeafe; color: #1d4ed8; }
+.tap-badge.accepted { background-color: #d1fae5; color: #059669; }
+
+.tap-card-detail-row {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.tap-card-detail-label {
+  color: #9ca3af;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.tap-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.tap-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tap-btn-resume {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.tap-btn-resume:hover {
+  background-color: #e5e7eb;
+}
+
+.tap-btn-invite {
+  background-color: #4f46e5;
+  color: #fff;
+}
+
+.tap-btn-invite:hover {
+  background-color: #4338ca;
+}
+
+/* Modals */
+.tap-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+
+.tap-modal-content {
+  background-color: #fff;
+  border-radius: 14px;
+  padding: 24px 28px;
+  max-width: 460px;
+  width: 100%;
+}
+
+.tap-modal-content h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.tap-modal-content p {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.tap-link-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tap-link-box input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  background-color: #f9fafb;
+}
+
+.tap-copy-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0 16px;
+  background-color: #4f46e5;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tap-modal-close-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tap-form-field {
+  margin-bottom: 14px;
+}
+
+.tap-form-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.tap-form-field input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}

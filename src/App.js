@@ -6,6 +6,9 @@ import TutorMessages from './pages/TutorMessages.jsx';
 import UCDashboard from './pages/UCDashboard.jsx';
 import Profile from './pages/Profile.jsx';
 import LogoutConfirm from './pages/LogoutConfirm.jsx';
+import TutorApply from './pages/TutorApply.jsx';
+import SetPassword from './pages/SetPassword.jsx';
+import TutorApplications from './pages/TutorApplications.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -86,6 +89,11 @@ function App() {
           } />
           <Route path="/logout" element={
             <ProtectedRoute><LogoutConfirm /></ProtectedRoute>
+          } />
+          <Route path="/apply" element={<TutorApply />} />
+          <Route path="/activate/:token" element={<SetPassword />} />
+          <Route path="/tutor-applications" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><TutorApplications /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

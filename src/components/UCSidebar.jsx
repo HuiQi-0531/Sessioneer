@@ -87,6 +87,7 @@ const UCSidebar = ({ activePage }) => {
         {navItem('Unit Setup', '/unit-setup', 'unit-setup')}
         {navItem('Sessions', activeUnit ? `/sessions/${activeUnit.id}` : '/unit-setup', 'sessions')}
         {navItem('Tutors', activeUnit ? `/tutors/${activeUnit.id}` : '/unit-setup', 'tutors')}
+        {navItem('Applications', '/tutor-applications', 'applications')}
         {navItem('Availability', '/uc-availability', 'availability')}
         {navItem('Schedule Builder', activeUnit ? `/schedule-builder/${activeUnit.id}` : '/unit-setup', 'schedule-builder')}
         {navItem('Requests', '/uc-requests', 'requests')}

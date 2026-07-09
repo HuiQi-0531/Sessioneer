@@ -15,6 +15,7 @@ const unitMessagesRoutes = require('./routes/unitMessages.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const profileRoutes = require('./routes/profile.routes');
+const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -256,6 +257,63 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Tutor application/onboarding tables
+pool.query(`
+  CREATE TABLE IF NOT EXISTS tutor_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50),
+    work_experience TEXT,
+    resume_filename VARCHAR(255),
+    resume_mime_type VARCHAR(100),
+    resume_data BYTEA,
+    status VARCHAR(20) DEFAULT 'pending',
+    applied_at TIMESTAMP DEFAULT NOW(),
+    invited_by_id UUID REFERENCES users(id),
+    invited_at TIMESTAMP,
+    invite_token VARCHAR(255) UNIQUE,
+    invite_token_expires_at TIMESTAMP,
+    created_user_id UUID REFERENCES users(id)
+  );
+`).then(() => {
+  console.log('tutor_applications schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Resume fields on the real users table too, so an accepted applicant's
+// resume stays visible on their tutor profile after their account exists.
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'resume_filename'
+    ) THEN
+      ALTER TABLE users ADD COLUMN resume_filename VARCHAR(255);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'resume_mime_type'
+    ) THEN
+      ALTER TABLE users ADD COLUMN resume_mime_type VARCHAR(100);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'resume_data'
+    ) THEN
+      ALTER TABLE users ADD COLUMN resume_data BYTEA;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('users resume columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -288,6 +346,7 @@ app.use('/messages', messagesRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/', dashboardRoutes);
 app.use('/profile', profileRoutes);
+app.use('/tutor-applications', tutorApplicationsRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 

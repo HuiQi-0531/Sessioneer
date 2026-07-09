@@ -533,6 +533,88 @@ export const profileAPI = {
   }
 };
 
+export const tutorApplicationsAPI = {
+  submit: async (data) => {
+    const response = await fetch(`${API_URL}/tutor-applications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to submit application');
+    return result;
+  },
+
+  getAll: async () => {
+    const response = await fetch(`${API_URL}/tutor-applications`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch applications');
+    return response.json();
+  },
+
+  downloadResume: async (applicationId, filename) => {
+    const response = await fetch(`${API_URL}/tutor-applications/${applicationId}/resume`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to download resume');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  },
+
+  downloadTutorResume: async (userId, filename) => {
+    const response = await fetch(`${API_URL}/tutor-applications/user/${userId}/resume`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to download resume');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  },
+
+  invite: async (applicationId) => {
+    const response = await fetch(`${API_URL}/tutor-applications/${applicationId}/invite`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
+    return result;
+  },
+
+  directInvite: async (name, email) => {
+    const response = await fetch(`${API_URL}/tutor-applications/direct-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ name, email })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to create invite');
+    return result;
+  },
+
+  verifyInvite: async (token) => {
+    const response = await fetch(`${API_URL}/tutor-applications/verify-invite/${token}`);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Invalid invite link');
+    return result;
+  },
+
+  acceptInvite: async (token, password) => {
+    const response = await fetch(`${API_URL}/tutor-applications/accept-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to create account');
+    return result;
+  }
+};
+
 export const notificationsAPI = {
   getAll: async () => {
     const response = await fetch(`${API_URL}/notifications`, {
