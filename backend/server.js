@@ -14,6 +14,7 @@ const messagesRoutes = require('./routes/messages.routes');
 const unitMessagesRoutes = require('./routes/unitMessages.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const profileRoutes = require('./routes/profile.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -231,6 +232,30 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Add notification preference columns to users if they don't exist
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'notify_session_updates'
+    ) THEN
+      ALTER TABLE users ADD COLUMN notify_session_updates BOOLEAN DEFAULT TRUE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'notify_request_updates'
+    ) THEN
+      ALTER TABLE users ADD COLUMN notify_request_updates BOOLEAN DEFAULT TRUE;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('users notification preference columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -262,6 +287,7 @@ app.use('/units/:unitId/messages', unitMessagesRoutes);
 app.use('/messages', messagesRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/', dashboardRoutes);
+app.use('/profile', profileRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 

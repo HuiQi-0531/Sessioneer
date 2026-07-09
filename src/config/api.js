@@ -490,6 +490,49 @@ export const messagesAPI = {
   }
 };
 
+export const profileAPI = {
+  get: async () => {
+    const response = await fetch(`${API_URL}/profile`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch profile');
+    return response.json();
+  },
+
+  update: async (data) => {
+    const response = await fetch(`${API_URL}/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update profile');
+    return result;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await fetch(`${API_URL}/profile/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to change password');
+    return result;
+  },
+
+  updateNotifications: async (notifySessionUpdates, notifyRequestUpdates) => {
+    const response = await fetch(`${API_URL}/profile/notifications`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ notifySessionUpdates, notifyRequestUpdates })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update notification preferences');
+    return result;
+  }
+};
+
 export const notificationsAPI = {
   getAll: async () => {
     const response = await fetch(`${API_URL}/notifications`, {

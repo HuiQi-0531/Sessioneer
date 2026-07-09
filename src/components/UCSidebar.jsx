@@ -93,13 +93,13 @@ const UCSidebar = ({ activePage }) => {
         {navItem('Messages', '/messages', 'messages')}
       </nav>
 
-      <div className="uc-user-profile">
+      <Link to="/profile" className="uc-user-profile" style={{ textDecoration: 'none' }}>
         <div className="uc-user-avatar">{avatarLetter}</div>
         <div className="uc-user-info">
           <p className="uc-user-name">{displayName}</p>
           <p className="uc-user-role">Unit Coordinator</p>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 };
