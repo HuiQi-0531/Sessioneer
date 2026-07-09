@@ -105,22 +105,26 @@
 .nb-item-body {
   flex: 1;
   min-width: 0;
+  text-align: left;
 }
 
 .nb-item-title {
   font-size: 13px;
   font-weight: 700;
   color: #1f2937;
+  text-align: left;
 }
 
 .nb-item-content {
   font-size: 12px;
   color: #6b7280;
   margin-top: 2px;
+  text-align: left;
 }
 
 .nb-item-time {
   font-size: 11px;
   color: #9ca3af;
   margin-top: 4px;
+  text-align: left;
 }

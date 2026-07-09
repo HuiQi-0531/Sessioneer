@@ -346,6 +346,16 @@ export const tutorsAPI = {
   }
 };
 
+export const ucDashboardAPI = {
+  getSummary: async () => {
+    const response = await fetch(`${API_URL}/uc/dashboard-summary`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
+    return response.json();
+  }
+};
+
 export const tutorDashboardAPI = {
   getSummary: async () => {
     const response = await fetch(`${API_URL}/tutor/dashboard-summary`, {

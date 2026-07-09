@@ -237,7 +237,7 @@ app.use('/units/:unitId/tutors', tutorsRoutes);
 app.use('/units/:unitId/messages', unitMessagesRoutes);
 app.use('/messages', messagesRoutes);
 app.use('/notifications', notificationsRoutes);
-app.use('/tutor', dashboardRoutes);
+app.use('/', dashboardRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/availability', availabilityRoutes);
 

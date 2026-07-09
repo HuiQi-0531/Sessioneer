@@ -3,6 +3,7 @@ import RoleBasedHome from './components/RoleBasedHome.jsx'
 import TutorAvailability from './pages/TutorAvailability.jsx';
 import TutorSession from './pages/TutorSession.jsx';
 import TutorMessages from './pages/TutorMessages.jsx';
+import UCDashboard from './pages/UCDashboard.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -74,6 +75,9 @@ function App() {
           } />
           <Route path="/tutor-messages" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorMessages /></ProtectedRoute>
+          } />
+          <Route path="/uc-dashboard" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><UCDashboard /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

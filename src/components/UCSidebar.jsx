@@ -83,7 +83,7 @@ const UCSidebar = ({ activePage }) => {
       </div>
 
       <nav className="uc-navigation">
-        {navItem('Dashboard', '#dashboard', 'dashboard')}
+        {navItem('Dashboard', '/uc-dashboard', 'dashboard')}
         {navItem('Unit Setup', '/unit-setup', 'unit-setup')}
         {navItem('Sessions', activeUnit ? `/sessions/${activeUnit.id}` : '/unit-setup', 'sessions')}
         {navItem('Tutors', activeUnit ? `/tutors/${activeUnit.id}` : '/unit-setup', 'tutors')}

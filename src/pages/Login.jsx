@@ -42,7 +42,7 @@ const Login = () => {
 
             if (data.user.role === 'coordinator') {
                 await refreshUnits();
-                navigate('/uc-requests');
+                navigate('/uc-dashboard');
             } else {
                 navigate('/');
             }
