@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { availabilityAPI } from "../config/api";
+import { availabilityAPI, unitsAPI } from "../config/api";
 import { useActiveUnit } from "../context/ActiveUnitContext";
 import UCSidebar from "../components/UCSidebar";
 import UCPageHeader from "../components/UCPageHeader";
@@ -28,14 +28,17 @@ function CheckIcon() {
 function XIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 }
-function NotificationIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-}
 function FullscreenIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>;
 }
 function ExitFullscreenIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>;
+}
+function LockIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+}
+function UnlockIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>;
 }
 function TutorIcon({ type }) {
   if (type === "star") return <StarIcon />;
@@ -44,7 +47,7 @@ function TutorIcon({ type }) {
 }
 
 export default function UCAvailability({ onSendReminder }) {
-  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+  const { activeUnit, isLoading: unitLoading, refreshUnits } = useActiveUnit();
 
   const [activeDay,      setActiveDay]      = useState("MON");
   const [zoom,           setZoom]           = useState(100);
@@ -54,6 +57,7 @@ export default function UCAvailability({ onSendReminder }) {
   const [availability,     setAvailability]     = useState({});
   const [submissionStatus, setSubmissionStatus] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
 
   useEffect(() => {
     if (!activeUnit) {
@@ -101,6 +105,27 @@ export default function UCAvailability({ onSendReminder }) {
     }
   };
 
+  const isDeadlinePassed = activeUnit?.availabilityDeadline &&
+    new Date() > new Date(activeUnit.availabilityDeadline);
+  const isWindowClosed = activeUnit?.availabilityLocked || isDeadlinePassed;
+
+  const handleToggleLock = async () => {
+    if (!activeUnit) return;
+    setIsTogglingLock(true);
+    try {
+      if (activeUnit.availabilityLocked) {
+        await unitsAPI.unlockAvailability(activeUnit.id);
+      } else {
+        await unitsAPI.lockAvailability(activeUnit.id);
+      }
+      await refreshUnits();
+    } catch (err) {
+      alert(err.message || 'Failed to update lock status.');
+    } finally {
+      setIsTogglingLock(false);
+    }
+  };
+
   const dayData = availability[activeDay] ?? {};
   const getCellBadge = (tutorId, slot) => {
     const val = dayData[tutorId]?.[slot];
@@ -141,6 +166,15 @@ export default function UCAvailability({ onSendReminder }) {
         <UCPageHeader title="Tutor Availability" />
 
         <div className="uca-content">
+          {isWindowClosed && (
+            <div style={{
+              backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
+              borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 600
+            }}>
+              Submissions are closed for this unit{activeUnit.availabilityLocked ? ' (locked manually)' : ` (deadline passed: ${new Date(activeUnit.availabilityDeadline).toLocaleDateString()})`}.
+            </div>
+          )}
+
           <div className={`uca-card ${isFullscreen ? 'uca-card--fullscreen' : ''}`}>
             <div className="uca-controls-row">
               <div className="uca-controls-left">
@@ -156,6 +190,17 @@ export default function UCAvailability({ onSendReminder }) {
                 </div>
               </div>
               <div className="uca-toolbar">
+                <button
+                  className="uca-toolbar__btn uca-toolbar__btn--text"
+                  onClick={handleToggleLock}
+                  disabled={isTogglingLock}
+                  style={activeUnit.availabilityLocked ? { backgroundColor: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5' } : {}}
+                >
+                  {activeUnit.availabilityLocked ? <UnlockIcon /> : <LockIcon />}
+                  <span style={{ marginLeft: 6 }}>
+                    {isTogglingLock ? 'Updating...' : activeUnit.availabilityLocked ? 'Unlock Submissions' : 'Lock Submissions'}
+                  </span>
+                </button>
                 <button className="uca-toolbar__btn" onClick={zoomOut} aria-label="Zoom out">−</button>
                 <span className="uca-toolbar__zoom">{zoom}%</span>
                 <button className="uca-toolbar__btn" onClick={zoomIn} aria-label="Zoom in">+</button>

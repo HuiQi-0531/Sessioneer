@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -18,6 +18,14 @@ const timeToSlot = (timeStr) => {
 const AVAILABILITY_DAY_MAP = {
   Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI',
   MON: 'MON', TUE: 'TUE', WED: 'WED', THU: 'THU', FRI: 'FRI',
+};
+
+// True if the unit's availability window is closed, either because a
+// coordinator locked it manually or because the deadline has passed.
+const isAvailabilityLocked = (unit) => {
+  if (unit.availability_locked) return true;
+  if (unit.availability_deadline && new Date() > new Date(unit.availability_deadline)) return true;
+  return false;
 };
 
 /**
@@ -74,29 +82,32 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /availability/submit
- * Tutor submits their availability.
- * Body: { tutorEmail, unitCode, slots: { "Monday-8:00am": "preferred", ... } }
+ * POST /availability/submit (tutor only)
+ * Body: { unitCode, slots: { "Monday-8:00am": "preferred", ... } }
+ * Uses the logged-in tutor's own identity, not a client-supplied email.
+ * Refuses if the unit's availability window is locked or past its deadline.
  */
-router.post('/submit', verifyToken, async (req, res) => {
+router.post('/submit', verifyToken, requireRole('tutor'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { tutorEmail, unitCode, slots } = req.body;
-    if (!tutorEmail || !unitCode || !slots) {
-      return res.status(400).json({ error: 'tutorEmail, unitCode, and slots are required' });
+    const { unitCode, slots } = req.body;
+    if (!unitCode || !slots) {
+      return res.status(400).json({ error: 'unitCode and slots are required' });
     }
 
-    const tutorResult = await client.query(
-      'SELECT id FROM users WHERE email = $1 LIMIT 1', [tutorEmail]
-    );
-    if (!tutorResult.rows.length) return res.status(404).json({ error: 'Tutor not found' });
-    const tutor_id = tutorResult.rows[0].id;
+    const tutor_id = req.user.id;
 
     const unitResult = await client.query(
-      'SELECT id FROM units WHERE unit_code = $1 LIMIT 1', [unitCode]
+      'SELECT id, availability_locked, availability_deadline FROM units WHERE unit_code = $1 LIMIT 1',
+      [unitCode]
     );
     if (!unitResult.rows.length) return res.status(404).json({ error: 'Unit not found' });
-    const unit_id = unitResult.rows[0].id;
+    const unit = unitResult.rows[0];
+    const unit_id = unit.id;
+
+    if (isAvailabilityLocked(unit)) {
+      return res.status(409).json({ error: 'Availability submissions are closed for this unit.' });
+    }
 
     await client.query('BEGIN');
 
@@ -131,7 +142,7 @@ router.post('/submit', verifyToken, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Availability submitted: ${tutorEmail} for ${unitCode}`);
+    console.log(`Availability submitted: ${req.user.email} for ${unitCode}`);
     res.status(201).json({ success: true, message: 'Availability submitted successfully' });
 
   } catch (error) {

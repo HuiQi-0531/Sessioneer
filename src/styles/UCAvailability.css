@@ -50,7 +50,6 @@
 
 /* ── Root wrapper ── */
 .uca-root {
-  font-family: var(--uca-font);
   display: flex;
   min-height: 100vh;
   background: #f5f7fa;

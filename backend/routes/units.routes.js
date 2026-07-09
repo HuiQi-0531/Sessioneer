@@ -283,4 +283,56 @@ router.patch('/:id/unlock-schedule', verifyToken, requireRole('coordinator'), as
   }
 });
 
+// PATCH /units/:id/lock-availability (coordinator only) - manual early lock
+router.patch('/:id/lock-availability', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      UPDATE units
+      SET availability_locked = TRUE
+      WHERE id = $1 AND unit_coordinator_id = $2
+      RETURNING id, unit_code, unit_name, semester, year, campus,
+                delivery_mode, enrolment_size, availability_deadline,
+                availability_locked, schedule_locked, schedule_locked_at
+      `,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
+
+    res.json(formatUnit(result.rows[0]));
+  } catch (error) {
+    console.error('Error locking availability:', error);
+    res.status(500).json({ error: 'Failed to lock availability' });
+  }
+});
+
+// PATCH /units/:id/unlock-availability (coordinator only)
+router.patch('/:id/unlock-availability', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      UPDATE units
+      SET availability_locked = FALSE
+      WHERE id = $1 AND unit_coordinator_id = $2
+      RETURNING id, unit_code, unit_name, semester, year, campus,
+                delivery_mode, enrolment_size, availability_deadline,
+                availability_locked, schedule_locked, schedule_locked_at
+      `,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
+
+    res.json(formatUnit(result.rows[0]));
+  } catch (error) {
+    console.error('Error unlocking availability:', error);
+    res.status(500).json({ error: 'Failed to unlock availability' });
+  }
+});
+
 module.exports = router;

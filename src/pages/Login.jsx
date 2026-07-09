@@ -44,6 +44,7 @@ const Login = () => {
                 await refreshUnits();
                 navigate('/uc-dashboard');
             } else {
+                await refreshUnits();
                 navigate('/');
             }
 

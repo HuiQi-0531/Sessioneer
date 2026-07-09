@@ -254,6 +254,24 @@ export const unitsAPI = {
     });
     if (!response.ok) throw new Error('Failed to unlock schedule');
     return response.json();
+  },
+
+  lockAvailability: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}/lock-availability`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to lock availability');
+    return response.json();
+  },
+
+  unlockAvailability: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}/unlock-availability`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to unlock availability');
+    return response.json();
   }
 };
 

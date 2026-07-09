@@ -13,6 +13,7 @@ const TutorAvailability = () => {
   const [availabilityData, setAvailabilityData] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const timeSlots = [
@@ -20,6 +21,13 @@ const TutorAvailability = () => {
     '1:00pm', '2:00pm', '3:00pm', '4:00pm', '5:00pm',
     '6:00pm', '7:00pm', '8:00pm', '9:00pm'
   ];
+
+  // The window is closed if a coordinator locked it manually, or the
+  // deadline (if any) has passed.
+  const isWindowClosed = activeUnit && (
+    activeUnit.availabilityLocked ||
+    (activeUnit.availabilityDeadline && new Date() > new Date(activeUnit.availabilityDeadline))
+  );
 
   // The saved-availability cache is scoped per unit, so switching units
   // via the sidebar doesn't show another unit's selections.
@@ -33,12 +41,13 @@ const TutorAvailability = () => {
       setIsEditable(false);
     } else {
       setAvailabilityData({});
-      setIsEditable(true);
+      setIsEditable(!isWindowClosed);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   const handleSlotClick = (day, time) => {
-    if (!isEditable) return;
+    if (!isEditable || isWindowClosed) return;
 
     const slotKey = `${day}-${time}`;
     const currentState = availabilityData[slotKey] || 'unselected';
@@ -83,8 +92,9 @@ const TutorAvailability = () => {
   };
 
   const handleSubmit = async () => {
-    if (!activeUnit) return;
+    if (!activeUnit || isWindowClosed) return;
     setIsSubmitting(true);
+    setSubmitError('');
     try {
       await availabilityAPI.submit(activeUnit.unitCode, availabilityData);
       localStorage.setItem(storageKey, JSON.stringify(availabilityData));
@@ -94,13 +104,14 @@ const TutorAvailability = () => {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error('Submit error:', error);
-      alert('Failed to submit availability. Please try again.');
+      setSubmitError(error.message || 'Failed to submit availability. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleEdit = () => {
+    if (isWindowClosed) return;
     setIsEditable(true);
   };
 
@@ -162,18 +173,36 @@ const TutorAvailability = () => {
               </div>
             </div>
 
-            {isEditable ? (
+            {isWindowClosed ? (
+              <div className="warning-message" style={{ backgroundColor: '#fee2e2', borderLeftColor: '#ef4444' }}>
+                <span className="warning-icon" style={{ color: '#ef4444' }}>!</span>
+                <span>
+                  Submissions are closed for this unit
+                  {activeUnit.availabilityDeadline
+                    ? ` (deadline was ${new Date(activeUnit.availabilityDeadline).toLocaleDateString()})`
+                    : ''}. Contact your unit coordinator if you need to make changes.
+                </span>
+              </div>
+            ) : isEditable ? (
               <div className="warning-message">
                 <span className="warning-icon">!</span>
-                <span>Please select your preferred time before the due date!</span>
+                <span>
+                  Please select your preferred time before the due date!
+                  {activeUnit.availabilityDeadline &&
+                    ` Deadline: ${new Date(activeUnit.availabilityDeadline).toLocaleDateString()}`}
+                </span>
               </div>
             ) : (
               <div className="status-badges">
-                <div className="status-badge unlocked">UNLOCKED</div>
+                <div className="status-badge unlocked">SUBMITTED</div>
                 <div className="status-badge preferred">PREFERRED: {counts.preferred}</div>
                 <div className="status-badge available">AVAILABLE: {counts.available}</div>
                 <div className="status-badge avoid">AVOID: {counts.avoid}</div>
               </div>
+            )}
+
+            {submitError && (
+              <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{submitError}</p>
             )}
 
             <div className="availability-grid">
@@ -197,7 +226,7 @@ const TutorAvailability = () => {
                             <button
                               className={`time-slot ${state}`}
                               onClick={() => handleSlotClick(day, time)}
-                              disabled={!isEditable}
+                              disabled={!isEditable || isWindowClosed}
                             >
                               {state.toUpperCase()}
                             </button>
@@ -211,12 +240,12 @@ const TutorAvailability = () => {
             </div>
 
             <div className="action-buttons">
-              {!isEditable && (
+              {!isWindowClosed && !isEditable && (
                 <button className="btn btn-edit" onClick={handleEdit}>
                   Edit
                 </button>
               )}
-              {isEditable && (
+              {!isWindowClosed && isEditable && (
                 <button className="btn btn-submit" onClick={handleSubmit} disabled={isSubmitting}>
                   {isSubmitting ? 'Submitting...' : 'Submit'}
                 </button>
