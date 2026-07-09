@@ -80,7 +80,7 @@ const TutorSidebar = ({ activePage }) => {
       </div>
 
       <nav className="uc-navigation">
-        {navItem('Dashboard', '#dashboard', 'dashboard')}
+        {navItem('Dashboard', '/', 'dashboard')}
         {navItem('Sessions', activeUnit ? `/tutor-sessions/${activeUnit.id}` : '#sessions', 'sessions')}
         {navItem('Availability', '/availability', 'availability')}
         {navItem('Schedule', activeUnit ? `/tutor-schedule/${activeUnit.id}` : '#schedule', 'schedule')}
