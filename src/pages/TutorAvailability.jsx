@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { availabilityAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -6,8 +6,21 @@ import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/TutorAvailability.css';
 
+const DAY_CODE_TO_NAME = {
+  MON: 'Monday',
+  TUE: 'Tuesday',
+  WED: 'Wednesday',
+  THU: 'Thursday',
+  FRI: 'Friday'
+};
+
 const TutorAvailability = () => {
   const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+
+  const currentUser = useMemo(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  }, []);
 
   const [isEditable, setIsEditable] = useState(true);
   const [availabilityData, setAvailabilityData] = useState({});
@@ -29,22 +42,63 @@ const TutorAvailability = () => {
     (activeUnit.availabilityDeadline && new Date() > new Date(activeUnit.availabilityDeadline))
   );
 
-  // The saved-availability cache is scoped per unit, so switching units
-  // via the sidebar doesn't show another unit's selections.
-  const storageKey = activeUnit ? `availabilityData_${activeUnit.id}` : null;
+  const hydrateTutorAvailability = useCallback((data) => {
+    const tutorId = currentUser?.id;
+    if (!tutorId || !data?.availability) return {};
+
+    const next = {};
+    Object.entries(data.availability).forEach(([dayCode, tutorSlots]) => {
+      const dayName = DAY_CODE_TO_NAME[dayCode];
+      const slots = tutorSlots?.[tutorId];
+      if (!dayName || !slots) return;
+
+      Object.entries(slots).forEach(([time, preference]) => {
+        next[`${dayName}-${time}`] = preference;
+      });
+    });
+
+    return next;
+  }, [currentUser?.id]);
+
+  // The saved-availability cache is scoped per tutor and unit, so switching
+  // accounts in the same browser does not show another tutor's selections.
+  const storageKey = activeUnit && currentUser?.id
+    ? `availabilityData_${currentUser.id}_${activeUnit.id}`
+    : null;
 
   useEffect(() => {
     if (!storageKey) return;
-    const savedData = localStorage.getItem(storageKey);
-    if (savedData) {
-      setAvailabilityData(JSON.parse(savedData));
-      setIsEditable(false);
-    } else {
-      setAvailabilityData({});
-      setIsEditable(!isWindowClosed);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+
+    const loadSavedAvailability = async () => {
+      setSubmitError('');
+
+      try {
+        const data = await availabilityAPI.get(activeUnit.unitCode);
+        const backendAvailability = hydrateTutorAvailability(data);
+        const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
+
+        if (hasSubmittedAvailability) {
+          setAvailabilityData(backendAvailability);
+          localStorage.setItem(storageKey, JSON.stringify(backendAvailability));
+          setIsEditable(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Could not load saved availability:', error);
+      }
+
+      const savedData = localStorage.getItem(storageKey);
+      if (savedData) {
+        setAvailabilityData(JSON.parse(savedData));
+        setIsEditable(false);
+      } else {
+        setAvailabilityData({});
+        setIsEditable(!isWindowClosed);
+      }
+    };
+
+    loadSavedAvailability();
+  }, [activeUnit, storageKey, isWindowClosed, hydrateTutorAvailability]);
 
   const handleSlotClick = (day, time) => {
     if (!isEditable || isWindowClosed) return;
