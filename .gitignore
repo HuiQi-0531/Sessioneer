@@ -33,3 +33,4 @@ db.json
 
 # Docker volumes
 postgres_data/
+.vercel
