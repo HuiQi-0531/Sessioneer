@@ -188,12 +188,13 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
         un.unit_code as "unitCode"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
-      LEFT JOIN units un ON cr.unit_id = un.id
+      JOIN units un ON cr.unit_id = un.id
+      WHERE un.unit_coordinator_id = $1
       ORDER BY 
         CASE WHEN cr.status = 'Pending' THEN 0 ELSE 1 END,
         CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
         cr.created_at DESC
-    `);
+    `, [req.user.id]);
 
     res.json(result.rows);
   } catch (error) {
@@ -208,11 +209,6 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
 
-    const ucResult = await pool.query(
-      "SELECT id FROM users WHERE role = 'coordinator' LIMIT 1"
-    );
-    const reviewed_by_id = ucResult.rows[0]?.id;
-
     const result = await pool.query(`
       UPDATE change_requests 
       SET 
@@ -220,18 +216,21 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
         review_notes = $2, 
         reviewed_by_id = $3,
         reviewed_at = NOW()
-      WHERE id = $4
+      FROM units un
+      WHERE change_requests.id = $4
+        AND change_requests.unit_id = un.id
+        AND un.unit_coordinator_id = $5
       RETURNING 
-        id,
-        request_type as "requestType",
-        reason,
-        status,
-        priority,
-        review_notes as "reviewNotes",
-        created_at as "submittedDate",
-        tutor_id,
-        unit_id
-    `, [status, reviewNotes, reviewed_by_id, id]);
+        change_requests.id,
+        change_requests.request_type as "requestType",
+        change_requests.reason,
+        change_requests.status,
+        change_requests.priority,
+        change_requests.review_notes as "reviewNotes",
+        change_requests.created_at as "submittedDate",
+        change_requests.tutor_id,
+        change_requests.unit_id
+    `, [status, reviewNotes, req.user.id, id, req.user.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });

@@ -28,6 +28,28 @@ const isAvailabilityLocked = (unit) => {
   return false;
 };
 
+const getUnitForAvailability = async (unitCode) => {
+  const result = await pool.query(
+    'SELECT id, unit_coordinator_id FROM units WHERE unit_code = $1 LIMIT 1',
+    [unitCode || 'FIT3077']
+  );
+  return result.rows[0] || null;
+};
+
+const isTutorLinkedToUnit = async (tutorId, unitId) => {
+  const result = await pool.query(
+    `
+    SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+      UNION
+      SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+    )
+    `,
+    [tutorId, unitId]
+  );
+  return result.rows.length > 0;
+};
+
 /**
  * GET /availability?unitCode=FIT3077
  * UC page uses this to get all tutors, their submission status,
@@ -37,23 +59,36 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const { unitCode } = req.query;
 
-    const unitResult = await pool.query(
-      'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
-      [unitCode || 'FIT3077']
-    );
-    if (!unitResult.rows.length) return res.status(404).json({ error: 'Unit not found' });
-    const unit_id = unitResult.rows[0].id;
+    const unit = await getUnitForAvailability(unitCode);
+    if (!unit) return res.status(404).json({ error: 'Unit not found' });
+    const unit_id = unit.id;
+
+    const isCoordinatorOwner = req.user.role === 'coordinator' && unit.unit_coordinator_id === req.user.id;
+    const isLinkedTutor = req.user.role === 'tutor' && await isTutorLinkedToUnit(req.user.id, unit_id);
+
+    if (!isCoordinatorOwner && !isLinkedTutor) {
+      return res.status(403).json({ error: 'You do not have access to this unit availability' });
+    }
+
+    const tutorParams = isCoordinatorOwner ? [] : [req.user.id];
+    const tutorWhere = isCoordinatorOwner ? '' : 'AND id = $1';
 
     const tutorResult = await pool.query(
-      "SELECT id, name FROM users WHERE role = 'tutor' ORDER BY name"
+      `SELECT id, name FROM users WHERE role = 'tutor' ${tutorWhere} ORDER BY name`,
+      tutorParams
     );
     const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
+    const visibleTutorIds = new Set(tutors.map(t => t.id));
 
     const submittedResult = await pool.query(
       'SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
       [unit_id]
     );
-    const submittedIds = new Set(submittedResult.rows.map(r => r.tutor_id));
+    const submittedIds = new Set(
+      submittedResult.rows
+        .map(r => r.tutor_id)
+        .filter(id => visibleTutorIds.has(id))
+    );
 
     const submissionStatus = tutors.map(t => ({
       tutorId: t.id,
@@ -67,6 +102,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
     for (const row of availResult.rows) {
+      if (!visibleTutorIds.has(row.tutor_id)) continue;
       const day = AVAILABILITY_DAY_MAP[row.day];
       if (!day) continue;
       const slot = timeToSlot(row.start_time);

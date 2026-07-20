@@ -4,6 +4,32 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+const canAccessUnit = async (user, unitId) => {
+  if (user.role === 'coordinator') {
+    const result = await pool.query(
+      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
+      [unitId, user.id]
+    );
+    return result.rows.length > 0;
+  }
+
+  if (user.role === 'tutor') {
+    const result = await pool.query(
+      `
+      SELECT 1 WHERE EXISTS (
+        SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+        UNION
+        SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+      )
+      `,
+      [user.id, unitId]
+    );
+    return result.rows.length > 0;
+  }
+
+  return false;
+};
+
 // Get the full message thread between the logged-in user and another user (1-on-1)
 router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
   try {
@@ -157,6 +183,10 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
+    if (!(await canAccessUnit(req.user, unitId))) {
+      return res.status(403).json({ error: 'You do not have access to this unit chat' });
+    }
+
     const result = await pool.query(
       `
       SELECT m.id, m.sender_id, m.content, m.sent_at, u.name as sender_name
@@ -191,6 +221,10 @@ router.post('/group/:unitId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'content is required' });
     }
 
+    if (!(await canAccessUnit(req.user, unitId))) {
+      return res.status(403).json({ error: 'You do not have access to this unit chat' });
+    }
+
     const result = await pool.query(
       `
       INSERT INTO messages (sender_id, unit_id, content, sent_at)
@@ -219,6 +253,11 @@ router.post('/group/:unitId', verifyToken, async (req, res) => {
 router.patch('/group/:unitId/read', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
+
+    if (!(await canAccessUnit(req.user, unitId))) {
+      return res.status(403).json({ error: 'You do not have access to this unit chat' });
+    }
+
     await pool.query(
       `
       INSERT INTO group_chat_reads (unit_id, user_id, last_read_at)
