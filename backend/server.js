@@ -187,6 +187,27 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+pool.query(`
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
+    ON password_reset_tokens(user_id);
+
+  CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash
+    ON password_reset_tokens(token_hash);
+`).then(() => {
+  console.log('password_reset_tokens schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Safety net: notifications table should already exist from the original
 // schema, but create it if a deployment is missing it.
 pool.query(`

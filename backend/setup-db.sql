@@ -135,6 +135,16 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Password reset tokens table
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -142,6 +152,8 @@ CREATE INDEX IF NOT EXISTS idx_change_requests_tutor ON change_requests(tutor_id
 CREATE INDEX IF NOT EXISTS idx_change_requests_status ON change_requests(status);
 CREATE INDEX IF NOT EXISTS idx_sessions_unit ON sessions(unit_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_assigned_tutor ON sessions(assigned_tutor_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 
 -- Insert sample data
 INSERT INTO users (email, password_hash, role, name) VALUES
