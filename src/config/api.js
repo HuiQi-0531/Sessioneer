@@ -8,6 +8,22 @@ const authHeader = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+const withTimeout = async (request, timeoutMessage = 'Request timed out. Please try again.') => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    return await request(controller.signal);
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(timeoutMessage);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -46,13 +62,16 @@ export const authAPI = {
   },
 
   forgotPassword: async (email) => {
-    const response = await fetch(`${API_URL}/auth/forgot-password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email })
-    });
+    const response = await withTimeout((signal) => fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email }),
+        signal
+      }),
+      'Sending reset email timed out. Please try again.'
+    );
 
     const data = await response.json();
 
@@ -64,13 +83,16 @@ export const authAPI = {
   },
 
   resetPassword: async (token, newPassword) => {
-    const response = await fetch(`${API_URL}/auth/reset-password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ token, newPassword })
-    });
+    const response = await withTimeout((signal) => fetch(`${API_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token, newPassword }),
+        signal
+      }),
+      'Resetting password timed out. Please try again.'
+    );
 
     const data = await response.json();
 

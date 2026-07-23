@@ -43,6 +43,9 @@ const sendPasswordResetEmail = async (email, resetLink) => {
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port,
     secure: port === 465,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
