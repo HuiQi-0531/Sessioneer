@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const pool = require('../db');
 
 const router = express.Router();
@@ -33,46 +34,40 @@ const hashResetToken = (token) => {
 };
 
 const sendPasswordResetEmail = async (email, resetLink) => {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error('RESEND_API_KEY is not configured');
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('SMTP email credentials are not configured');
   }
 
-  const from = process.env.EMAIL_FROM || 'Sessioneer <onboarding@resend.dev>';
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from,
-      to: email,
-      subject: 'Reset your Sessioneer password',
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
-          <h2>Reset your Sessioneer password</h2>
-          <p>We received a request to reset your password.</p>
-          <p>
-            <a href="${resetLink}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
-              Reset password
-            </a>
-          </p>
-          <p>This link will expire in 30 minutes.</p>
-          <p>If you did not request this, you can ignore this email.</p>
-        </div>
-      `,
-      text: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
-    })
+  const port = Number(process.env.EMAIL_PORT || 465);
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port,
+    secure: port === 465,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
   });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.message || data.error || 'Failed to send reset email');
-  }
-
-  return data;
+  return transporter.sendMail({
+    from: process.env.EMAIL_FROM || `Sessioneer <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Reset your Sessioneer password',
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+        <h2>Reset your Sessioneer password</h2>
+        <p>We received a request to reset your password.</p>
+        <p>
+          <a href="${resetLink}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+            Reset password
+          </a>
+        </p>
+        <p>This link will expire in 30 minutes.</p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    `,
+    text: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
+  });
 };
 
 router.post('/register', async (req, res) => {
