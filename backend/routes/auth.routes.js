@@ -1,7 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const pool = require('../db');
 
 const router = express.Router();
@@ -34,44 +33,56 @@ const hashResetToken = (token) => {
 };
 
 const sendPasswordResetEmail = async (email, resetLink) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error('SMTP email credentials are not configured');
+  if (!process.env.BREVO_API_KEY || !process.env.EMAIL_FROM) {
+    throw new Error('Brevo email settings are not configured');
   }
 
-  const port = Number(process.env.EMAIL_PORT || 465);
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port,
-    secure: port === 465,
-    family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
+  const senderEmailMatch = process.env.EMAIL_FROM.match(/<([^>]+)>/);
+  const senderEmail = senderEmailMatch ? senderEmailMatch[1] : process.env.EMAIL_FROM;
+  const senderName = process.env.EMAIL_FROM.replace(/<[^>]+>/, '').trim() || 'Sessioneer';
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      sender: {
+        name: senderName,
+        email: senderEmail
+      },
+      to: [
+        {
+          email
+        }
+      ],
+      subject: 'Reset your Sessioneer password',
+      htmlContent: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+          <h2>Reset your Sessioneer password</h2>
+          <p>We received a request to reset your password.</p>
+          <p>
+            <a href="${resetLink}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+              Reset password
+            </a>
+          </p>
+          <p>This link will expire in 30 minutes.</p>
+          <p>If you did not request this, you can ignore this email.</p>
+        </div>
+      `,
+      textContent: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
+    })
   });
 
-  return transporter.sendMail({
-    from: process.env.EMAIL_FROM || `Sessioneer <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'Reset your Sessioneer password',
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
-        <h2>Reset your Sessioneer password</h2>
-        <p>We received a request to reset your password.</p>
-        <p>
-          <a href="${resetLink}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
-            Reset password
-          </a>
-        </p>
-        <p>This link will expire in 30 minutes.</p>
-        <p>If you did not request this, you can ignore this email.</p>
-      </div>
-    `,
-    text: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
-  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Brevo failed to send reset email');
+  }
+
+  return data;
 };
 
 router.post('/register', async (req, res) => {
