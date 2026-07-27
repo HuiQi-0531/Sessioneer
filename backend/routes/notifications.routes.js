@@ -4,11 +4,19 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-const formatNotification = (n) => ({
+const replaceEmailsWithNames = (content, users) => {
+  if (!content) return content;
+  return users.reduce((text, user) => {
+    if (!user.email || !user.name) return text;
+    return text.replaceAll(user.email, user.name);
+  }, content);
+};
+
+const formatNotification = (n, users = []) => ({
   id: n.id,
   type: n.notification_type,
   title: n.title,
-  content: n.content,
+  content: replaceEmailsWithNames(n.content, users),
   relatedUnitId: n.related_unit_id,
   relatedSessionId: n.related_session_id,
   actionUrl: n.action_url,
@@ -33,9 +41,10 @@ router.get('/', verifyToken, async (req, res) => {
       'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = FALSE',
       [req.user.id]
     );
+    const usersResult = await pool.query('SELECT name, email FROM users');
 
     res.json({
-      notifications: result.rows.map(formatNotification),
+      notifications: result.rows.map(n => formatNotification(n, usersResult.rows)),
       unreadCount: parseInt(unreadResult.rows[0].count, 10)
     });
   } catch (error) {

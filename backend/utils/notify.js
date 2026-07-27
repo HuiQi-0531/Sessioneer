@@ -48,4 +48,13 @@ const createNotification = async ({ userId, type, title, content, unitId, sessio
   }
 };
 
-module.exports = { createNotification };
+const getUserDisplayName = async (userId) => {
+  const result = await pool.query(
+    'SELECT name, email FROM users WHERE id = $1',
+    [userId]
+  );
+  const user = result.rows[0];
+  return user?.name || user?.email || 'Someone';
+};
+
+module.exports = { createNotification, getUserDisplayName };

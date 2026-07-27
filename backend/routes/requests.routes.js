@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { createNotification } = require('../utils/notify');
+const { createNotification, getUserDisplayName } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -83,12 +83,14 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     console.log('New request created:', result.rows[0].id, 'priority:', priorityValue);
 
+    const tutorDisplayName = await getUserDisplayName(req.user.id);
+
     if (coordinatorId) {
       await createNotification({
         userId: coordinatorId,
         type: 'request_submitted',
         title: 'New swap/change request',
-        content: `${req.user.email} submitted a ${requestType || 'session'} request in ${unitCode}.`,
+        content: `${tutorDisplayName} submitted a ${requestType || 'session'} request in ${unitCode}.`,
         unitId: unit_id,
         actionUrl: '/uc-requests'
       });
@@ -96,7 +98,7 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     res.status(201).json({
       ...result.rows[0],
-      tutorName: req.user.email,
+      tutorName: tutorDisplayName,
       unitCode,
     });
   } catch (error) {

@@ -9,7 +9,7 @@ const {
   timeRangesOverlap,
   timeToSlot
 } = require('../utils/normalise');
-const { createNotification } = require('../utils/notify');
+const { createNotification, getUserDisplayName } = require('../utils/notify');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -594,14 +594,16 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
     const unitResult = await pool.query('SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1', [unitId]);
     const unit = unitResult.rows[0];
 
+    const tutorDisplayName = await getUserDisplayName(req.user.id);
+
     if (unit) {
       await createNotification({
         userId: unit.unit_coordinator_id,
         type: confirmed ? 'session_confirmed' : 'session_declined',
         title: confirmed ? 'Tutor confirmed a session' : 'Tutor declined a session',
         content: confirmed
-          ? `${req.user.email} confirmed their ${session.day} session in ${unit.unit_code}.`
-          : `${req.user.email} declined their ${session.day} session in ${unit.unit_code}: "${reason.trim()}"`,
+          ? `${tutorDisplayName} confirmed their ${session.day} session in ${unit.unit_code}.`
+          : `${tutorDisplayName} declined their ${session.day} session in ${unit.unit_code}: "${reason.trim()}"`,
         unitId,
         sessionId,
         actionUrl: `/schedule-builder/${unitId}`
