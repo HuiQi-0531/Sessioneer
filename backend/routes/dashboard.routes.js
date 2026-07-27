@@ -6,12 +6,12 @@ const { isUnitActive } = require('../utils/normalise');
 const router = express.Router();
 
 /**
- * GET /tutor/dashboard-summary (tutor only)
+ * GET /tutor/dashboard-summary
  * Everything the tutor dashboard needs in one call: their units with
  * availability/assignment status, overall session counts, and pending
  * change request count.
  */
-router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor'), async (req, res) => {
+router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const tutorId = req.user.id;
 
@@ -23,6 +23,8 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor'), async 
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
         SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
+        UNION
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
       )
       ORDER BY u.year DESC, u.semester DESC
       `,
