@@ -12,7 +12,7 @@ const RoleBasedHome = () => {
   if (isLoading) return null;
 
   if (effectiveRole === 'coordinator') {
-    return <Navigate to="/uc-requests" replace />;
+    return <Navigate to="/uc-dashboard" replace />;
   }
 
   return <TutorDashboard />;
