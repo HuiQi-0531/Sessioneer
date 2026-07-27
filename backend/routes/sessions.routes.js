@@ -28,6 +28,22 @@ const isScheduleLocked = async (unitId) => {
   return result.rows[0]?.schedule_locked || false;
 };
 
+const isTutorLinkedToUnit = async (userId, unitId) => {
+  const result = await pool.query(
+    `
+    SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      UNION
+      SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+      UNION
+      SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+    )
+    `,
+    [userId, unitId]
+  );
+  return result.rows.length > 0;
+};
+
 const formatSessionRow = (s) => ({
   id: s.id,
   day: s.day,
@@ -56,22 +72,11 @@ router.get('/', verifyToken, async (req, res) => {
     if (req.user.role === 'coordinator') {
       const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
       if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
-    } else if (req.user.role === 'tutor') {
-      const linkedResult = await pool.query(
-        `
-        SELECT 1 WHERE EXISTS (
-          SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
-          UNION
-          SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
-        )
-        `,
-        [req.user.id, unitId]
-      );
-      if (linkedResult.rows.length === 0) {
+    } else {
+      const isLinkedTutor = await isTutorLinkedToUnit(req.user.id, unitId);
+      if (!isLinkedTutor) {
         return res.status(403).json({ error: 'You are not linked to this unit' });
       }
-    } else {
-      return res.status(403).json({ error: 'Forbidden' });
     }
 
     const result = await pool.query(
@@ -102,7 +107,7 @@ router.get('/', verifyToken, async (req, res) => {
  * The logged-in tutor's own assigned sessions in this unit, including
  * ones still awaiting their confirmation.
  */
-router.get('/my-assigned', verifyToken, requireRole('tutor'), async (req, res) => {
+router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { unitId } = req.params;
 
@@ -320,7 +325,9 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       SELECT u.id, u.name, u.email, u.maximum_hours, m.priority_tag
       FROM users u
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
-      WHERE u.role = 'tutor'
+      LEFT JOIN unit_memberships um
+        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
+      WHERE u.role = 'tutor' OR um.id IS NOT NULL
       ORDER BY u.name
       `,
       [unitId]
@@ -458,8 +465,14 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     const session = sessionResult.rows[0];
 
     const tutorResult = await pool.query(
-      'SELECT id, name, maximum_hours FROM users WHERE id = $1 AND role = $2',
-      [tutorId, 'tutor']
+      `
+      SELECT u.id, u.name, u.maximum_hours
+      FROM users u
+      LEFT JOIN unit_memberships um
+        ON um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor'
+      WHERE u.id = $1 AND (u.role = 'tutor' OR um.id IS NOT NULL)
+      `,
+      [tutorId, unitId]
     );
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Tutor not found' });
     const tutor = tutorResult.rows[0];
@@ -502,6 +515,15 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       [tutorId, sessionId, unitId]
     );
 
+    await pool.query(
+      `
+      INSERT INTO unit_memberships (unit_id, user_id, role)
+      VALUES ($1, $2, 'tutor')
+      ON CONFLICT (unit_id, user_id, role) DO NOTHING
+      `,
+      [unitId, tutorId]
+    );
+
     const withName = await pool.query(
       `
       SELECT s.*, u.name as assigned_tutor_name
@@ -537,7 +559,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
  * Body: { confirmed: true } or { confirmed: false, reason: '...' }
  * Refuses if the unit's schedule has been locked/finalised.
  */
-router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor'), async (req, res) => {
+router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { unitId, sessionId } = req.params;
     const { confirmed, reason } = req.body;

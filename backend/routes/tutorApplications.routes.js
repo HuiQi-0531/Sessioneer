@@ -132,6 +132,8 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
       return res.status(400).json({ error: 'Name and email are required' });
     }
 
+    // TODO: Later, if this email already belongs to an existing user, add a
+    // tutor unit membership instead of creating a duplicate invite/account.
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 

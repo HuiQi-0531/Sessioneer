@@ -3,6 +3,10 @@
 }
 
 .tt-search-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -18,6 +22,28 @@
 .tt-search-input:focus {
   outline: none;
   border-color: #4f46e5;
+}
+
+.tt-add-self-btn {
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  padding: 0 16px;
+  background-color: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tt-add-self-btn:hover {
+  background-color: #1d4ed8;
+}
+
+.tt-add-self-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 .tt-empty-state {

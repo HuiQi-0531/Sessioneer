@@ -4,40 +4,61 @@ import { unitsAPI } from '../config/api';
 const ActiveUnitContext = createContext(null);
 
 const STORAGE_KEY = 'activeUnitId';
+const ROLE_STORAGE_KEY = 'activeViewRole';
+const ROLE_LABELS = {
+  coordinator: 'Unit Coordinator',
+  tutor: 'Tutor'
+};
+
+const getCurrentUser = () => {
+  const saved = localStorage.getItem('currentUser');
+  return saved ? JSON.parse(saved) : null;
+};
+
+const getDefaultRole = (unit, preferredRole, fallbackRole) => {
+  const roles = unit?.roles || [];
+  if (preferredRole && roles.includes(preferredRole)) return preferredRole;
+  if (fallbackRole && roles.includes(fallbackRole)) return fallbackRole;
+  return roles[0] || null;
+};
 
 export const ActiveUnitProvider = ({ children }) => {
   const [allUnits, setAllUnits] = useState([]);
   const [activeUnitId, setActiveUnitIdState] = useState(() => {
     return localStorage.getItem(STORAGE_KEY) || null;
   });
+  const [activeViewRole, setActiveViewRoleState] = useState(() => {
+    return localStorage.getItem(ROLE_STORAGE_KEY) || null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
-  const currentUser = (() => {
-    const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : null;
-  })();
-
-  const role = currentUser?.role;
-
   const refreshUnits = useCallback(async () => {
-    if (role !== 'coordinator' && role !== 'tutor') {
+    const latestFallbackRole = getCurrentUser()?.role;
+
+    if (latestFallbackRole !== 'coordinator' && latestFallbackRole !== 'tutor') {
       setAllUnits([]);
+      setActiveUnitIdState(null);
+      setActiveViewRoleState(null);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      const units = role === 'coordinator'
-        ? await unitsAPI.getAll()
-        : await unitsAPI.getMyUnits();
+      const units = await unitsAPI.getMyAccess();
       setAllUnits(units);
 
       setActiveUnitIdState(prevId => {
-        const stillExists = units.some(u => u.id === prevId);
-        if (stillExists) return prevId;
+        const stillExists = units.find(u => u.id === prevId);
+        if (stillExists) {
+          const nextRole = getDefaultRole(stillExists, activeViewRole, latestFallbackRole);
+          setActiveViewRoleState(nextRole);
+          return prevId;
+        }
         // Fall back to the first unit in the list, or null if there are none
-        return units.length > 0 ? units[0].id : null;
+        const firstUnit = units[0] || null;
+        setActiveViewRoleState(getDefaultRole(firstUnit, activeViewRole, latestFallbackRole));
+        return firstUnit ? firstUnit.id : null;
       });
     } catch (error) {
       console.error('Error loading units for ActiveUnitContext:', error);
@@ -46,7 +67,7 @@ export const ActiveUnitProvider = ({ children }) => {
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role]);
+  }, [activeViewRole]);
 
   useEffect(() => {
     refreshUnits();
@@ -60,17 +81,39 @@ export const ActiveUnitProvider = ({ children }) => {
     }
   }, [activeUnitId]);
 
+  useEffect(() => {
+    if (activeViewRole) {
+      localStorage.setItem(ROLE_STORAGE_KEY, activeViewRole);
+    } else {
+      localStorage.removeItem(ROLE_STORAGE_KEY);
+    }
+  }, [activeViewRole]);
+
   const setActiveUnitId = (id) => {
+    const nextUnit = allUnits.find(u => u.id === id);
+    setActiveViewRoleState(prevRole => getDefaultRole(nextUnit, prevRole, getCurrentUser()?.role));
     setActiveUnitIdState(id);
   };
 
   const activeUnit = allUnits.find(u => u.id === activeUnitId) || null;
+  const activeUnitRoles = activeUnit?.roles || [];
+  const canSwitchRole = activeUnitRoles.length > 1;
+
+  const setActiveViewRole = (role) => {
+    if (!['coordinator', 'tutor'].includes(role)) return;
+    setActiveViewRoleState(role);
+  };
 
   const value = {
     allUnits,
     activeUnit,
     activeUnitId,
     setActiveUnitId,
+    activeViewRole,
+    activeViewRoleLabel: ROLE_LABELS[activeViewRole] || '',
+    activeUnitRoles,
+    canSwitchRole,
+    setActiveViewRole,
     refreshUnits,
     isLoading
   };

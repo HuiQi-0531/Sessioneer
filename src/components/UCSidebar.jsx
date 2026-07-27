@@ -1,12 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/UCSidebar.css';
 
 const UCSidebar = ({ activePage }) => {
-  const { activeUnit, allUnits, setActiveUnitId, isLoading } = useActiveUnit();
+  const {
+    activeUnit,
+    allUnits,
+    setActiveUnitId,
+    isLoading,
+    activeViewRole,
+    activeUnitRoles,
+    canSwitchRole,
+    setActiveViewRole
+  } = useActiveUnit();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -29,6 +39,11 @@ const UCSidebar = ({ activePage }) => {
   const handleSelectUnit = (unitId) => {
     setActiveUnitId(unitId);
     setShowDropdown(false);
+  };
+
+  const handleRoleSwitch = (role) => {
+    setActiveViewRole(role);
+    navigate(role === 'coordinator' ? '/uc-requests' : '/', { replace: true });
   };
 
   const navItem = (label, path, key) => {
@@ -81,6 +96,21 @@ const UCSidebar = ({ activePage }) => {
           </div>
         )}
       </div>
+
+      {canSwitchRole && (
+        <div className="ucs-role-switcher" aria-label="Viewing role">
+          {activeUnitRoles.map(role => (
+            <button
+              key={role}
+              className={`ucs-role-option ${activeViewRole === role ? 'active' : ''}`}
+              onClick={() => handleRoleSwitch(role)}
+              type="button"
+            >
+              {role === 'coordinator' ? 'UC' : 'Tutor'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <nav className="uc-navigation">
         {navItem('Dashboard', '/uc-dashboard', 'dashboard')}

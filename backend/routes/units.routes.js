@@ -21,6 +21,22 @@ const formatUnit = (u) => ({
   isActive: isUnitActive(u.semester, u.year)
 });
 
+const formatUnitAccess = (u) => ({
+  ...formatUnit(u),
+  roles: u.roles || []
+});
+
+const ensureUnitMembership = async (clientOrPool, unitId, userId, role) => {
+  await clientOrPool.query(
+    `
+    INSERT INTO unit_memberships (unit_id, user_id, role)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (unit_id, user_id, role) DO NOTHING
+    `,
+    [unitId, userId, role]
+  );
+};
+
 /**
  * GET /units/my-units (tutor only)
  * Every unit this tutor is connected to (submitted availability for,
@@ -49,6 +65,33 @@ router.get('/my-units', verifyToken, requireRole('tutor'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching tutor units:', error);
     res.status(500).json({ error: 'Failed to fetch units' });
+  }
+});
+
+// Get every unit the logged-in user can access, with their role(s) per unit.
+router.get('/my-access', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT u.id, u.unit_code, u.unit_name, u.semester, u.year,
+             u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
+             u.availability_locked, u.schedule_locked, u.schedule_locked_at,
+             ARRAY_AGG(DISTINCT um.role ORDER BY um.role) as roles
+      FROM units u
+      JOIN unit_memberships um ON um.unit_id = u.id
+      WHERE um.user_id = $1
+      GROUP BY u.id, u.unit_code, u.unit_name, u.semester, u.year,
+               u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
+               u.availability_locked, u.schedule_locked, u.schedule_locked_at
+      ORDER BY u.year DESC, u.semester DESC, u.unit_code ASC
+      `,
+      [req.user.id]
+    );
+
+    res.json(result.rows.map(formatUnitAccess));
+  } catch (error) {
+    console.error('Error fetching user unit access:', error);
+    res.status(500).json({ error: 'Failed to fetch unit access' });
   }
 });
 
@@ -100,6 +143,27 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
   }
 });
 
+// Let a coordinator use the same account as a tutor for one of their units.
+router.post('/:id/self-tutor-role', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ownedResult = await pool.query(
+      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
+      [id, req.user.id]
+    );
+
+    if (ownedResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    await ensureUnitMembership(pool, id, req.user.id, 'tutor');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding self tutor role:', error);
+    res.status(500).json({ error: 'Failed to add tutor role' });
+  }
+});
+
 // Create a new unit
 router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
@@ -130,6 +194,8 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
         availabilityDeadline || null
       ]
     );
+
+    await ensureUnitMembership(pool, result.rows[0].id, req.user.id, 'coordinator');
 
     res.status(201).json(formatUnit(result.rows[0]));
   } catch (error) {

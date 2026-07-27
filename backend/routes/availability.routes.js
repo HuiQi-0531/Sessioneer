@@ -40,6 +40,8 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
       SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
@@ -64,17 +66,25 @@ router.get('/', verifyToken, async (req, res) => {
     const unit_id = unit.id;
 
     const isCoordinatorOwner = req.user.role === 'coordinator' && unit.unit_coordinator_id === req.user.id;
-    const isLinkedTutor = req.user.role === 'tutor' && await isTutorLinkedToUnit(req.user.id, unit_id);
+    const isLinkedTutor = await isTutorLinkedToUnit(req.user.id, unit_id);
 
     if (!isCoordinatorOwner && !isLinkedTutor) {
       return res.status(403).json({ error: 'You do not have access to this unit availability' });
     }
 
-    const tutorParams = isCoordinatorOwner ? [] : [req.user.id];
-    const tutorWhere = isCoordinatorOwner ? '' : 'AND id = $1';
+    const tutorParams = isCoordinatorOwner ? [unit_id] : [req.user.id, unit_id];
+    const tutorWhere = isCoordinatorOwner ? '' : 'AND u.id = $1';
+    const membershipUnitParam = isCoordinatorOwner ? '$1' : '$2';
 
     const tutorResult = await pool.query(
-      `SELECT id, name FROM users WHERE role = 'tutor' ${tutorWhere} ORDER BY name`,
+      `
+      SELECT DISTINCT u.id, u.name
+      FROM users u
+      LEFT JOIN unit_memberships um
+        ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
+      WHERE (u.role = 'tutor' OR um.id IS NOT NULL) ${tutorWhere}
+      ORDER BY u.name
+      `,
       tutorParams
     );
     const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
@@ -123,7 +133,7 @@ router.get('/', verifyToken, async (req, res) => {
  * Uses the logged-in tutor's own identity, not a client-supplied email.
  * Refuses if the unit's availability window is locked or past its deadline.
  */
-router.post('/submit', verifyToken, requireRole('tutor'), async (req, res) => {
+router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { unitCode, slots } = req.body;
@@ -146,6 +156,15 @@ router.post('/submit', verifyToken, requireRole('tutor'), async (req, res) => {
     }
 
     await client.query('BEGIN');
+
+    await client.query(
+      `
+      INSERT INTO unit_memberships (unit_id, user_id, role)
+      VALUES ($1, $2, 'tutor')
+      ON CONFLICT (unit_id, user_id, role) DO NOTHING
+      `,
+      [unit_id, tutor_id]
+    );
 
     await client.query(
       'DELETE FROM availability WHERE tutor_id = $1 AND unit_id = $2',

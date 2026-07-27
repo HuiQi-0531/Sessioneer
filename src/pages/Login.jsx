@@ -40,13 +40,8 @@ const Login = () => {
             localStorage.setItem('currentUser', JSON.stringify(data.user));
             localStorage.setItem('token', data.token);
 
-            if (data.user.role === 'coordinator') {
-                await refreshUnits();
-                navigate('/uc-dashboard');
-            } else {
-                await refreshUnits();
-                navigate('/');
-            }
+            await refreshUnits();
+            navigate('/');
 
         } catch (err) {
             setError(err.message || 'Login failed. Please try again.');

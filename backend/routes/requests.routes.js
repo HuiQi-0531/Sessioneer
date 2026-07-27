@@ -6,7 +6,7 @@ const { createNotification } = require('../utils/notify');
 const router = express.Router();
 
 // Get the logged-in tutor's own requests only
-router.get('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
+router.get('/requests', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -37,7 +37,7 @@ router.get('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
 });
 
 // Create new request (uses the logged-in tutor's own id, not a name lookup)
-router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => {
+router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const {
       unitCode, requestType, priority,
@@ -54,6 +54,17 @@ router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => 
     const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
 
     const priorityValue = priority || 'Normal';
+
+    if (unit_id) {
+      await pool.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        VALUES ($1, $2, 'tutor')
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [unit_id, tutor_id]
+      );
+    }
 
     const result = await pool.query(`
       INSERT INTO change_requests 
@@ -95,7 +106,7 @@ router.post('/requests', verifyToken, requireRole('tutor'), async (req, res) => 
 });
 
 // Update request
-router.patch('/requests/:id', verifyToken, requireRole('tutor'), async (req, res) => {
+router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
@@ -131,7 +142,7 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor'), async (req, res
 });
 
 // Delete request
-router.delete('/requests/:id', verifyToken, requireRole('tutor'), async (req, res) => {
+router.delete('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM change_requests WHERE id = $1 AND tutor_id = $2 RETURNING id', [id, req.user.id]);

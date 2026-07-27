@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { profileAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -11,7 +12,9 @@ const Profile = () => {
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
   }, []);
-  const isTutor = currentUser?.role === 'tutor';
+  const { activeViewRole } = useActiveUnit();
+  const effectiveRole = activeViewRole || currentUser?.role;
+  const isTutor = effectiveRole === 'tutor';
   const Sidebar = isTutor ? TutorSidebar : UCSidebar;
 
   const [profile, setProfile] = useState(null);

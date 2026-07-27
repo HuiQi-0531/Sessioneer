@@ -196,6 +196,39 @@ pool.query(`
 });
 
 pool.query(`
+  CREATE TABLE IF NOT EXISTS unit_memberships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('coordinator', 'tutor')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(unit_id, user_id, role)
+  );
+
+  INSERT INTO unit_memberships (unit_id, user_id, role)
+  SELECT id, unit_coordinator_id, 'coordinator'
+  FROM units
+  WHERE unit_coordinator_id IS NOT NULL
+  ON CONFLICT (unit_id, user_id, role) DO NOTHING;
+
+  INSERT INTO unit_memberships (unit_id, user_id, role)
+  SELECT DISTINCT unit_id, tutor_id, 'tutor'
+  FROM availability
+  WHERE tutor_id IS NOT NULL AND unit_id IS NOT NULL
+  ON CONFLICT (unit_id, user_id, role) DO NOTHING;
+
+  INSERT INTO unit_memberships (unit_id, user_id, role)
+  SELECT DISTINCT unit_id, assigned_tutor_id, 'tutor'
+  FROM sessions
+  WHERE assigned_tutor_id IS NOT NULL AND unit_id IS NOT NULL
+  ON CONFLICT (unit_id, user_id, role) DO NOTHING;
+`).then(() => {
+  console.log('unit_memberships schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+pool.query(`
   DO $$
   BEGIN
     IF NOT EXISTS (

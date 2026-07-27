@@ -235,6 +235,14 @@ export const availabilityAPI = {
 };
 
 export const unitsAPI = {
+  getMyAccess: async () => {
+    const response = await fetch(`${API_URL}/units/my-access`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch unit access');
+    return response.json();
+  },
+
   getMyUnits: async () => {
     const response = await fetch(`${API_URL}/units/my-units`, {
       headers: authHeader()
@@ -257,6 +265,16 @@ export const unitsAPI = {
     });
     if (!response.ok) throw new Error('Failed to fetch unit');
     return response.json();
+  },
+
+  addSelfTutorRole: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}/self-tutor-role`, {
+      method: 'POST',
+      headers: authHeader()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to add tutor role');
+    return data;
   },
 
   create: async (unitData) => {

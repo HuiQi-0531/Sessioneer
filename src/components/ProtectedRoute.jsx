@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 
 // Wrap any page that should require login.
 // Usage: <ProtectedRoute><SomePage /></ProtectedRoute>
@@ -7,6 +8,7 @@ import { Navigate } from 'react-router-dom';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('token');
   const savedUser = localStorage.getItem('currentUser');
+  const { activeViewRole, isLoading } = useActiveUnit();
 
   if (!token || !savedUser) {
     return <Navigate to="/login" replace />;
@@ -14,7 +16,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (allowedRoles) {
     const currentUser = JSON.parse(savedUser);
-    if (!allowedRoles.includes(currentUser.role)) {
+    const effectiveRole = activeViewRole || currentUser.role;
+    if (isLoading) return null;
+    if (!allowedRoles.includes(effectiveRole)) {
       return <Navigate to="/" replace />;
     }
   }

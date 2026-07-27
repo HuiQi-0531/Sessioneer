@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { tutorsAPI } from '../config/api';
+import { tutorsAPI, unitsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -11,10 +11,19 @@ const PRIORITY_OPTIONS = ['Preferred', 'Standard', 'Backup', 'Risk'];
 
 const Tutors = () => {
   const { unitId: unitIdFromUrl } = useParams();
-  const { activeUnit, activeUnitId, setActiveUnitId, isLoading: unitLoading } = useActiveUnit();
+  const {
+    activeUnit,
+    activeUnitId,
+    activeUnitRoles,
+    setActiveUnitId,
+    setActiveViewRole,
+    refreshUnits,
+    isLoading: unitLoading
+  } = useActiveUnit();
 
   const [tutors, setTutors] = useState([]);
   const [isLoadingTutors, setIsLoadingTutors] = useState(true);
+  const [isAddingSelf, setIsAddingSelf] = useState(false);
   const [search, setSearch] = useState('');
 
   const [selectedTutor, setSelectedTutor] = useState(null);
@@ -48,6 +57,29 @@ const Tutors = () => {
       console.error('Error loading tutors:', err);
     } finally {
       setIsLoadingTutors(false);
+    }
+  };
+
+  const currentUser = (() => {
+    const saved = localStorage.getItem('currentUser');
+    return saved ? JSON.parse(saved) : null;
+  })();
+
+  const canAddSelfAsTutor = currentUser?.role === 'coordinator' && !activeUnitRoles.includes('tutor');
+
+  const handleAddSelfAsTutor = async () => {
+    if (!activeUnit) return;
+    setIsAddingSelf(true);
+    try {
+      await unitsAPI.addSelfTutorRole(activeUnit.id);
+      await refreshUnits();
+      await loadTutors(activeUnit.id);
+      setActiveViewRole('tutor');
+    } catch (error) {
+      console.error('Error adding self as tutor:', error);
+      alert(error.message || 'Failed to add yourself as a tutor.');
+    } finally {
+      setIsAddingSelf(false);
     }
   };
 
@@ -145,6 +177,16 @@ const Tutors = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {canAddSelfAsTutor && (
+              <button
+                className="tt-add-self-btn"
+                onClick={handleAddSelfAsTutor}
+                disabled={isAddingSelf}
+                type="button"
+              >
+                {isAddingSelf ? 'Adding...' : 'Add Myself as Tutor'}
+              </button>
+            )}
           </div>
 
           {isLoadingTutors ? (
