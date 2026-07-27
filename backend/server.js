@@ -1,5 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const jwt = require('jsonwebtoken');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const pool = require('./db');
@@ -18,7 +21,58 @@ const profileRoutes = require('./routes/profile.routes');
 const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5001;
+
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('No token provided'));
+
+    socket.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (error) {
+    next(new Error('Invalid token'));
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.join(`user:${socket.user.id}`);
+
+  socket.on('join-unit', async (unitId) => {
+    try {
+      if (!unitId) return;
+
+      const accessResult = await pool.query(
+        `
+        SELECT 1 WHERE EXISTS (
+          SELECT 1 FROM units WHERE id = $1 AND unit_coordinator_id = $2
+          UNION
+          SELECT 1 FROM availability WHERE unit_id = $1 AND tutor_id = $2
+          UNION
+          SELECT 1 FROM sessions WHERE unit_id = $1 AND assigned_tutor_id = $2
+        )
+        `,
+        [unitId, socket.user.id]
+      );
+
+      if (accessResult.rows.length > 0) {
+        socket.join(`unit:${unitId}`);
+      }
+    } catch (error) {
+      console.error('Socket join-unit error:', error);
+    }
+  });
+});
+
+app.set('io', io);
 
 // Add missing columns if they don't exist (existing tables from earlier iterations)
 pool.query(`
@@ -377,7 +431,7 @@ app.use((req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log('=================================');
   console.log(`Backend server running`);
   console.log(`URL: http://localhost:${PORT}`);

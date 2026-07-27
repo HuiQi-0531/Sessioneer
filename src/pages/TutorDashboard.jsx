@@ -3,19 +3,9 @@ import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { formatTimeAgo } from '../utils/time';
 import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
-
-const timeAgo = (isoString) => {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
-};
 
 const TutorDashboard = () => {
   const { isLoading: unitsLoading } = useActiveUnit();
@@ -133,7 +123,7 @@ const TutorDashboard = () => {
                     {notifications.map(n => (
                       <div key={n.id} className="td-notification-item">
                         <p className="td-notification-text">{n.title}</p>
-                        <p className="td-notification-time">{timeAgo(n.createdAt)}</p>
+                        <p className="td-notification-time">{formatTimeAgo(n.createdAt)}</p>
                       </div>
                     ))}
                   </div>

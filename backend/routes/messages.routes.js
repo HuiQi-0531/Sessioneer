@@ -4,6 +4,25 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+const getIo = (req) => req.app.get('io');
+
+const emitDirectMessage = (req, message) => {
+  const io = getIo(req);
+  if (!io) return;
+
+  io.to(`user:${message.senderId}`).to(`user:${message.recipientId}`).emit('direct-message', message);
+};
+
+const emitGroupMessage = (req, unitId, message) => {
+  const io = getIo(req);
+  if (!io) return;
+
+  io.to(`unit:${unitId}`).emit('group-message', {
+    unitId,
+    message
+  });
+};
+
 const canAccessUnit = async (user, unitId) => {
   if (user.role === 'coordinator') {
     const result = await pool.query(
@@ -80,7 +99,7 @@ router.post('/', verifyToken, async (req, res) => {
     );
 
     const m = result.rows[0];
-    res.status(201).json({
+    const message = {
       id: m.id,
       senderId: m.sender_id,
       recipientId: m.recipient_id,
@@ -88,7 +107,11 @@ router.post('/', verifyToken, async (req, res) => {
       isRead: m.is_read,
       sentAt: m.sent_at,
       isMine: true
-    });
+    };
+
+    emitDirectMessage(req, message);
+
+    res.status(201).json(message);
   } catch (error) {
     console.error('Error sending message:', error);
     res.status(500).json({ error: 'Failed to send message' });
@@ -235,14 +258,18 @@ router.post('/group/:unitId', verifyToken, async (req, res) => {
     );
 
     const m = result.rows[0];
-    res.status(201).json({
+    const message = {
       id: m.id,
       senderId: m.sender_id,
       senderName: req.user.name || null,
       content: m.content,
       sentAt: m.sent_at,
       isMine: true
-    });
+    };
+
+    emitGroupMessage(req, unitId, message);
+
+    res.status(201).json(message);
   } catch (error) {
     console.error('Error sending group message:', error);
     res.status(500).json({ error: 'Failed to send message' });

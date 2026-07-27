@@ -4,19 +4,9 @@ import { notificationsAPI, ucDashboardAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { formatTimeAgo } from '../utils/time';
 import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
-
-const timeAgo = (isoString) => {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
-};
 
 const UCDashboard = () => {
   const { isLoading: unitsLoading } = useActiveUnit();
@@ -147,7 +137,7 @@ const UCDashboard = () => {
                     {notifications.map(n => (
                       <div key={n.id} className="ucd-notification-item">
                         <p className="ucd-notification-text">{n.title}</p>
-                        <p className="ucd-notification-time">{timeAgo(n.createdAt)}</p>
+                        <p className="ucd-notification-time">{formatTimeAgo(n.createdAt)}</p>
                       </div>
                     ))}
                   </div>

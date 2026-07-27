@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { disconnectSocket } from '../utils/socket';
 import '../styles/LogoutConfirm.css';
 
 const LogoutConfirm = () => {
@@ -11,6 +12,7 @@ const LogoutConfirm = () => {
   }, []);
 
   const handleConfirm = () => {
+    disconnectSocket();
     localStorage.removeItem('currentUser');
     localStorage.removeItem('token');
     navigate('/login', { replace: true });

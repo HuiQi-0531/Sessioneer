@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { getSocket } from '../utils/socket';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/Messages.css';
 
-const POLL_INTERVAL_MS = 4000;
+const POLL_INTERVAL_MS = 30000;
 
 const Messages = () => {
   const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
@@ -28,6 +29,18 @@ const Messages = () => {
 
   const threadEndRef = useRef(null);
   const pollRef = useRef(null);
+
+  const currentUser = React.useMemo(() => {
+    const saved = localStorage.getItem('currentUser');
+    return saved ? JSON.parse(saved) : null;
+  }, []);
+
+  const appendMessage = useCallback((message) => {
+    setThread(prev => {
+      if (prev.some(m => m.id === message.id)) return prev;
+      return [...prev, message];
+    });
+  }, []);
 
   useEffect(() => {
     if (!selectedUnitId && activeUnit) {
@@ -68,6 +81,15 @@ const Messages = () => {
     setShowProfile(false);
     openGroupChat(selectedUnitId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUnitId]);
+
+  useEffect(() => {
+    if (!selectedUnitId) return;
+
+    const socket = getSocket();
+    if (!socket) return;
+
+    socket.emit('join-unit', selectedUnitId);
   }, [selectedUnitId]);
 
   const loadDirectThread = useCallback(async (otherUserId) => {
@@ -131,6 +153,58 @@ const Messages = () => {
 
     return () => clearInterval(pollRef.current);
   }, [chatMode, selectedContact, selectedUnitId, loadDirectThread, loadGroupThread, loadContacts, loadGroupUnreadCount]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !currentUser) return;
+
+    const handleDirectMessage = (message) => {
+      const otherUserId = message.senderId === currentUser.id ? message.recipientId : message.senderId;
+      const normalisedMessage = {
+        ...message,
+        isMine: message.senderId === currentUser.id
+      };
+
+      if (chatMode === 'direct' && selectedContact?.userId === otherUserId) {
+        appendMessage(normalisedMessage);
+        messagesAPI.markRead(otherUserId).catch(err => console.error('Error marking read:', err));
+      }
+
+      if (selectedUnitId) {
+        loadContacts(selectedUnitId);
+      }
+    };
+
+    const handleGroupMessage = ({ unitId, message }) => {
+      const normalisedMessage = {
+        ...message,
+        isMine: message.senderId === currentUser.id
+      };
+
+      if (unitId === selectedUnitId && chatMode === 'group') {
+        appendMessage(normalisedMessage);
+        messagesAPI.markGroupRead(unitId).catch(err => console.error('Error marking group read:', err));
+      } else if (unitId === selectedUnitId) {
+        loadGroupUnreadCount(unitId);
+      }
+    };
+
+    socket.on('direct-message', handleDirectMessage);
+    socket.on('group-message', handleGroupMessage);
+
+    return () => {
+      socket.off('direct-message', handleDirectMessage);
+      socket.off('group-message', handleGroupMessage);
+    };
+  }, [
+    appendMessage,
+    chatMode,
+    currentUser,
+    selectedContact,
+    selectedUnitId,
+    loadContacts,
+    loadGroupUnreadCount
+  ]);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
