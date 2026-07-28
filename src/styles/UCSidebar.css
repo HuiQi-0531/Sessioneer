@@ -1,3 +1,50 @@
+.uc-sidebar {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.uc-logo-section,
+.ucs-active-unit-wrapper,
+.ucs-role-switcher,
+.uc-user-footer-row {
+  flex-shrink: 0;
+}
+
+.uc-navigation {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+}
+
+.uc-user-footer-row {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid #e9ecef;
+}
+
+.uc-user-footer-row .uc-user-profile {
+  margin-top: 0;
+  padding: 8px 0;
+  border-top: 0;
+}
+
+.uc-user-info {
+  min-width: 0;
+}
+
+.uc-user-name,
+.uc-user-role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ucs-active-unit-wrapper {
   position: relative;
   margin: 0 16px 20px 16px;
@@ -129,4 +176,45 @@
   background-color: #ffffff;
   color: #2563eb;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-height: 720px) and (min-width: 769px) {
+  .uc-logo-section {
+    padding: 18px 18px;
+  }
+
+  .ucs-active-unit-wrapper {
+    margin-bottom: 12px;
+  }
+
+  .ucs-active-unit-btn {
+    padding: 10px 12px;
+  }
+
+  .ucs-role-switcher {
+    margin-bottom: 12px;
+  }
+
+  .uc-nav-item {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .uc-user-footer-row {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .uc-sidebar {
+    position: relative;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .uc-navigation {
+    overflow: visible;
+  }
 }
