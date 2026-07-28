@@ -489,8 +489,8 @@
 }
 
 /* ===== SHARED SIDEBAR HEIGHT FIX =====
-   Keep the profile/logout footer visible on shorter laptop screens.
-   The navigation area scrolls instead of pushing the footer out of view. */
+   Keep the profile/logout footer visible on laptop screens without an
+   inner navigation scrollbar. */
 .uc-sidebar {
   top: 0;
   left: 0;
@@ -507,23 +507,33 @@
   flex-shrink: 0;
 }
 
+.uc-logo-section {
+  padding-top: 22px;
+  padding-bottom: 22px;
+}
+
 .uc-navigation {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 12px;
-  scrollbar-width: thin;
+  overflow-y: visible;
+  padding-bottom: 8px;
+  gap: 2px;
+}
+
+.uc-nav-item {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .uc-user-footer-row {
   margin-top: auto;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-top: 1px solid #e9ecef;
 }
 
 .uc-user-footer-row .uc-user-profile {
   margin-top: 0;
-  padding: 8px 0;
+  padding: 6px 0;
   border-top: 0;
 }
 
@@ -556,8 +566,8 @@
   }
 
   .uc-nav-item {
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 
   .uc-user-footer-row {
