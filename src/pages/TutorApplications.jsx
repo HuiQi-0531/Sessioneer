@@ -16,6 +16,7 @@ const TutorApplications = () => {
   const [directInviteForm, setDirectInviteForm] = useState({ name: '', email: '' });
   const [directInviteError, setDirectInviteError] = useState('');
   const [isDirectInviting, setIsDirectInviting] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     loadApplications();
@@ -34,6 +35,13 @@ const TutorApplications = () => {
   };
 
   const buildInviteUrl = (token) => `${window.location.origin}/activate/${token}`;
+
+  const handleCopyApplyLink = () => {
+    const applyUrl = `${window.location.origin}/apply`;
+    navigator.clipboard.writeText(applyUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const handleInvite = async (application) => {
     setIsInviting(application.id);
@@ -92,6 +100,9 @@ const TutorApplications = () => {
 
         <div className="tap-content">
           <div className="tap-top-row">
+          <button className="tap-direct-invite-btn" onClick={handleCopyApplyLink}>
+            {linkCopied ? 'Link copied!' : 'Copy application link'}
+         </button>
             <button className="tap-direct-invite-btn" onClick={() => setShowDirectInviteModal(true)}>
               + Invite a known tutor directly
             </button>

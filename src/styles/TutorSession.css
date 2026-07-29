@@ -174,6 +174,17 @@
     color: #6b7280;
 }
 
+.sessions-not-released {
+    margin: 20px;
+    padding: 20px;
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    color: #92400e;
+    font-size: 14px;
+    text-align: center;
+}
+
 /* ===== TIMETABLE ===== */
 
 .timetable-wrapper {

@@ -26,7 +26,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       SELECT
         u.id, u.name, u.email, u.phone_number, u.work_experience,
         u.maximum_hours, u.contract_type,
-        m.priority_tag, m.internal_notes, m.tags
+        m.priority_tag, m.internal_notes, m.tags, m.early_access
       FROM users u
       LEFT JOIN tutor_unit_markers m
         ON m.tutor_id = u.id AND m.unit_id = $1
@@ -48,7 +48,8 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       contractType: t.contract_type,
       priorityTag: t.priority_tag || 'Standard',
       internalNotes: t.internal_notes || '',
-      tags: t.tags || []
+      tags: t.tags || [],
+      earlyAccess: t.early_access || false
     }));
 
     res.json(tutors);
@@ -89,6 +90,34 @@ router.put('/:tutorId/marker', verifyToken, requireRole('coordinator'), async (r
   } catch (error) {
     console.error('Error updating tutor marker:', error);
     res.status(500).json({ error: 'Failed to update tutor marker' });
+  }
+});
+
+// Toggle whether a specific tutor can see the timetable before the UC
+// releases the draft (or locks/finalises the schedule) for everyone.
+router.put('/:tutorId/early-access', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId, tutorId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const { earlyAccess } = req.body;
+
+    const result = await pool.query(
+      `
+      INSERT INTO tutor_unit_markers (unit_id, tutor_id, early_access)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (unit_id, tutor_id)
+      DO UPDATE SET early_access = $3
+      RETURNING early_access
+      `,
+      [unitId, tutorId, !!earlyAccess]
+    );
+
+    res.json({ earlyAccess: result.rows[0].early_access });
+  } catch (error) {
+    console.error('Error updating early access:', error);
+    res.status(500).json({ error: 'Failed to update early access' });
   }
 });
 

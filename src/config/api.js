@@ -348,6 +348,26 @@ export const unitsAPI = {
     });
     if (!response.ok) throw new Error('Failed to unlock availability');
     return response.json();
+
+},
+
+ releaseDraft: async (id) => {
+   const response = await fetch(`${API_URL}/units/${id}/release-draft`, {
+     method: 'PATCH',
+     headers: authHeader()
+   });
+   if (!response.ok) throw new Error('Failed to release draft schedule');
+   return response.json();
+ },
+
+ unreleaseDraft: async (id) => {
+   const response = await fetch(`${API_URL}/units/${id}/unrelease-draft`, {
+     method: 'PATCH',
+     headers: authHeader()
+   });
+   if (!response.ok) throw new Error('Failed to un-release draft schedule');
+   return response.json();
+
   }
 };
 
@@ -461,6 +481,17 @@ export const tutorsAPI = {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update tutor marker');
     return data;
+    },
+
+ setEarlyAccess: async (unitId, tutorId, earlyAccess) => {
+   const response = await fetch(`${API_URL}/units/${unitId}/tutors/${tutorId}/early-access`, {
+     method: 'PUT',
+     headers: { 'Content-Type': 'application/json', ...authHeader() },
+     body: JSON.stringify({ earlyAccess })
+   });
+   const data = await response.json();
+   if (!response.ok) throw new Error(data.error || 'Failed to update early access');
+   return data;
   }
 };
 

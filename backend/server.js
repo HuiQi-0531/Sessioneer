@@ -341,6 +341,31 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Draft-release gate: tutors can't see the timetable until the UC releases the
+// draft (or the schedule is finalised/locked, which counts as released too).
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'draft_released'
+    ) THEN
+      ALTER TABLE units ADD COLUMN draft_released BOOLEAN DEFAULT FALSE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_unit_markers' AND column_name = 'early_access'
+    ) THEN
+      ALTER TABLE tutor_unit_markers ADD COLUMN early_access BOOLEAN DEFAULT FALSE;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('units draft_released / tutor_unit_markers early_access columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Add notification preference columns to users if they don't exist
 pool.query(`
   DO $$

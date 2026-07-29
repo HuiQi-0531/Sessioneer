@@ -28,6 +28,25 @@ const isScheduleLocked = async (unitId) => {
   return result.rows[0]?.schedule_locked || false;
 };
 
+// A tutor can see the full unit timetable once the UC has released the draft
+// (or finalised/locked the schedule, which counts as released too), OR if the
+// UC has switched on early access for that specific tutor.
+const canTutorViewTimetable = async (unitId, tutorId) => {
+  const unitResult = await pool.query(
+    'SELECT schedule_locked, draft_released FROM units WHERE id = $1',
+    [unitId]
+  );
+  const unit = unitResult.rows[0];
+  if (!unit) return false;
+  if (unit.schedule_locked || unit.draft_released) return true;
+
+  const markerResult = await pool.query(
+    'SELECT early_access FROM tutor_unit_markers WHERE unit_id = $1 AND tutor_id = $2',
+    [unitId, tutorId]
+  );
+  return markerResult.rows[0]?.early_access || false;
+};
+
 const isTutorLinkedToUnit = async (userId, unitId) => {
   const result = await pool.query(
     `
@@ -77,6 +96,10 @@ router.get('/', verifyToken, async (req, res) => {
       if (!isLinkedTutor) {
         return res.status(403).json({ error: 'You are not linked to this unit' });
       }
+      const canView = await canTutorViewTimetable(unitId, req.user.id);
+     if (!canView) {
+       return res.json({ released: false, sessions: [] });
+     }
     }
 
     const result = await pool.query(

@@ -95,6 +95,16 @@
   gap: 6px;
 }
 
+.tt-early-access-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
 .tt-badge {
   font-size: 11px;
   font-weight: 700;

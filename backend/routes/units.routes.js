@@ -18,6 +18,7 @@ const formatUnit = (u) => ({
   availabilityLocked: u.availability_locked,
   scheduleLocked: u.schedule_locked || false,
   scheduleLockedAt: u.schedule_locked_at || null,
+  draftReleased: u.draft_released || false,
   isActive: isUnitActive(u.semester, u.year)
 });
 
@@ -49,7 +50,7 @@ router.get('/my-units', verifyToken, requireRole('tutor'), async (req, res) => {
       `
       SELECT DISTINCT u.id, u.unit_code, u.unit_name, u.semester, u.year,
              u.campus, u.delivery_mode, u.availability_deadline, u.availability_locked,
-             u.schedule_locked, u.schedule_locked_at
+             u.schedule_locked, u.schedule_locked_at, u.draft_released
       FROM units u
       WHERE u.id IN (
         SELECT unit_id FROM availability WHERE tutor_id = $1
@@ -75,14 +76,14 @@ router.get('/my-access', verifyToken, async (req, res) => {
       `
       SELECT u.id, u.unit_code, u.unit_name, u.semester, u.year,
              u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
-             u.availability_locked, u.schedule_locked, u.schedule_locked_at,
+             u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released,
              ARRAY_AGG(DISTINCT um.role ORDER BY um.role) as roles
       FROM units u
       JOIN unit_memberships um ON um.unit_id = u.id
       WHERE um.user_id = $1
       GROUP BY u.id, u.unit_code, u.unit_name, u.semester, u.year,
                u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
-               u.availability_locked, u.schedule_locked, u.schedule_locked_at
+               u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released
       ORDER BY u.year DESC, u.semester DESC, u.unit_code ASC
       `,
       [req.user.id]
@@ -186,7 +187,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [
         req.user.id, unitCode, unitName, semester, year,
@@ -228,7 +229,7 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
       WHERE id = $9 AND unit_coordinator_id = $10
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [
         unitCode, unitName, semester, year, campus,
@@ -311,7 +312,7 @@ router.patch('/:id/lock-schedule', verifyToken, requireRole('coordinator'), asyn
       WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [id]
     );
@@ -320,6 +321,59 @@ router.patch('/:id/lock-schedule', verifyToken, requireRole('coordinator'), asyn
   } catch (error) {
     console.error('Error locking schedule:', error);
     res.status(500).json({ error: 'Failed to lock schedule' });
+  }
+});
+
+// PATCH /units/:id/release-draft (coordinator only)
+// Makes the (still-editable) draft schedule visible to tutors linked to this unit.
+router.patch('/:id/release-draft', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      UPDATE units
+      SET draft_released = TRUE
+      WHERE id = $1 AND unit_coordinator_id = $2
+      RETURNING id, unit_code, unit_name, semester, year, campus,
+                delivery_mode, enrolment_size, availability_deadline,
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
+      `,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
+
+    res.json(formatUnit(result.rows[0]));
+  } catch (error) {
+    console.error('Error releasing draft:', error);
+    res.status(500).json({ error: 'Failed to release draft schedule' });
+  }
+});
+
+// PATCH /units/:id/unrelease-draft (coordinator only) — undo, e.g. if released by mistake
+router.patch('/:id/unrelease-draft', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      UPDATE units
+      SET draft_released = FALSE
+      WHERE id = $1 AND unit_coordinator_id = $2
+      RETURNING id, unit_code, unit_name, semester, year, campus,
+                delivery_mode, enrolment_size, availability_deadline,
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
+      `,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
+
+    res.json(formatUnit(result.rows[0]));
+  } catch (error) {
+    console.error('Error un-releasing draft:', error);
+    res.status(500).json({ error: 'Failed to un-release draft schedule' });
   }
 });
 
@@ -335,7 +389,7 @@ router.patch('/:id/unlock-schedule', verifyToken, requireRole('coordinator'), as
       WHERE id = $1 AND unit_coordinator_id = $2
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [id, req.user.id]
     );
@@ -361,7 +415,7 @@ router.patch('/:id/lock-availability', verifyToken, requireRole('coordinator'), 
       WHERE id = $1 AND unit_coordinator_id = $2
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [id, req.user.id]
     );
@@ -387,7 +441,7 @@ router.patch('/:id/unlock-availability', verifyToken, requireRole('coordinator')
       WHERE id = $1 AND unit_coordinator_id = $2
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at
+                availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [id, req.user.id]
     );

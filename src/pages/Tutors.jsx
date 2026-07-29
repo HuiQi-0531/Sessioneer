@@ -60,6 +60,20 @@ const Tutors = () => {
     }
   };
 
+const handleToggleEarlyAccess = async (tutor, e) => {
+   e.stopPropagation();
+   const nextValue = !tutor.earlyAccess;
+   setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: nextValue } : t)));
+   try {
+     await tutorsAPI.setEarlyAccess(activeUnit.id, tutor.id, nextValue);
+   } catch (err) {
+     console.error('Error updating early access:', err);
+     // Roll back on failure
+     setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: !nextValue } : t)));
+     alert(err.message || 'Failed to update early access.');
+   }
+ };
+
   const currentUser = (() => {
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
@@ -211,6 +225,14 @@ const Tutors = () => {
                       <span key={tag} className="tt-badge tag">{tag}</span>
                     ))}
                   </div>
+                  <label className="tt-early-access-toggle" onClick={(e) => e.stopPropagation()}>
+                   <input
+                     type="checkbox"
+                     checked={!!tutor.earlyAccess}
+                     onChange={(e) => handleToggleEarlyAccess(tutor, e)}
+                   />
+                   Early schedule access
+                 </label>
                 </div>
               ))}
             </div>

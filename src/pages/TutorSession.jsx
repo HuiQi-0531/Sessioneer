@@ -4,8 +4,25 @@ import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/TutorSession.css';
+import '../styles/ScheduleBuilder.css';
 
-const DAY_TO_INDEX = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4 };
+const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+const DAY_LABELS = { MON: 'Monday', TUE: 'Tuesday', WED: 'Wednesday', THU: 'Thursday', FRI: 'Friday' };
+// Same range as the UC's Schedule Builder grid (8am-9pm), so the two views line up exactly.
+const GRID_START_HOUR = 8;
+const GRID_END_HOUR = 21;
+const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => {
+  const hour = GRID_START_HOUR + i;
+  if (hour === 12) return '12pm';
+  if (hour > 12) return `${hour - 12}pm`;
+  return `${hour}am`;
+});
+
+const getBlockState = (session) => {
+  if (!session.isAssigned) return 'unassigned';
+  if (session.tutorConfirmed === true) return 'confirmed';
+  return 'pending';
+};
 
 const TutorSession = () => {
   const { activeUnit, isLoading: unitLoading } = useActiveUnit();
@@ -13,12 +30,7 @@ const TutorSession = () => {
   const [fullscreen, setFullscreen] = useState(false);
   const [rawSessions, setRawSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
-
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-  const compactTimeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'];
-  const fullTimeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm', '8pm', '9pm'];
-  const timeSlots = fullscreen ? fullTimeSlots : compactTimeSlots;
+  const [notReleased, setNotReleased] = useState(false);
 
   useEffect(() => {
     if (!activeUnit) {
@@ -33,7 +45,15 @@ const TutorSession = () => {
     setIsLoadingSessions(true);
     try {
       const data = await sessionsAPI.getAll(unitId);
-      setRawSessions(data);
+      if (Array.isArray(data)) {
+        setNotReleased(false);
+        setRawSessions(data);
+      } else {
+        // Backend returns { released: false, sessions: [] } when the UC hasn't
+        // released the draft/final schedule yet (and this tutor has no early access).
+        setNotReleased(true);
+        setRawSessions([]);
+      }
     } catch (err) {
       console.error('Error loading unit sessions:', err);
     } finally {
@@ -41,28 +61,15 @@ const TutorSession = () => {
     }
   };
 
-  // Convert real session records into the {title, code, tutor, day, start, duration, color}
-  // shape the existing grid renderer expects.
-  const sessions = rawSessions
-    .filter(s => DAY_TO_INDEX[s.day] !== undefined)
-    .map(s => {
-      const startHour = parseInt(s.startTime.split(':')[0], 10);
-      const endHour = parseInt(s.endTime.split(':')[0], 10);
-      let color;
-      if (!s.isAssigned) color = 'red';
-      else if (s.tutorConfirmed === true) color = 'green';
-      else color = 'yellow';
+  const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
+  const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
 
-      return {
-        title: s.sessionType || 'Session',
-        code: s.location || '-',
-        tutor: s.isAssigned ? (s.assignedTutorName || 'Assigned') : 'Unassigned',
-        day: DAY_TO_INDEX[s.day],
-        start: Math.max(0, startHour - 8),
-        duration: Math.max(1, endHour - startHour),
-        color
-      };
-    });
+  const gridSessions = rawSessions.filter(s =>
+    DAYS.includes(s.day) &&
+    hourFromTime(s.startTime) >= GRID_START_HOUR &&
+    hourFromTime(s.endTime) <= GRID_END_HOUR
+  );
+  const hiddenFromGridCount = rawSessions.length - gridSessions.length;
 
   if (unitLoading) {
     return (
@@ -103,52 +110,66 @@ const TutorSession = () => {
 
             {isLoadingSessions ? (
               <p style={{ padding: 20, color: '#6b7280' }}>Loading sessions...</p>
-            ) : sessions.length === 0 ? (
+            ) : notReleased ? (
+              <div className="sessions-not-released">
+                Your unit coordinator hasn't released the schedule yet. Check back once the draft
+                or final schedule has been released.
+              </div>
+            ) : rawSessions.length === 0 ? (
               <p style={{ padding: 20, color: '#6b7280' }}>No sessions have been added to this unit yet.</p>
             ) : (
-              <div className="timetable-wrapper">
-                <div className="timetable-days">
-                  <div className="time-header"></div>
-                  {days.map((day) => (
-                    <div key={day} className="day-header">{day}</div>
-                  ))}
+              <>
+                <div className="sb-grid-legend">
+                  <span className="sb-legend-item"><span className="sb-legend-dot assigned"></span>Confirmed</span>
+                  <span className="sb-legend-item"><span className="sb-legend-dot pending"></span>Awaiting confirmation</span>
+                  <span className="sb-legend-item"><span className="sb-legend-dot unassigned"></span>Unassigned</span>
                 </div>
-
-                <div className="timetable-grid">
-                  <div className="time-column">
-                    {timeSlots.map((time) => (
-                      <div key={time} className="time-slot-label">{time}</div>
+                <div className="sb-grid-wrapper">
+                  <div
+                    className="sb-grid"
+                    style={{ gridTemplateRows: `auto repeat(${HOUR_LABELS.length}, ${fullscreen ? 60 : 44}px)` }}
+                  >
+                    <div className="sb-grid-corner" />
+                    {DAYS.map(day => (
+                      <div key={day} className="sb-grid-day-header">{DAY_LABELS[day]}</div>
                     ))}
-                  </div>
 
-                  <div className="calendar-grid">
-                    {days.map((day, dayIndex) => (
-                      <div key={dayIndex} className="calendar-column">
-                        {timeSlots.map((time, index) => (
-                          <div key={index} className="calendar-cell"></div>
-                        ))}
-
-                        {sessions
-                          .filter((session) => session.day === dayIndex)
-                          .map((session, index) => (
-                            <div
-                              key={index}
-                              className={`session-event-card ${session.color}`}
-                              style={{
-                                top: `${session.start * (fullscreen ? 50 : 70)}px`,
-                                height: `${session.duration * (fullscreen ? 50 : 70)}px`
-                              }}
-                            >
-                              <h4>{session.title}</h4>
-                              <p>{session.code}</p>
-                              <span>{session.tutor}</span>
-                            </div>
-                          ))}
-                      </div>
+                    {HOUR_LABELS.map((label, i) => (
+                      <div key={label} className="sb-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
                     ))}
+
+                    {gridSessions.map(session => {
+                      const dayIndex = DAYS.indexOf(session.day);
+                      const startHour = hourFromTime(session.startTime);
+                      const endHour = hourFromTime(session.endTime);
+                      const rowStart = (startHour - GRID_START_HOUR) + 2;
+                      const rowEnd = (endHour - GRID_START_HOUR) + 2;
+                      const state = getBlockState(session);
+
+                      return (
+                        <div
+                          key={session.id}
+                          className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}`}
+                          style={{ gridColumn: dayIndex + 2, gridRow: `${rowStart} / ${rowEnd}` }}
+                        >
+                          <div className="sb-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                          <div className="sb-grid-block-type">
+                            {session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}
+                          </div>
+                          <div className="sb-grid-block-tutor">
+                            {state === 'unassigned' ? 'Unassigned' : `${session.assignedTutorName}${state === 'pending' ? ' (pending)' : ''}`}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                  {hiddenFromGridCount > 0 && (
+                    <p className="sb-grid-note">
+                      {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
+                    </p>
+                  )}
                 </div>
-              </div>
+              </>
             )}
 
             <div className="fullscreen-btn-container">
