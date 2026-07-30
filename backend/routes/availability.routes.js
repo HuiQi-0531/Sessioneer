@@ -8,10 +8,10 @@ const router = express.Router();
 const timeToSlot = (timeStr) => {
   const [h] = timeStr.split(':');
   const hour = parseInt(h);
-  if (hour === 0) return '12am';
-  if (hour < 12) return `${hour}am`;
-  if (hour === 12) return '12pm';
-  return `${hour - 12}pm`;
+  if (hour === 0) return '12:00am';
+  if (hour < 12) return `${hour}:00am`;
+  if (hour === 12) return '12:00pm';
+  return `${hour - 12}:00pm`;
 };
 
 // Normalises day "Monday" -> "MON" for the availability slot key format
