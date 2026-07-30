@@ -83,6 +83,12 @@
   color: #1f2937;
 }
 
+.tt-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .tt-card-meta {
   font-size: 13px;
   color: #6b7280;
@@ -117,6 +123,53 @@
 .tt-badge.backup { background-color: #fef3c7; color: #b45309; }
 .tt-badge.risk { background-color: #fee2e2; color: #b91c1c; }
 .tt-badge.tag { background-color: #ede9fe; color: #6d28d9; }
+
+/* Star / flag buttons */
+.tt-star-btn,
+.tt-flag-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.tt-star-btn {
+  color: #d1d5db;
+}
+
+.tt-star-btn:hover {
+  color: #f5b301;
+}
+
+.tt-star-btn.starred {
+  color: #f5b301;
+}
+
+.tt-flag-btn {
+  color: #d1d5db;
+}
+
+.tt-flag-btn:hover {
+  color: #dc2626;
+}
+
+.tt-flag-btn.flagged {
+  color: #dc2626;
+}
+
+.tt-modal-icon {
+  font-size: 1.4rem;
+}
+
+.tt-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
 
 /* Profile modal */
 .tt-modal-overlay {

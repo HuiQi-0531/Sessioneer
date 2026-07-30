@@ -492,6 +492,28 @@ export const tutorsAPI = {
    const data = await response.json();
    if (!response.ok) throw new Error(data.error || 'Failed to update early access');
    return data;
+  },
+
+ setStarred: async (unitId, tutorId, starred) => {
+   const response = await fetch(`${API_URL}/units/${unitId}/tutors/${tutorId}/starred`, {
+     method: 'PUT',
+     headers: { 'Content-Type': 'application/json', ...authHeader() },
+     body: JSON.stringify({ starred })
+   });
+   const data = await response.json();
+   if (!response.ok) throw new Error(data.error || 'Failed to update starred status');
+   return data;
+  },
+
+ setFlagged: async (unitId, tutorId, flagged) => {
+   const response = await fetch(`${API_URL}/units/${unitId}/tutors/${tutorId}/flagged`, {
+     method: 'PUT',
+     headers: { 'Content-Type': 'application/json', ...authHeader() },
+     body: JSON.stringify({ flagged })
+   });
+   const data = await response.json();
+   if (!response.ok) throw new Error(data.error || 'Failed to update flagged status');
+   return data;
   }
 };
 

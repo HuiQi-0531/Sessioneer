@@ -366,6 +366,30 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Coordinator "star" (favourite/priority pick) and "flag" (risk/caution) markers on tutors.
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_unit_markers' AND column_name = 'starred'
+    ) THEN
+      ALTER TABLE tutor_unit_markers ADD COLUMN starred BOOLEAN DEFAULT FALSE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_unit_markers' AND column_name = 'flagged'
+    ) THEN
+      ALTER TABLE tutor_unit_markers ADD COLUMN flagged BOOLEAN DEFAULT FALSE;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('tutor_unit_markers starred / flagged columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Add notification preference columns to users if they don't exist
 pool.query(`
   DO $$

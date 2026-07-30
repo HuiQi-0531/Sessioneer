@@ -26,7 +26,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       SELECT
         u.id, u.name, u.email, u.phone_number, u.work_experience,
         u.maximum_hours, u.contract_type,
-        m.priority_tag, m.internal_notes, m.tags, m.early_access
+        m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
       LEFT JOIN tutor_unit_markers m
         ON m.tutor_id = u.id AND m.unit_id = $1
@@ -49,7 +49,9 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       priorityTag: t.priority_tag || 'Standard',
       internalNotes: t.internal_notes || '',
       tags: t.tags || [],
-      earlyAccess: t.early_access || false
+      earlyAccess: t.early_access || false,
+      starred: t.starred || false,
+      flagged: t.flagged || false
     }));
 
     res.json(tutors);
@@ -118,6 +120,60 @@ router.put('/:tutorId/early-access', verifyToken, requireRole('coordinator'), as
   } catch (error) {
     console.error('Error updating early access:', error);
     res.status(500).json({ error: 'Failed to update early access' });
+  }
+});
+
+// Toggle whether a coordinator has starred a tutor (marks them as a favourite/priority pick).
+router.put('/:tutorId/starred', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId, tutorId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const { starred } = req.body;
+
+    const result = await pool.query(
+      `
+      INSERT INTO tutor_unit_markers (unit_id, tutor_id, starred)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (unit_id, tutor_id)
+      DO UPDATE SET starred = $3
+      RETURNING starred
+      `,
+      [unitId, tutorId, !!starred]
+    );
+
+    res.json({ starred: result.rows[0].starred });
+  } catch (error) {
+    console.error('Error updating starred status:', error);
+    res.status(500).json({ error: 'Failed to update starred status' });
+  }
+});
+
+// Toggle whether a coordinator has flagged a tutor (marks them as a risk/caution case).
+router.put('/:tutorId/flagged', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId, tutorId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const { flagged } = req.body;
+
+    const result = await pool.query(
+      `
+      INSERT INTO tutor_unit_markers (unit_id, tutor_id, flagged)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (unit_id, tutor_id)
+      DO UPDATE SET flagged = $3
+      RETURNING flagged
+      `,
+      [unitId, tutorId, !!flagged]
+    );
+
+    res.json({ flagged: result.rows[0].flagged });
+  } catch (error) {
+    console.error('Error updating flagged status:', error);
+    res.status(500).json({ error: 'Failed to update flagged status' });
   }
 });
 

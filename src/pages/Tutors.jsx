@@ -60,19 +60,51 @@ const Tutors = () => {
     }
   };
 
-const handleToggleEarlyAccess = async (tutor, e) => {
-   e.stopPropagation();
-   const nextValue = !tutor.earlyAccess;
-   setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: nextValue } : t)));
-   try {
-     await tutorsAPI.setEarlyAccess(activeUnit.id, tutor.id, nextValue);
-   } catch (err) {
-     console.error('Error updating early access:', err);
-     // Roll back on failure
-     setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: !nextValue } : t)));
-     alert(err.message || 'Failed to update early access.');
-   }
- };
+  const handleToggleEarlyAccess = async (tutor, e) => {
+    e.stopPropagation();
+    const nextValue = !tutor.earlyAccess;
+    setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: nextValue } : t)));
+    try {
+      await tutorsAPI.setEarlyAccess(activeUnit.id, tutor.id, nextValue);
+    } catch (err) {
+      console.error('Error updating early access:', err);
+      // Roll back on failure
+      setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: !nextValue } : t)));
+      alert(err.message || 'Failed to update early access.');
+    }
+  };
+
+  const handleToggleStar = async (tutor, e) => {
+    e.stopPropagation();
+    const nextValue = !tutor.starred;
+    setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, starred: nextValue } : t)));
+    setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, starred: nextValue } : prev));
+    try {
+      await tutorsAPI.setStarred(activeUnit.id, tutor.id, nextValue);
+    } catch (err) {
+      console.error('Error updating starred status:', err);
+      // Roll back on failure
+      setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, starred: !nextValue } : t)));
+      setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, starred: !nextValue } : prev));
+      alert(err.message || 'Failed to update star.');
+    }
+  };
+
+  const handleToggleFlag = async (tutor, e) => {
+    e.stopPropagation();
+    const nextValue = !tutor.flagged;
+    setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, flagged: nextValue } : t)));
+    setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, flagged: nextValue } : prev));
+    try {
+      await tutorsAPI.setFlagged(activeUnit.id, tutor.id, nextValue);
+    } catch (err) {
+      console.error('Error updating flagged status:', err);
+      // Roll back on failure
+      setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, flagged: !nextValue } : t)));
+      setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, flagged: !nextValue } : prev));
+      alert(err.message || 'Failed to update flag.');
+    }
+  };
 
   const currentUser = (() => {
     const saved = localStorage.getItem('currentUser');
@@ -146,9 +178,9 @@ const handleToggleEarlyAccess = async (tutor, e) => {
     }
   };
 
-  const filteredTutors = tutors.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredTutors = tutors
+    .filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (b.starred === a.starred ? 0 : b.starred ? 1 : -1));
 
   if (unitLoading) {
     return (
@@ -213,6 +245,26 @@ const handleToggleEarlyAccess = async (tutor, e) => {
                 <div key={tutor.id} className="tt-card" onClick={() => openProfile(tutor)}>
                   <div className="tt-card-top">
                     <span className="tt-card-name">{tutor.name}</span>
+                    <div className="tt-card-actions">
+                      <button
+                        type="button"
+                        className={`tt-star-btn ${tutor.starred ? 'starred' : ''}`}
+                        onClick={(e) => handleToggleStar(tutor, e)}
+                        aria-label={tutor.starred ? 'Unstar tutor' : 'Star tutor'}
+                        title={tutor.starred ? 'Unstar tutor' : 'Star tutor'}
+                      >
+                        {tutor.starred ? '★' : '☆'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`tt-flag-btn ${tutor.flagged ? 'flagged' : ''}`}
+                        onClick={(e) => handleToggleFlag(tutor, e)}
+                        aria-label={tutor.flagged ? 'Remove flag' : 'Flag tutor'}
+                        title={tutor.flagged ? 'Remove flag' : 'Flag tutor'}
+                      >
+                        ⚑
+                      </button>
+                    </div>
                   </div>
                   <div className="tt-card-meta">
                     {tutor.workExperience ? tutor.workExperience.slice(0, 80) : 'No experience notes yet'}
@@ -226,13 +278,13 @@ const handleToggleEarlyAccess = async (tutor, e) => {
                     ))}
                   </div>
                   <label className="tt-early-access-toggle" onClick={(e) => e.stopPropagation()}>
-                   <input
-                     type="checkbox"
-                     checked={!!tutor.earlyAccess}
-                     onChange={(e) => handleToggleEarlyAccess(tutor, e)}
-                   />
-                   Early schedule access
-                 </label>
+                    <input
+                      type="checkbox"
+                      checked={!!tutor.earlyAccess}
+                      onChange={(e) => handleToggleEarlyAccess(tutor, e)}
+                    />
+                    Early schedule access
+                  </label>
                 </div>
               ))}
             </div>
@@ -250,6 +302,26 @@ const handleToggleEarlyAccess = async (tutor, e) => {
               <div>
                 <div className="tt-modal-name">{selectedTutor.name}</div>
                 <div className="tt-modal-role">Tutor</div>
+              </div>
+              <div className="tt-modal-actions">
+                <button
+                  type="button"
+                  className={`tt-star-btn tt-modal-icon ${selectedTutor.starred ? 'starred' : ''}`}
+                  onClick={(e) => handleToggleStar(selectedTutor, e)}
+                  aria-label={selectedTutor.starred ? 'Unstar tutor' : 'Star tutor'}
+                  title={selectedTutor.starred ? 'Unstar tutor' : 'Star tutor'}
+                >
+                  {selectedTutor.starred ? '★' : '☆'}
+                </button>
+                <button
+                  type="button"
+                  className={`tt-flag-btn tt-modal-icon ${selectedTutor.flagged ? 'flagged' : ''}`}
+                  onClick={(e) => handleToggleFlag(selectedTutor, e)}
+                  aria-label={selectedTutor.flagged ? 'Remove flag' : 'Flag tutor'}
+                  title={selectedTutor.flagged ? 'Remove flag' : 'Flag tutor'}
+                >
+                  ⚑
+                </button>
               </div>
             </div>
 
