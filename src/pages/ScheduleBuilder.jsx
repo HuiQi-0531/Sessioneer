@@ -558,6 +558,12 @@ const ScheduleBuilder = () => {
                     <div className="sb-candidate-info">
                       <div className="sb-candidate-name">
                         {candidate.name}
+                        {candidate.starred && (
+                          <span className="sb-candidate-star" title="Starred tutor">★</span>
+                        )}
+                        {candidate.flagged && (
+                          <span className="sb-candidate-flag" title="Flagged tutor">⚑</span>
+                        )}
                         <span className={`sb-priority-badge ${candidate.priorityTag.toLowerCase()}`}>
                           {candidate.priorityTag}
                         </span>

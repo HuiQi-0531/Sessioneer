@@ -345,7 +345,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 
     const tutorsResult = await pool.query(
       `
-      SELECT u.id, u.name, u.email, u.maximum_hours, m.priority_tag
+      SELECT u.id, u.name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
       FROM users u
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       LEFT JOIN unit_memberships um
@@ -425,6 +425,8 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         email: tutor.email,
         maximumHours: tutor.maximum_hours,
         priorityTag: tutor.priority_tag || 'Standard',
+        starred: tutor.starred || false,
+        flagged: tutor.flagged || false,
         hoursIfAssigned,
         allPreferred,
         allKnown,

@@ -490,3 +490,16 @@
 .is-btn-secondary:hover {
   background-color: #e5e7eb;
 }
+
+/* Star / flag indicators on candidate rows in the assign modal */
+.sb-candidate-star {
+  color: #f5b301;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sb-candidate-flag {
+  color: #dc2626;
+  font-size: 13px;
+  line-height: 1;
+}
