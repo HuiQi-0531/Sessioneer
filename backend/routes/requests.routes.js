@@ -107,18 +107,21 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
   }
 });
 
-// Update request
+// Update request. Also used by tutors to appeal a rejected request: they
+// send { status: 'Pending', reason: <original + appeal text> } to reopen it,
+// which notifies the unit coordinator so it shows back up for review.
 router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, reviewNotes } = req.body;
+    const { status, reviewNotes, reason } = req.body;
 
     const result = await pool.query(`
       UPDATE change_requests 
       SET 
         status = COALESCE($1, status),
-        review_notes = COALESCE($2, review_notes)
-      WHERE id = $3 AND tutor_id = $4
+        review_notes = COALESCE($2, review_notes),
+        reason = COALESCE($3, reason)
+      WHERE id = $4 AND tutor_id = $5
       RETURNING 
         id,
         request_type as "requestType",
@@ -128,15 +131,42 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
         review_notes as "reviewNotes",
         current_session as "currentSession",
         preferred_swap_to as "preferredSwapTo",
-        created_at as "submittedDate"
-    `, [status, reviewNotes, id, req.user.id]);
+        created_at as "submittedDate",
+        unit_id
+    `, [status, reviewNotes, reason, id, req.user.id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Request not found' });
     }
 
+    const updated = result.rows[0];
+
+    // If this update reopened the request as Pending (an appeal), let the
+    // unit coordinator know it needs another look.
+    if ((status || '').toLowerCase() === 'pending' && updated.unit_id) {
+      const unitResult = await pool.query(
+        'SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1',
+        [updated.unit_id]
+      );
+      const unitCode = unitResult.rows[0]?.unit_code || 'your unit';
+      const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
+
+      if (coordinatorId) {
+        const tutorDisplayName = await getUserDisplayName(req.user.id);
+        await createNotification({
+          userId: coordinatorId,
+          type: 'request_appealed',
+          title: 'Rejected request appealed',
+          content: `${tutorDisplayName} appealed a rejected request in ${unitCode}.`,
+          unitId: updated.unit_id,
+          actionUrl: '/uc-requests'
+        });
+      }
+    }
+
     console.log('Request updated:', id);
-    res.json(result.rows[0]);
+    delete updated.unit_id;
+    res.json(updated);
   } catch (error) {
     console.error('Error updating request:', error);
     res.status(500).json({ error: 'Failed to update request' });

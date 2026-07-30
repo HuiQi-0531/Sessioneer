@@ -11,6 +11,19 @@ const labelFromValue = (value) => {
   return parts[1].replace(/\|/g, ' | ');
 };
 
+const APPEAL_MARKER = '--- Appeal ---';
+// Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
+// Split that back apart so the UI can show "Reason" and "Appeal" as separate labeled sections.
+const splitReasonAndAppeal = (reasonText) => {
+  if (!reasonText || !reasonText.includes(APPEAL_MARKER)) {
+    return { reason: reasonText || '', appeal: null };
+  }
+  const idx = reasonText.indexOf(APPEAL_MARKER);
+  const reason = reasonText.slice(0, idx).trim();
+  const appeal = reasonText.slice(idx + APPEAL_MARKER.length).trim();
+  return { reason, appeal };
+};
+
 const UCRequests = () => {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -108,6 +121,24 @@ const UCRequests = () => {
 
   const isUrgent = (req) => (req.priority || '').toLowerCase() === 'urgent';
 
+  const renderReasonSections = (req) => {
+    const { reason, appeal } = splitReasonAndAppeal(req.reason);
+    return (
+      <>
+        <div className="uc-reason-box">
+          <div className="uc-reason-label">Reason</div>
+          <p className="uc-reason-text">{reason}</p>
+        </div>
+        {appeal && (
+          <div className="uc-appeal-box">
+            <div className="uc-appeal-label">Appeal</div>
+            <p className="uc-reason-text">{appeal}</p>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="uc-dashboard-container">
       <UCSidebar activePage="requests" />
@@ -141,6 +172,9 @@ const UCRequests = () => {
                     </div>
                     <div className="uc-request-badges">
                       {isUrgent(request) && <span className="uc-badge urgent">URGENT</span>}
+                      {request.reason && request.reason.includes(APPEAL_MARKER) && (
+                        <span className="uc-badge appealed">APPEALED</span>
+                      )}
                       <span className={`uc-badge ${request.requestType === 'Session swap' ? 'swap' : 'change'}`}>
                         {request.requestType}
                       </span>
@@ -162,10 +196,7 @@ const UCRequests = () => {
                         </div>
                       </>
                     )}
-                    <div className="uc-reason-box">
-                      <div className="uc-reason-label">Reason</div>
-                      <p className="uc-reason-text">{request.reason}</p>
-                    </div>
+                    {renderReasonSections(request)}
                   </div>
 
                   <div className="uc-action-buttons">
@@ -197,6 +228,9 @@ const UCRequests = () => {
                       <p className="uc-submitted-date">Submitted {request.submittedDate}</p>
                     </div>
                     <div className="uc-request-badges">
+                      {request.reason && request.reason.includes(APPEAL_MARKER) && (
+                        <span className="uc-badge appealed">APPEALED</span>
+                      )}
                       <span className={`uc-badge ${request.requestType === 'Session swap' ? 'swap' : 'change'}`}>
                         {request.requestType}
                       </span>
@@ -226,10 +260,7 @@ const UCRequests = () => {
                         <p className="uc-session-time">{request.reviewNotes}</p>
                       </div>
                     )}
-                    <div className="uc-reason-box">
-                      <div className="uc-reason-label">Reason</div>
-                      <p className="uc-reason-text">{request.reason}</p>
-                    </div>
+                    {renderReasonSections(request)}
                   </div>
                 </div>
               ))}

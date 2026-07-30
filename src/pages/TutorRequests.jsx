@@ -21,6 +21,19 @@ const unitCodeFromSession = (value) => {
 const sessionLabel = (s) => `${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)} | ${s.location || 'TBA'} | ${s.sessionType || 'Session'}`;
 const sessionValue = (s, unitCode) => `${unitCode}::${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}|${s.location || 'TBA'}`;
 
+const APPEAL_MARKER = '--- Appeal ---';
+// Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
+// Split that back apart so the UI can show "Reason" and "Appeal" as separate labeled sections.
+const splitReasonAndAppeal = (reasonText) => {
+  if (!reasonText || !reasonText.includes(APPEAL_MARKER)) {
+    return { reason: reasonText || '', appeal: null };
+  }
+  const idx = reasonText.indexOf(APPEAL_MARKER);
+  const reason = reasonText.slice(0, idx).trim();
+  const appeal = reasonText.slice(idx + APPEAL_MARKER.length).trim();
+  return { reason, appeal };
+};
+
 const isActive = (s) => ['pending', 'suggested'].includes((s || '').toLowerCase());
 const isProcessed = (s) => ['accepted', 'rejected'].includes((s || '').toLowerCase());
 const statusKey = (s) => (s || '').toLowerCase();
@@ -44,6 +57,12 @@ const TutorRequests = () => {
 
   const [unitSessions, setUnitSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+
+  const [showAppealModal, setShowAppealModal] = useState(false);
+  const [appealRequest, setAppealRequest] = useState(null);
+  const [appealText, setAppealText] = useState('');
+  const [appealError, setAppealError] = useState('');
+  const [isAppealing, setIsAppealing] = useState(false);
 
   const activeRequests = requests.filter(r => isActive(r.status));
   const processedRequests = requests.filter(r => isProcessed(r.status));
@@ -143,6 +162,44 @@ const TutorRequests = () => {
     } catch (err) { alert(`Failed to respond: ${err.message}`); }
   };
 
+  const handleOpenAppeal = (req) => {
+    setAppealRequest(req);
+    setAppealText('');
+    setAppealError('');
+    setShowAppealModal(true);
+  };
+
+  const handleCancelAppeal = () => {
+    setShowAppealModal(false);
+    setAppealRequest(null);
+    setAppealText('');
+    setAppealError('');
+  };
+
+  const submitAppeal = async () => {
+    if (!appealRequest) return;
+    if (!appealText.trim()) {
+      setAppealError('Please explain why you\'re appealing this decision.');
+      return;
+    }
+    setIsAppealing(true);
+    try {
+      const combinedReason = `${appealRequest.reason}\n\n--- Appeal ---\n${appealText.trim()}`;
+      await requestsAPI.update(appealRequest.id, {
+        status: 'Pending',
+        reason: combinedReason,
+      });
+      await fetchRequests();
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      handleCancelAppeal();
+    } catch (err) {
+      setAppealError(err.message || 'Failed to submit appeal. Please try again.');
+    } finally {
+      setIsAppealing(false);
+    }
+  };
+
   const getTimeAgo = (ts) => {
     const d = Date.now() - new Date(ts);
     const m = Math.floor(d / 60000), h = Math.floor(d / 3600000), dy = Math.floor(d / 86400000);
@@ -176,10 +233,23 @@ const TutorRequests = () => {
             <div className="session-label">UC Suggested Session</div>
             <div className="session-time">{req.reviewNotes}</div>
           </div>
-          <div className="reason-section">
-            <div className="reason-label">Reason</div>
-            <div className="reason-text">{req.reason}</div>
-          </div>
+          {(() => {
+            const { reason, appeal } = splitReasonAndAppeal(req.reason);
+            return (
+              <>
+                <div className="reason-section">
+                  <div className="reason-label">Reason</div>
+                  <div className="reason-text">{reason}</div>
+                </div>
+                {appeal && (
+                  <div style={{ marginTop: '4px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
+                    <div className="reason-text">{appeal}</div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="suggestion-actions">
             <button className="btn-accept-suggestion" onClick={() => { setSelectedSuggestion(req); setSuggestionAction('accept'); setShowSuggestedModal(true); }}>Accept Suggestion</button>
             <button className="btn-reject-suggestion" onClick={() => { setSelectedSuggestion(req); setSuggestionAction('reject'); setShowSuggestedModal(true); }}>Reject Suggestion</button>
@@ -194,10 +264,28 @@ const TutorRequests = () => {
             <div className="session-label">Current Session Will Be Removed</div>
             <div className="session-time">{labelFromValue(req.currentSession) || req.currentSession}</div>
           </div>
-          <div className="reason-section">
-            <div className="reason-label">Reason</div>
-            <div className="reason-text">{req.reason}</div>
-          </div>
+          {(() => {
+            const { reason, appeal } = splitReasonAndAppeal(req.reason);
+            return (
+              <>
+                <div className="reason-section">
+                  <div className="reason-label">Reason</div>
+                  <div className="reason-text">{reason}</div>
+                </div>
+                {appeal && (
+                  <div style={{ marginTop: '4px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
+                    <div className="reason-text">{appeal}</div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+          {statusKey(req.status) === 'rejected' && (
+            <div className="appeal-actions">
+              <button className="btn-appeal" onClick={() => handleOpenAppeal(req)}>Appeal decision</button>
+            </div>
+          )}
         </>
       );
     }
@@ -216,10 +304,28 @@ const TutorRequests = () => {
             </div>
           </>
         )}
-        <div className="reason-section">
-          <div className="reason-label">Reason</div>
-          <div className="reason-text">{req.reason}</div>
-        </div>
+        {(() => {
+          const { reason, appeal } = splitReasonAndAppeal(req.reason);
+          return (
+            <>
+              <div className="reason-section">
+                <div className="reason-label">Reason</div>
+                <div className="reason-text">{reason}</div>
+              </div>
+              {appeal && (
+                <div style={{ marginTop: '4px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
+                  <div className="reason-text">{appeal}</div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+        {statusKey(req.status) === 'rejected' && (
+          <div className="appeal-actions">
+            <button className="btn-appeal" onClick={() => handleOpenAppeal(req)}>Appeal decision</button>
+          </div>
+        )}
       </>
     );
   };
@@ -428,6 +534,53 @@ const TutorRequests = () => {
               <button className={suggestionAction === 'accept' ? 'btn-submit' : 'btn-submit reject-btn'}
                 onClick={confirmSuggestionResponse}>
                 {suggestionAction === 'accept' ? 'Accept' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAppealModal && (
+        <div className="modal-overlay" onClick={handleCancelAppeal}>
+          <div className="modal-content modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Appeal this decision</h2>
+                <p className="modal-subtitle">Add more context and resubmit this request for review.</p>
+              </div>
+              <button className="modal-close-btn" onClick={handleCancelAppeal}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Original reason</label>
+                <p className="appeal-original-reason">{splitReasonAndAppeal(appealRequest?.reason).reason}</p>
+              </div>
+              {appealRequest?.reviewNotes && (
+                <div className="form-group">
+                  <label>Rejection note</label>
+                  <p className="appeal-original-reason">{appealRequest.reviewNotes}</p>
+                </div>
+              )}
+              <div className="form-group">
+                <label>Why are you appealing? <span className="required">*</span></label>
+                <textarea
+                  rows={4}
+                  className={`form-textarea ${appealError ? 'error' : ''}`}
+                  value={appealText}
+                  onChange={(e) => { setAppealText(e.target.value); setAppealError(''); }}
+                  placeholder="Explain what's changed or why you'd like this reconsidered..."
+                />
+                {appealError && <p className="error-message">{appealError}</p>}
+              </div>
+              <div className="info-note">
+                <span className="note-icon">⚠</span>
+                <span className="note-text"><strong>Note:</strong> This will move your request back to Pending and notify your Unit Coordinator.</span>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={handleCancelAppeal}>Cancel</button>
+              <button className="btn-submit" onClick={submitAppeal} disabled={isAppealing}>
+                {isAppealing ? 'Submitting...' : 'Submit appeal'}
               </button>
             </div>
           </div>

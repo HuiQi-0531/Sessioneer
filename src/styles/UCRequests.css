@@ -245,6 +245,7 @@
 .uc-badge.rejected  { background-color: #fee2e2; color: #dc2626; }
 .uc-badge.suggested { background-color: #e8d5f7; color: #7c3aed; }
 .uc-badge.urgent    { background-color: #fee2e2; color: #dc2626; }
+.uc-badge.appealed  { background-color: #ede9fe; color: #5e5ae6; }
 
 /* ===== REQUEST BODY ===== */
 .uc-request-body {
@@ -289,6 +290,20 @@
 }
 
 .uc-reason-text { font-size: 14px; color: #4b5563; line-height: 1.6; text-align: left; margin: 0; }
+
+.uc-appeal-box {
+  margin-top: 4px;
+}
+
+.uc-appeal-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+  text-align: left;
+}
 
 /* ===== ACTION BUTTONS ===== */
 .uc-action-buttons { display: flex; gap: 12px; margin-top: 16px; }

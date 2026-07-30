@@ -304,6 +304,40 @@
   transform: translateY(0);
 }
 
+/* ===== APPEAL (rejected requests) ===== */
+.appeal-actions {
+  margin-top: 4px;
+}
+
+.btn-appeal {
+  width: 100%;
+  padding: 10px 24px;
+  background-color: #ffffff;
+  color: #5e5ae6;
+  border: 1px solid #5e5ae6;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-appeal:hover {
+  background-color: #f0edff;
+}
+
+.appeal-original-reason {
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  background-color: #f9fafb;
+  border: 1px solid #f0f1f3;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 /* ===== MODAL ===== */
 .modal-overlay {
   position: fixed;
@@ -447,6 +481,7 @@
 .btn-cancel:hover { background-color: #e5e7eb; }
 .btn-submit { background-color: #5e5ae6; color: white; }
 .btn-submit:hover { background-color: #4d49d1; }
+.btn-submit:disabled { background-color: #d1d5db; cursor: not-allowed; }
 
 /* ===== SUGGESTION DETAIL ===== */
 .suggestion-detail {
