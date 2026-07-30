@@ -104,6 +104,53 @@ const TutorSchedule = () => {
 
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
 
+  const handleExportCsv = () => {
+  const headers = ['Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
+
+  const rows = sessions.map(session => {
+    const status = getStatus(session);
+
+    return [
+      session.day,
+      session.startTime.slice(0, 5),
+      session.endTime.slice(0, 5),
+      session.location || '',
+      session.sessionType || '',
+      status === 'pending'
+        ? 'Awaiting response'
+        : status.charAt(0).toUpperCase() + status.slice(1),
+    ];
+  });
+
+  const csvContent = [headers, ...rows]
+    .map(row =>
+      row
+        .map(value => `"${String(value).replace(/"/g, '""')}"`)
+        .join(',')
+    )
+    .join('\n');
+
+  const blob = new Blob([csvContent], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = window.URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute(
+    'download',
+    `${activeUnit?.unitCode || 'Schedule'}_Schedule.csv`
+  );
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  window.URL.revokeObjectURL(url);
+};
+
+
   const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
   const gridSessions = sessions.filter(s =>
     DAYS.includes(s.day) &&
@@ -188,13 +235,28 @@ const TutorSchedule = () => {
 
         <div className="ts-content">
           <div className="ts-view-toggle">
-            <button className={`ts-toggle-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>
-              List View
-            </button>
-            <button className={`ts-toggle-btn ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')}>
-              Grid View
-            </button>
-          </div>
+  <button
+    className={`ts-toggle-btn ${view === 'list' ? 'active' : ''}`}
+    onClick={() => setView('list')}
+  >
+    List View
+  </button>
+
+  <button
+    className={`ts-toggle-btn ${view === 'grid' ? 'active' : ''}`}
+    onClick={() => setView('grid')}
+  >
+    Grid View
+  </button>
+
+  <button
+    className="ts-toggle-btn"
+    onClick={handleExportCsv}
+    disabled={sessions.length === 0}
+  >
+    Export CSV
+  </button>
+</div>
 
           {isLoadingSessions ? (
             <div className="ts-empty-state">Loading your schedule...</div>
