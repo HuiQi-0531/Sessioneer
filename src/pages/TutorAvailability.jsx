@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { availabilityAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -28,6 +28,36 @@ const TutorAvailability = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const infoIconRef = useRef(null);
+  const tooltipRef = useRef(null);
+
+  const toggleTooltip = () => {
+    if (!showInfoTooltip && infoIconRef.current) {
+      const rect = infoIconRef.current.getBoundingClientRect();
+      setTooltipPos({ top: rect.bottom + 6, left: rect.right - 220 });
+    }
+    setShowInfoTooltip(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (!showInfoTooltip) return;
+
+    const handleClickOutside = (event) => {
+      if (
+        infoIconRef.current &&
+        !infoIconRef.current.contains(event.target) &&
+        tooltipRef.current &&
+        !tooltipRef.current.contains(event.target)
+      ) {
+        setShowInfoTooltip(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showInfoTooltip]);
+
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const timeSlots = [
@@ -215,51 +245,53 @@ const TutorAvailability = () => {
           <div className="availability-card">
             <div className="unit-info">My Unit: {activeUnit.unitCode}</div>
 
-            <div className="legend" style={{ position: 'relative' }}>
-        <div className="legend-item">
-          <div className="legend-box preferred"></div>
-          <span>Preferred</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-box available"></div>
-          <span>Available</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-box avoid"></div>
-          <span>Avoid</span>
-        </div>
+            <div className="legend">
+    <div className="legend-item">
+      <div className="legend-box preferred"></div>
+      <span>Preferred</span>
+    </div>
+    <div className="legend-item">
+      <div className="legend-box available"></div>
+      <span>Available</span>
+    </div>
+    <div className="legend-item">
+      <div className="legend-box avoid"></div>
+      <span>Avoid</span>
+    </div>
 
-        <button
-          className="info-icon-btn"
-          onClick={() => setShowInfoTooltip(prev => !prev)}
+    <div style={{ position: 'relative', marginLeft: 'auto' }}>
+      <button
+        ref={infoIconRef}
+        className="info-icon-btn"
+        onClick={toggleTooltip}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          border: '1px solid #999',
+          background: '#fff',
+          color: '#555',
+          fontSize: 13,
+          fontStyle: 'italic',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        aria-label="How to use the availability grid"
+      >
+        i
+      </button>
+
+      {showInfoTooltip && (
+        <div
+          ref={tooltipRef}
+          className="info-tooltip"
           style={{
-            marginLeft: 'auto',
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            border: '1px solid #999',
-            background: '#fff',
-            color: '#555',
-            fontSize: 13,
-            fontStyle: 'italic',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          aria-label="How to use the availability grid"
-        >
-          i
-        </button>
-
-        {showInfoTooltip && (
-          <div
-            className="info-tooltip"
-            style={{
-              position: 'absolute',
-              top: 30,
-              right: 0,
+              position: 'fixed',
+              top: tooltipPos.top,
+              left: tooltipPos.left,
               background: '#fff',
               border: '1px solid #ddd',
               borderRadius: 6,
@@ -268,17 +300,19 @@ const TutorAvailability = () => {
               fontSize: 13,
               color: '#333',
               width: 220,
-              zIndex: 10,
+              zIndex: 9999,
+              textAlign: 'left',
             }}
-          >
-            <p style={{ margin: '2px 0' }}>Click a time slot to cycle through:</p>
-            <p style={{ margin: '2px 0' }}>1st click — <strong style={{ color: '#16a34a' }}>Preferred</strong></p>
-            <p style={{ margin: '2px 0' }}>2nd click — <strong style={{ color: '#2563eb' }}>Available</strong></p>
-            <p style={{ margin: '2px 0' }}>3rd click — <strong style={{ color: '#dc2626' }}>Avoid</strong></p>
-            <p style={{ margin: '2px 0' }}>4th click — clears the selection</p>
-          </div>
-        )}
-      </div>
+        >
+          <p style={{ margin: '2px 0' }}>Click a time slot to cycle through:</p>
+          <p style={{ margin: '2px 0' }}>1st click — <strong style={{ color: '#16a34a' }}>Preferred</strong></p>
+          <p style={{ margin: '2px 0' }}>2nd click — <strong style={{ color: '#2563eb' }}>Available</strong></p>
+          <p style={{ margin: '2px 0' }}>3rd click — <strong style={{ color: '#dc2626' }}>Avoid</strong></p>
+          <p style={{ margin: '2px 0' }}>4th click — clears the selection</p>
+        </div>
+      )}
+    </div>
+  </div>
 
             {isWindowClosed ? (
               <div className="warning-message" style={{ backgroundColor: '#fee2e2', borderLeftColor: '#ef4444' }}>
