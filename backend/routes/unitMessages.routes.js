@@ -65,12 +65,23 @@ router.get('/contacts', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
-    if (req.user.role === 'coordinator') {
+        if (req.user.role === 'coordinator') {
       const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
       if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
       const tutorsResult = await pool.query(
-        `SELECT id, name, email FROM users WHERE role = 'tutor' ORDER BY name`
+        `
+        SELECT DISTINCT u.id, u.name, u.email
+        FROM users u
+        WHERE u.role = 'tutor'
+          AND (
+            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor')
+            OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $1)
+            OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $1)
+          )
+        ORDER BY u.name
+        `,
+        [unitId]
       );
 
       const contacts = await Promise.all(
@@ -95,8 +106,19 @@ router.get('/contacts', verifyToken, async (req, res) => {
       const coordinator = unitResult.rows[0];
 
       const peerTutorsResult = await pool.query(
-        `SELECT id, name, email FROM users WHERE role = 'tutor' AND id != $1 ORDER BY name`,
-        [req.user.id]
+  `
+        SELECT DISTINCT u.id, u.name, u.email
+        FROM users u
+        WHERE u.role = 'tutor'
+          AND u.id != $1
+          AND (
+            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor')
+            OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $2)
+            OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $2)
+          )
+        ORDER BY u.name
+        `,
+        [req.user.id, unitId]
       );
 
       const contacts = [];
