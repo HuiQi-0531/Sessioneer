@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { messagesAPI } from '../config/api';
+import { getSocket } from '../utils/socket';
 import '../styles/UCSidebar.css';
 
 const TutorSidebar = ({ activePage }) => {
@@ -19,9 +21,58 @@ const TutorSidebar = ({ activePage }) => {
   const navigate = useNavigate();
 
   const currentUser = useMemo(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
-  }, []);
+  const savedUser = localStorage.getItem('currentUser');
+  return savedUser ? JSON.parse(savedUser) : null;
+}, []);
+
+const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+const checkUnreadMessages = useCallback(async () => {
+  if (!allUnits || allUnits.length === 0) {
+    setHasUnreadMessages(false);
+    return;
+  }
+
+  try {
+    const results = await Promise.all(
+      allUnits.map(async (unit) => {
+        const [groupData, contacts] = await Promise.all([
+          messagesAPI.getGroupUnreadCount(unit.id),
+          messagesAPI.getUnitContacts(unit.id)
+        ]);
+        const groupUnread = groupData?.unreadCount || 0;
+        const directUnread = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        return groupUnread + directUnread;
+      })
+    );
+
+    const totalUnread = results.reduce((sum, n) => sum + n, 0);
+    setHasUnreadMessages(totalUnread > 0);
+  } catch (err) {
+    console.error('Error checking unread messages:', err);
+  }
+}, [allUnits]);
+
+useEffect(() => {
+  checkUnreadMessages();
+}, [checkUnreadMessages]);
+
+useEffect(() => {
+  const socket = getSocket();
+  if (!socket) return;
+
+  const handleNewMessage = () => {
+    checkUnreadMessages();
+  };
+
+  socket.on('direct-message', handleNewMessage);
+  socket.on('group-message', handleNewMessage);
+
+  return () => {
+    socket.off('direct-message', handleNewMessage);
+    socket.off('group-message', handleNewMessage);
+  };
+}, [checkUnreadMessages]);
 
   const displayName = currentUser?.name || 'Guest';
   const avatarLetter = displayName.charAt(0).toUpperCase();
@@ -46,11 +97,30 @@ const TutorSidebar = ({ activePage }) => {
     navigate(role === 'coordinator' ? '/uc-requests' : '/', { replace: true });
   };
 
-  const navItem = (label, path, key) => {
+  const navItem = (label, path, key, showDot = false) => {
+  const content = (
+    <>
+        {label}
+        {showDot && (
+          <span
+            style={{
+              display: 'inline-block',
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#ef4444',
+              marginLeft: 6,
+              verticalAlign: 'middle',
+            }}
+          />
+        )}
+      </>
+    );
+
     if (activePage === key) {
-      return <span className="uc-nav-item active">{label}</span>;
+      return <span className="uc-nav-item active">{content}</span>;
     }
-    return <Link to={path} className="uc-nav-item">{label}</Link>;
+    return <Link to={path} className="uc-nav-item">{content}</Link>;
   };
 
   return (
@@ -115,7 +185,7 @@ const TutorSidebar = ({ activePage }) => {
         {navItem('Availability', '/availability', 'availability')}
         {navItem('Schedule', activeUnit ? `/tutor-schedule/${activeUnit.id}` : '#schedule', 'schedule')}
         {navItem('Requests', '/requests', 'requests')}
-        {navItem('Messages', '/tutor-messages', 'messages')}
+        {navItem('Messages', '/tutor-messages', 'messages', hasUnreadMessages)}
       </nav>
 
       <div className="uc-user-footer-row">
