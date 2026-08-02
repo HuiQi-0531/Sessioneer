@@ -105,8 +105,6 @@ const TutorAvailability = () => {
 
       try {
         const data = await availabilityAPI.get(activeUnit.unitCode);
-        console.log('API response:', data);
-        console.log('currentUser:', currentUser);
         const backendAvailability = hydrateTutorAvailability(data);
         const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
 
