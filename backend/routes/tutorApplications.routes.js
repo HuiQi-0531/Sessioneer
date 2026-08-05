@@ -18,6 +18,8 @@ const formatApplication = (a) => ({
   email: a.email,
   phoneNumber: a.phone_number,
   workExperience: a.work_experience,
+  maximumHours: a.maximum_hours,
+  contractType: a.contract_type,
   hasResume: !!a.resume_filename,
   resumeFilename: a.resume_filename,
   status: a.status,
@@ -33,7 +35,7 @@ const formatApplication = (a) => ({
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, email, phoneNumber, workExperience, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const { name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and email are required' });
@@ -44,10 +46,10 @@ router.post('/', async (req, res) => {
     await pool.query(
       `
       INSERT INTO tutor_applications
-        (name, email, phone_number, work_experience, resume_filename, resume_mime_type, resume_data, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        (name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
       `,
-      [name, email, phoneNumber || null, workExperience || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
+      [name, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -221,13 +223,14 @@ router.post('/accept-invite', async (req, res) => {
     const passwordHash = hashPassword(password);
     const newUserResult = await client.query(
       `
-      INSERT INTO users (name, email, role, password_hash, phone_number, work_experience, resume_filename, resume_mime_type, resume_data)
-      VALUES ($1, $2, 'tutor', $3, $4, $5, $6, $7, $8)
+      INSERT INTO users (name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)
+      VALUES ($1, $2, 'tutor', $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
       `,
       [
         application.name, application.email, passwordHash,
-        application.phone_number, application.work_experience,
+        application.phone_number, application.work_experience, 
+        application.maximum_hours, application.contract_type,
         application.resume_filename, application.resume_mime_type, application.resume_data
       ]
     );

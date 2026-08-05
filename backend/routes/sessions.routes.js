@@ -72,6 +72,7 @@ const formatSessionRow = (s) => ({
   campus: s.campus,
   sessionType: s.session_type,
   capacity: s.capacity,
+  requiredTutors: s.required_tutors,
   status: s.status,
   staffNote: s.staff_note,
   isAssigned: s.is_assigned,
@@ -164,7 +165,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const { day, startTime, endTime, location, campus, sessionType, capacity, status } = req.body;
+    const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;
     const normalisedDay = normaliseDay(day) || day;
 
     if (!normalisedDay || !startTime || !endTime) {
@@ -174,14 +175,14 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO sessions
-        (unit_id, day, start_time, end_time, location, campus, session_type, capacity, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
       `,
       [
         unitId, normalisedDay, startTime, endTime,
         location || null, campus || null, sessionType || null,
-        capacity || null, status || 'Confirmed'
+        capacity || null, requiredTutors || 1, status || 'Confirmed'
       ]
     );
 
@@ -199,9 +200,7 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const { day, startTime, endTime, location, campus, sessionType, capacity, status } = req.body;
-    const normalisedDay = day ? (normaliseDay(day) || day) : null;
-
+    const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;    const normalisedDay = day ? (normaliseDay(day) || day) : null;
     const result = await pool.query(
       `
       UPDATE sessions
@@ -213,11 +212,12 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
         campus = COALESCE($5, campus),
         session_type = COALESCE($6, session_type),
         capacity = COALESCE($7, capacity),
-        status = COALESCE($8, status)
-      WHERE id = $9 AND unit_id = $10
+        required_tutors = COALESCE($8, required_tutors),
+        status = COALESCE($9, status)
+      WHERE id = $10 AND unit_id = $11
       RETURNING *
       `,
-      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, status, sessionId, unitId]
+      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionId, unitId]
     );
 
     if (result.rows.length === 0) {
@@ -292,14 +292,14 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
       const result = await client.query(
         `
         INSERT INTO sessions
-          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, status, staff_note)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, staff_note)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id
         `,
         [
           unitId, normalisedDay, normalisedStart, normalisedEnd,
           row.location || null, row.campus || null, row.sessionType || null,
-          row.capacity || null, row.status || 'Confirmed', row.staffNote || null
+          row.capacity || null, row.requiredTutors || 1, row.status || 'Confirmed', row.staffNote || null
         ]
       );
       imported.push(result.rows[0].id);

@@ -14,7 +14,14 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 });
 
 const TutorApply = () => {
-  const [formData, setFormData] = useState({ name: '', email: '', phoneNumber: '', workExperience: '' });
+const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phoneNumber: '',
+    workExperience: '',
+    maximumHours: '',
+    contractType: ''
+});  
   const [resumeFile, setResumeFile] = useState(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,6 +67,8 @@ const TutorApply = () => {
         email: formData.email.trim(),
         phoneNumber: formData.phoneNumber.trim(),
         workExperience: formData.workExperience.trim(),
+        maximumHours: formData.maximumHours === '' ? null : parseInt(formData.maximumHours, 10),
+        contractType: formData.contractType || null,
         resumeBase64,
         resumeFilename: resumeFile?.name || null,
         resumeMimeType: resumeFile?.type || null
@@ -127,6 +136,28 @@ const TutorApply = () => {
               onChange={handleChange}
               placeholder="Tell us about any tutoring, teaching, or relevant industry experience..."
             />
+          </div>
+
+          <div className="ta-field">
+            <label>Maximum hours / week</label>
+            <input
+              type="number"
+              name="maximumHours"
+              min="0"
+              value={formData.maximumHours}
+              onChange={handleChange}
+              placeholder="e.g. 10"
+            />
+          </div>
+
+          <div className="ta-field">
+            <label>Preferred contract type</label>
+            <select name="contractType" value={formData.contractType} onChange={handleChange}>
+              <option value="">-- Select --</option>
+              <option value="Casual">Casual</option>
+              <option value="Sessional">Sessional</option>
+              <option value="Fixed-term">Fixed-term (Contract)</option>
+            </select>
           </div>
 
           <div className="ta-field">

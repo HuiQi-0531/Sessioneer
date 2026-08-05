@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     location VARCHAR(100),
     session_type VARCHAR(50),
     capacity INTEGER,
+    required_tutors INTEGER NOT NULL DEFAULT 1,
     is_assigned BOOLEAN DEFAULT FALSE,
     assigned_tutor_id UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT NOW()

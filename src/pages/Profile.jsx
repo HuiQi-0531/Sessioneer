@@ -20,7 +20,13 @@ const Profile = () => {
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [formData, setFormData] = useState({ name: '', phoneNumber: '' });
+  const [formData, setFormData] = useState({
+    name: '',
+    phoneNumber: '',
+    workExperience: '',
+    maximumHours: '',
+    contractType: ''
+  });  
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState(null);
 
@@ -39,8 +45,13 @@ const Profile = () => {
     try {
       const data = await profileAPI.get();
       setProfile(data);
-      setFormData({ name: data.name || '', phoneNumber: data.phoneNumber || '' });
-    } catch (err) {
+      setFormData({
+        name: data.name || '',
+        phoneNumber: data.phoneNumber || '',
+        workExperience: data.workExperience || '',
+        maximumHours: data.maximumHours ?? '',
+        contractType: data.contractType || ''
+      });    } catch (err) {
       console.error('Error loading profile:', err);
     } finally {
       setIsLoading(false);
@@ -51,8 +62,11 @@ const Profile = () => {
     setIsSavingProfile(true);
     setProfileMessage(null);
     try {
-      const updated = await profileAPI.update(formData);
-      setProfile(updated);
+      const payload = {
+        ...formData,
+        maximumHours: formData.maximumHours === '' ? null : parseInt(formData.maximumHours, 10)
+      };
+      const updated = await profileAPI.update(payload);      setProfile(updated);
 
       // Keep the sidebar's cached name in sync
       const saved = localStorage.getItem('currentUser');
@@ -164,17 +178,35 @@ const Profile = () => {
               <>
                 <div className="pf-field">
                   <label>Work experience</label>
-                  <input type="text" value={profile?.workExperience || 'Not set'} disabled />
-                  <p className="pf-field-hint">Editable from the Availability page in a future update.</p>
+                  <input
+                    type="text"
+                    value={formData.workExperience}
+                    onChange={(e) => setFormData(prev => ({ ...prev, workExperience: e.target.value }))}
+                    placeholder="e.g. 2 years tutoring first-year programming units"
+                  />
                 </div>
                 <div className="pf-row">
                   <div className="pf-field">
                     <label>Maximum hours / week</label>
-                    <input type="text" value={profile?.maximumHours ?? 'Not set'} disabled />
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.maximumHours}
+                      onChange={(e) => setFormData(prev => ({ ...prev, maximumHours: e.target.value }))}
+                      placeholder="e.g. 10"
+                    />
                   </div>
                   <div className="pf-field">
                     <label>Contract type</label>
-                    <input type="text" value={profile?.contractType || 'Not set'} disabled />
+                    <select
+                      value={formData.contractType}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contractType: e.target.value }))}
+                    >
+                      <option value="">-- Select --</option>
+                      <option value="Casual">Casual</option>
+                      <option value="Sessional">Sessional</option>
+                      <option value="Fixed-term">Fixed-term (Contract)</option>
+                    </select>
                   </div>
                 </div>
               </>

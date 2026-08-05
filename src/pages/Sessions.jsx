@@ -15,6 +15,7 @@ const emptyForm = {
   campus: '',
   sessionType: '',
   capacity: '',
+  requiredTutors: 1,
   status: 'Confirmed'
 };
 
@@ -84,6 +85,7 @@ const Sessions = () => {
       campus: session.campus || '',
       sessionType: session.sessionType || '',
       capacity: session.capacity || '',
+      requiredTutors: session.requiredTutors || 1,
       status: session.status || 'Confirmed'
     });
     setError('');
@@ -117,6 +119,7 @@ const Sessions = () => {
       campus: formData.campus || null,
       sessionType: formData.sessionType || null,
       capacity: formData.capacity ? parseInt(formData.capacity, 10) : null,
+      requiredTutors: formData.requiredTutors ? parseInt(formData.requiredTutors, 10) : 1,
       status: formData.status
     };
 
@@ -264,6 +267,11 @@ const Sessions = () => {
                   </div>
 
                   <div className="ss-field">
+                    <label>Tutor</label>
+                    <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" />
+                  </div>
+
+                  <div className="ss-field">
                     <label>Status</label>
                     <select name="status" value={formData.status} onChange={handleChange}>
                       <option value="Confirmed">Confirmed</option>
@@ -300,6 +308,7 @@ const Sessions = () => {
                   <th>Campus</th>
                   <th>Type</th>
                   <th>Capacity</th>
+                  <th>Tutor</th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
@@ -313,6 +322,7 @@ const Sessions = () => {
                     <td>{session.campus || '-'}</td>
                     <td>{session.sessionType || '-'}</td>
                     <td>{session.capacity || '-'}</td>
+                    <td>{session.requiredTutors || 1}</td>
                     <td>
                       <span className={`ss-status-badge ${(session.status || '').toLowerCase()}`}>
                         {session.status}

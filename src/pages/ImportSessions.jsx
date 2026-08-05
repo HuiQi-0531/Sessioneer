@@ -16,6 +16,7 @@ const SYSTEM_FIELDS = [
   { key: 'campus', label: 'Campus', required: false },
   { key: 'sessionType', label: 'Session Type', required: false },
   { key: 'capacity', label: 'Capacity', required: false },
+  { key: 'requiredTutors', label: 'Tutor', required: false },
   { key: 'staffNote', label: 'Staff (note only)', required: false },
 ];
 
@@ -115,6 +116,9 @@ const ImportSessions = () => {
         const capacityRaw = resolveRowValue(block, mapping, row, 'capacity');
         const capacity = capacityRaw ? parseInt(capacityRaw, 10) : null;
 
+        const requiredTutorsRaw = resolveRowValue(block, mapping, row, 'requiredTutors');
+        const requiredTutors = requiredTutorsRaw ? parseInt(requiredTutorsRaw, 10) : 1;
+
         sessions.push({
           day: resolveRowValue(block, mapping, row, 'day'),
           startTime: resolveRowValue(block, mapping, row, 'startTime'),
@@ -123,6 +127,7 @@ const ImportSessions = () => {
           campus: resolveRowValue(block, mapping, row, 'campus') || null,
           sessionType: resolveRowValue(block, mapping, row, 'sessionType') || fallbackType || null,
           capacity: Number.isNaN(capacity) ? null : capacity,
+          requiredTutors: Number.isNaN(requiredTutors) ? 1 : requiredTutors,
           staffNote: resolveRowValue(block, mapping, row, 'staffNote') || null,
           status: 'Confirmed'
         });
@@ -165,7 +170,7 @@ const ImportSessions = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const csvContent = 'Day,Start Time,End Time,Location,Campus,Session Type,Capacity\nMonday,08:00,10:00,GP-P-419,GP,Tutorial,25\n';
+    const csvContent = 'Day,Start Time,End Time,Location,Campus,Session Type,Capacity,Tutor\nMonday,08:00,10:00,GP-P-419,GP,Tutorial,25,1\n';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
