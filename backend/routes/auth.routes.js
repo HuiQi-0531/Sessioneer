@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
+const { sendEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -33,33 +34,10 @@ const hashResetToken = (token) => {
 };
 
 const sendPasswordResetEmail = async (email, resetLink) => {
-  if (!process.env.BREVO_API_KEY || !process.env.EMAIL_FROM) {
-    throw new Error('Brevo email settings are not configured');
-  }
-
-  const senderEmailMatch = process.env.EMAIL_FROM.match(/<([^>]+)>/);
-  const senderEmail = senderEmailMatch ? senderEmailMatch[1] : process.env.EMAIL_FROM;
-  const senderName = process.env.EMAIL_FROM.replace(/<[^>]+>/, '').trim() || 'Sessioneer';
-
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY,
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      sender: {
-        name: senderName,
-        email: senderEmail
-      },
-      to: [
-        {
-          email
-        }
-      ],
-      subject: 'Reset your Sessioneer password',
-      htmlContent: `
+  return sendEmail({
+    to: email,
+    subject: 'Reset your Sessioneer password',
+    htmlContent: `
         <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
           <h2>Reset your Sessioneer password</h2>
           <p>We received a request to reset your password.</p>
@@ -72,17 +50,8 @@ const sendPasswordResetEmail = async (email, resetLink) => {
           <p>If you did not request this, you can ignore this email.</p>
         </div>
       `,
-      textContent: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
-    })
+    textContent: `Reset your Sessioneer password: ${resetLink}\n\nThis link will expire in 30 minutes.`
   });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.message || data.error || 'Brevo failed to send reset email');
-  }
-
-  return data;
 };
 
 router.post('/register', async (req, res) => {

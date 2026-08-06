@@ -2,8 +2,73 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
+const { escapeHtml, sendEmail } = require('../utils/email');
 
 const router = express.Router();
+
+const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+const labelFromSessionValue = (value) => {
+  if (!value) return 'Not specified';
+  const parts = String(value).split('::');
+  if (parts.length !== 2) return value;
+  return parts[1].replace(/\|/g, ' | ');
+};
+
+const sendUrgentRequestEmail = async ({
+  coordinatorEmail,
+  coordinatorName,
+  tutorName,
+  tutorEmail,
+  unitCode,
+  unitName,
+  requestType,
+  currentSession,
+  preferredSwapTo,
+  reason
+}) => {
+  if (!coordinatorEmail) return;
+
+  const reviewUrl = `${frontendUrl()}/uc-requests`;
+  const title = `Urgent ${requestType || 'session'} request`;
+  const subject = `${title} from ${tutorName} for ${unitCode}`;
+  const sessionLabel = labelFromSessionValue(currentSession);
+  const preferredLabel = preferredSwapTo ? labelFromSessionValue(preferredSwapTo) : 'Not specified';
+  const unitLabel = unitName ? `${unitCode} - ${unitName}` : unitCode;
+
+  await sendEmail({
+    to: [{ email: coordinatorEmail, name: coordinatorName || undefined }],
+    subject,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(tutorName)} submitted an urgent ${escapeHtml(requestType || 'session')} request for ${escapeHtml(unitLabel)}.</p>
+        <table style="border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Tutor</td><td style="padding: 6px 0;">${escapeHtml(tutorName)} (${escapeHtml(tutorEmail || 'no email')})</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Current session</td><td style="padding: 6px 0;">${escapeHtml(sessionLabel)}</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Preferred swap to</td><td style="padding: 6px 0;">${escapeHtml(preferredLabel)}</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Reason</td><td style="padding: 6px 0;">${escapeHtml(reason || 'No reason provided')}</td></tr>
+        </table>
+        <p>
+          <a href="${reviewUrl}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+            Review request
+          </a>
+        </p>
+      </div>
+    `,
+    textContent: [
+      title,
+      '',
+      `${tutorName} submitted an urgent ${requestType || 'session'} request for ${unitLabel}.`,
+      `Tutor: ${tutorName}${tutorEmail ? ` (${tutorEmail})` : ''}`,
+      `Current session: ${sessionLabel}`,
+      `Preferred swap to: ${preferredLabel}`,
+      `Reason: ${reason || 'No reason provided'}`,
+      '',
+      `Review request: ${reviewUrl}`
+    ].join('\n')
+  });
+};
 
 // Get the logged-in tutor's own requests only
 router.get('/requests', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
@@ -47,11 +112,24 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     const tutor_id = req.user.id;
 
     const unitResult = await pool.query(
-      'SELECT id, unit_coordinator_id FROM units WHERE unit_code = $1 LIMIT 1',
+      `
+      SELECT
+        un.id,
+        un.unit_code,
+        un.unit_name,
+        un.unit_coordinator_id,
+        uc.name as coordinator_name,
+        uc.email as coordinator_email
+      FROM units un
+      LEFT JOIN users uc ON uc.id = un.unit_coordinator_id
+      WHERE un.unit_code = $1
+      LIMIT 1
+      `,
       [unitCode]
     );
-    const unit_id = unitResult.rows[0]?.id;
-    const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
+    const unit = unitResult.rows[0];
+    const unit_id = unit?.id;
+    const coordinatorId = unit?.unit_coordinator_id;
 
     const priorityValue = priority || 'Normal';
 
@@ -94,6 +172,25 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
         unitId: unit_id,
         actionUrl: '/uc-requests'
       });
+
+      if ((priorityValue || '').toLowerCase() === 'urgent') {
+        try {
+          await sendUrgentRequestEmail({
+            coordinatorEmail: unit.coordinator_email,
+            coordinatorName: unit.coordinator_name,
+            tutorName: tutorDisplayName,
+            tutorEmail: req.user.email,
+            unitCode: unit.unit_code || unitCode,
+            unitName: unit.unit_name,
+            requestType,
+            currentSession,
+            preferredSwapTo,
+            reason
+          });
+        } catch (emailError) {
+          console.error('Error sending urgent request email:', emailError);
+        }
+      }
     }
 
     res.status(201).json({
