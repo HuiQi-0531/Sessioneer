@@ -302,7 +302,7 @@ const TutorMessages = () => {
       }
     } catch (err) {
       console.error('Error sending message:', err);
-      alert('Failed to send message. Please try again.');
+      alert(err.message || 'Failed to send message. Please try again.');
     } finally {
       setIsSending(false);
     }
