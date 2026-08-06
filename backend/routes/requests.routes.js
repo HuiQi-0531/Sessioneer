@@ -70,6 +70,61 @@ const sendUrgentRequestEmail = async ({
   });
 };
 
+const sendRequestReviewEmail = async ({
+  tutorEmail,
+  tutorName,
+  unitCode,
+  unitName,
+  requestType,
+  status,
+  currentSession,
+  preferredSwapTo,
+  reviewNotes
+}) => {
+  if (!tutorEmail) return;
+
+  const statusLower = (status || '').toLowerCase();
+  const displayStatus = statusLower === 'accepted' ? 'approved' : statusLower || 'updated';
+  const unitLabel = unitName ? `${unitCode} - ${unitName}` : unitCode;
+  const requestsUrl = `${frontendUrl()}/requests`;
+  const sessionLabel = labelFromSessionValue(currentSession);
+  const preferredLabel = preferredSwapTo ? labelFromSessionValue(preferredSwapTo) : 'Not specified';
+  const subject = statusLower === 'suggested'
+    ? `Alternative session suggested for ${unitCode}`
+    : `Your ${unitCode} request was ${displayStatus}`;
+
+  await sendEmail({
+    to: [{ email: tutorEmail, name: tutorName || undefined }],
+    subject,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+        <h2>${escapeHtml(subject)}</h2>
+        <p>Your ${escapeHtml(requestType || 'session')} request for ${escapeHtml(unitLabel)} has been ${escapeHtml(displayStatus)}.</p>
+        <table style="border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Current session</td><td style="padding: 6px 0;">${escapeHtml(sessionLabel)}</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Preferred swap to</td><td style="padding: 6px 0;">${escapeHtml(preferredLabel)}</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Coordinator note</td><td style="padding: 6px 0;">${escapeHtml(reviewNotes || 'No note provided')}</td></tr>
+        </table>
+        <p>
+          <a href="${requestsUrl}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+            View request
+          </a>
+        </p>
+      </div>
+    `,
+    textContent: [
+      subject,
+      '',
+      `Your ${requestType || 'session'} request for ${unitLabel} has been ${displayStatus}.`,
+      `Current session: ${sessionLabel}`,
+      `Preferred swap to: ${preferredLabel}`,
+      `Coordinator note: ${reviewNotes || 'No note provided'}`,
+      '',
+      `View request: ${requestsUrl}`
+    ].join('\n')
+  });
+};
+
 // Get the logged-in tutor's own requests only
 router.get('/requests', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
@@ -367,6 +422,8 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
         change_requests.status,
         change_requests.priority,
         change_requests.review_notes as "reviewNotes",
+        change_requests.current_session as "currentSession",
+        change_requests.preferred_swap_to as "preferredSwapTo",
         change_requests.created_at as "submittedDate",
         change_requests.tutor_id,
         change_requests.unit_id
@@ -378,8 +435,22 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
 
     const updated = result.rows[0];
 
-    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [updated.unit_id]);
-    const unitCode = unitResult.rows[0]?.unit_code || 'your unit';
+    const detailsResult = await pool.query(
+      `
+      SELECT
+        un.unit_code,
+        un.unit_name,
+        tutor.name as tutor_name,
+        tutor.email as tutor_email
+      FROM units un
+      LEFT JOIN users tutor ON tutor.id = $2
+      WHERE un.id = $1
+      LIMIT 1
+      `,
+      [updated.unit_id, updated.tutor_id]
+    );
+    const details = detailsResult.rows[0] || {};
+    const unitCode = details.unit_code || 'your unit';
 
     const statusLower = (status || '').toLowerCase();
     let title, content;
@@ -406,6 +477,22 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
         unitId: updated.unit_id,
         actionUrl: '/requests'
       });
+
+      try {
+        await sendRequestReviewEmail({
+          tutorEmail: details.tutor_email,
+          tutorName: details.tutor_name,
+          unitCode,
+          unitName: details.unit_name,
+          requestType: updated.requestType,
+          status,
+          currentSession: updated.currentSession,
+          preferredSwapTo: updated.preferredSwapTo,
+          reviewNotes
+        });
+      } catch (emailError) {
+        console.error('Error sending request review email:', emailError);
+      }
     }
 
     console.log('Request reviewed:', id, status);
