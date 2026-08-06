@@ -546,11 +546,17 @@ export const messagesAPI = {
     return response.json();
   },
 
-  sendGroup: async (unitId, content) => {
+  sendGroup: async (unitId, content, attachment) => {
+    const body = attachment ? new FormData() : JSON.stringify({ content });
+    if (attachment) {
+      body.append('content', content || '');
+      body.append('attachment', attachment);
+    }
+
     const response = await fetch(`${API_URL}/messages/group/${unitId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ content })
+      headers: attachment ? authHeader() : { 'Content-Type': 'application/json', ...authHeader() },
+      body
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to send message');
@@ -598,11 +604,18 @@ export const messagesAPI = {
     return response.json();
   },
 
-  send: async (recipientId, content) => {
+  send: async (recipientId, content, attachment) => {
+    const body = attachment ? new FormData() : JSON.stringify({ recipientId, content });
+    if (attachment) {
+      body.append('recipientId', recipientId);
+      body.append('content', content || '');
+      body.append('attachment', attachment);
+    }
+
     const response = await fetch(`${API_URL}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ recipientId, content })
+      headers: attachment ? authHeader() : { 'Content-Type': 'application/json', ...authHeader() },
+      body
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to send message');

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const jwt = require('jsonwebtoken');
+const path = require('path');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
@@ -79,7 +80,7 @@ pool.query(`
   DO $$ 
   BEGIN
     IF NOT EXISTS (
-      SELECT 1 FROM information_schema.columns 
+      SELECT 1 FROM information_schema.columns
       WHERE table_name = 'change_requests' AND column_name = 'current_session'
     ) THEN
       ALTER TABLE change_requests ADD COLUMN current_session TEXT;
@@ -253,9 +254,37 @@ pool.query(`
     ) THEN
       ALTER TABLE messages ADD COLUMN unit_id UUID REFERENCES units(id) ON DELETE CASCADE;
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'attachment_url'
+    ) THEN
+      ALTER TABLE messages ADD COLUMN attachment_url TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'attachment_name'
+    ) THEN
+      ALTER TABLE messages ADD COLUMN attachment_name TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'attachment_type'
+    ) THEN
+      ALTER TABLE messages ADD COLUMN attachment_type VARCHAR(120);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'attachment_size'
+    ) THEN
+      ALTER TABLE messages ADD COLUMN attachment_size INTEGER;
+    END IF;
   END $$;
 `).then(() => {
-  console.log('messages unit_id column OK');
+  console.log('messages attachment columns OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });
@@ -474,6 +503,7 @@ pool.query(`
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoint (no token required)
 app.get('/health', async (req, res) => {

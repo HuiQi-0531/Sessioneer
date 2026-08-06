@@ -8,6 +8,8 @@ import '../styles/UCRequests.css';
 import '../styles/Messages.css';
 
 const POLL_INTERVAL_MS = 30000;
+const ATTACHMENT_ACCEPT = 'image/*,.pdf,.doc,.docx,.csv,.xls,.xlsx';
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
 const Messages = () => {
   const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
@@ -22,6 +24,8 @@ const Messages = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [thread, setThread] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [isSending, setIsSending] = useState(false);
 
   const [showProfile, setShowProfile] = useState(false);
@@ -29,6 +33,7 @@ const Messages = () => {
 
   const threadEndRef = useRef(null);
   const pollRef = useRef(null);
+  const attachmentInputRef = useRef(null);
 
   const currentUser = React.useMemo(() => {
     const saved = localStorage.getItem('currentUser');
@@ -210,17 +215,90 @@ const Messages = () => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [thread]);
 
+  useEffect(() => {
+    return () => {
+      if (attachmentPreview?.url) {
+        URL.revokeObjectURL(attachmentPreview.url);
+      }
+    };
+  }, [attachmentPreview]);
+
+  const formatAttachmentSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const clearAttachment = () => {
+    if (attachmentPreview?.url) {
+      URL.revokeObjectURL(attachmentPreview.url);
+    }
+    setSelectedAttachment(null);
+    setAttachmentPreview(null);
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = '';
+    }
+  };
+
+  const handleAttachmentChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      alert('File is too large. Please choose a file under 5 MB.');
+      clearAttachment();
+      return;
+    }
+
+    if (attachmentPreview?.url) {
+      URL.revokeObjectURL(attachmentPreview.url);
+    }
+
+    setSelectedAttachment(file);
+    setAttachmentPreview({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    });
+  };
+
+  const renderAttachment = (message) => {
+    if (!message.attachmentUrl) return null;
+    const isImage = message.attachmentType?.startsWith('image/');
+
+    if (isImage) {
+      return (
+        <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className="msg-attachment-image-link">
+          <img src={message.attachmentUrl} alt={message.attachmentName || 'Attachment'} className="msg-attachment-image" />
+        </a>
+      );
+    }
+
+    return (
+      <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className="msg-attachment-file">
+        <span className="msg-attachment-icon">+</span>
+        <span>
+          <span className="msg-attachment-name">{message.attachmentName || 'Attachment'}</span>
+          <span className="msg-attachment-size">{formatAttachmentSize(message.attachmentSize)}</span>
+        </span>
+      </a>
+    );
+  };
+
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !selectedAttachment) return;
     setIsSending(true);
     try {
       if (chatMode === 'group') {
-        await messagesAPI.sendGroup(selectedUnitId, newMessage.trim());
+        await messagesAPI.sendGroup(selectedUnitId, newMessage.trim(), selectedAttachment);
         setNewMessage('');
+        clearAttachment();
         await loadGroupThread(selectedUnitId);
       } else if (chatMode === 'direct' && selectedContact) {
-        await messagesAPI.send(selectedContact.userId, newMessage.trim());
+        await messagesAPI.send(selectedContact.userId, newMessage.trim(), selectedAttachment);
         setNewMessage('');
+        clearAttachment();
         await loadDirectThread(selectedContact.userId);
         await loadContacts(selectedUnitId);
       }
@@ -325,12 +403,45 @@ const Messages = () => {
                       <div className="msg-bubble-meta">
                         {m.isMine ? 'You' : (chatMode === 'group' ? m.senderName : selectedContact?.name)} - {formatTime(m.sentAt)}
                       </div>
-                      <div className="msg-bubble">{m.content}</div>
+                      <div className="msg-bubble">
+                        {m.content && <div className="msg-bubble-text">{m.content}</div>}
+                        {renderAttachment(m)}
+                      </div>
                     </div>
                   ))}
                   <div ref={threadEndRef} />
                 </div>
+                {attachmentPreview && (
+                  <div className="msg-attachment-preview">
+                    {attachmentPreview.url ? (
+                      <img src={attachmentPreview.url} alt={attachmentPreview.name} />
+                    ) : (
+                      <span className="msg-attachment-preview-icon">+</span>
+                    )}
+                    <div>
+                      <div className="msg-attachment-preview-name">{attachmentPreview.name}</div>
+                      <div className="msg-attachment-preview-size">{formatAttachmentSize(attachmentPreview.size)}</div>
+                    </div>
+                    <button type="button" onClick={clearAttachment} aria-label="Remove attachment">&times;</button>
+                  </div>
+                )}
                 <div className="msg-input-row">
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    accept={ATTACHMENT_ACCEPT}
+                    className="msg-file-input"
+                    onChange={handleAttachmentChange}
+                  />
+                  <button
+                    type="button"
+                    className="msg-attach-btn"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={isSending}
+                    title="Attach file"
+                  >
+                    +
+                  </button>
                   <input
                     type="text"
                     placeholder="Send Message..."
@@ -338,7 +449,7 @@ const Messages = () => {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
                   />
-                  <button className="msg-send-btn" onClick={handleSend} disabled={isSending || !newMessage.trim()}>
+                  <button className="msg-send-btn" onClick={handleSend} disabled={isSending || (!newMessage.trim() && !selectedAttachment)}>
                     Send
                   </button>
                 </div>

@@ -1,8 +1,38 @@
 const express = require('express');
+const crypto = require('crypto');
+const fs = require('fs/promises');
+const path = require('path');
+const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
+
+const ATTACHMENT_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'message-attachments';
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+]);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ATTACHMENT_SIZE },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.mimetype)) {
+      return cb(new Error('Unsupported file type'));
+    }
+    cb(null, true);
+  }
+});
 
 const getIo = (req) => req.app.get('io');
 
@@ -21,6 +51,126 @@ const emitGroupMessage = (req, unitId, message) => {
     unitId,
     message
   });
+};
+
+const formatMessage = (m, currentUserId) => ({
+  id: m.id,
+  senderId: m.sender_id,
+  recipientId: m.recipient_id || null,
+  senderName: m.sender_name || null,
+  content: m.content,
+  isRead: m.is_read,
+  sentAt: m.sent_at,
+  attachmentUrl: m.attachment_url || null,
+  attachmentName: m.attachment_name || null,
+  attachmentType: m.attachment_type || null,
+  attachmentSize: m.attachment_size || null,
+  isMine: m.sender_id === currentUserId
+});
+
+const getSupabaseConfig = () => {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return null;
+  }
+  return {
+    supabaseUrl: supabaseUrl.replace(/\/$/, ''),
+    serviceKey
+  };
+};
+
+const ensureAttachmentBucket = async () => {
+  const { supabaseUrl, serviceKey } = getSupabaseConfig();
+  const response = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: ATTACHMENT_BUCKET,
+      name: ATTACHMENT_BUCKET,
+      public: true,
+      file_size_limit: MAX_ATTACHMENT_SIZE
+    })
+  });
+
+  if (!response.ok && response.status !== 409 && response.status !== 400) {
+    const text = await response.text();
+    throw new Error(text || 'Failed to prepare attachment storage');
+  }
+};
+
+const buildRequestBaseUrl = (req) => {
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = forwardedProto ? forwardedProto.split(',')[0] : req.protocol;
+  return `${protocol}://${req.get('host')}`;
+};
+
+const uploadAttachmentLocally = async (file, senderId, req) => {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const safeExt = ext && ext.length <= 12 ? ext : '';
+  const objectPath = path.join(
+    'message-attachments',
+    'messages',
+    String(senderId),
+    `${Date.now()}-${crypto.randomBytes(12).toString('hex')}${safeExt}`
+  );
+  const uploadDir = path.join(__dirname, '..', 'uploads', path.dirname(objectPath));
+  const fullPath = path.join(__dirname, '..', 'uploads', objectPath);
+
+  await fs.mkdir(uploadDir, { recursive: true });
+  await fs.writeFile(fullPath, file.buffer);
+
+  return {
+    url: `${buildRequestBaseUrl(req)}/uploads/${objectPath.split(path.sep).map(encodeURIComponent).join('/')}`,
+    name: file.originalname,
+    type: file.mimetype,
+    size: file.size
+  };
+};
+
+const uploadAttachment = async (file, senderId, req) => {
+  if (!file) return null;
+
+  const supabaseConfig = getSupabaseConfig();
+  if (!supabaseConfig) {
+    return uploadAttachmentLocally(file, senderId, req);
+  }
+
+  const { supabaseUrl, serviceKey } = supabaseConfig;
+  await ensureAttachmentBucket();
+
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const safeExt = ext && ext.length <= 12 ? ext : '';
+  const objectPath = `messages/${senderId}/${Date.now()}-${crypto.randomBytes(12).toString('hex')}${safeExt}`;
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${ATTACHMENT_BUCKET}/${objectPath}`;
+
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': file.mimetype,
+      'x-upsert': 'false'
+    },
+    body: file.buffer
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Failed to upload attachment');
+  }
+
+  const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
+  return {
+    url: `${supabaseUrl}/storage/v1/object/public/${ATTACHMENT_BUCKET}/${encodedPath}`,
+    name: file.originalname,
+    type: file.mimetype,
+    size: file.size
+  };
 };
 
 const canAccessUnit = async (user, unitId) => {
@@ -56,7 +206,8 @@ router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, sender_id, recipient_id, content, is_read, sent_at
+      SELECT id, sender_id, recipient_id, content, is_read, sent_at,
+             attachment_url, attachment_name, attachment_type, attachment_size
       FROM messages
       WHERE unit_id IS NULL
         AND ((sender_id = $1 AND recipient_id = $2)
@@ -66,15 +217,7 @@ router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
       [req.user.id, otherUserId]
     );
 
-    res.json(result.rows.map(m => ({
-      id: m.id,
-      senderId: m.sender_id,
-      recipientId: m.recipient_id,
-      content: m.content,
-      isRead: m.is_read,
-      sentAt: m.sent_at,
-      isMine: m.sender_id === req.user.id
-    })));
+    res.json(result.rows.map(m => formatMessage(m, req.user.id)));
   } catch (error) {
     console.error('Error fetching message thread:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
@@ -82,39 +225,45 @@ router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
 });
 
 // Send a 1-on-1 message
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
   try {
     const { recipientId, content } = req.body;
-    if (!recipientId || !content || !content.trim()) {
-      return res.status(400).json({ error: 'recipientId and content are required' });
+    const cleanContent = (content || '').trim();
+    if (!recipientId || (!cleanContent && !req.file)) {
+      return res.status(400).json({ error: 'recipientId and message content or attachment are required' });
     }
+
+    const attachment = await uploadAttachment(req.file, req.user.id, req);
 
     const result = await pool.query(
       `
-      INSERT INTO messages (sender_id, recipient_id, content, sent_at)
-      VALUES ($1, $2, $3, NOW())
-      RETURNING id, sender_id, recipient_id, content, is_read, sent_at
+      INSERT INTO messages (
+        sender_id, recipient_id, content, sent_at,
+        attachment_url, attachment_name, attachment_type, attachment_size
+      )
+      VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
+      RETURNING id, sender_id, recipient_id, content, is_read, sent_at,
+                attachment_url, attachment_name, attachment_type, attachment_size
       `,
-      [req.user.id, recipientId, content.trim()]
+      [
+        req.user.id,
+        recipientId,
+        cleanContent,
+        attachment?.url || null,
+        attachment?.name || null,
+        attachment?.type || null,
+        attachment?.size || null
+      ]
     );
 
-    const m = result.rows[0];
-    const message = {
-      id: m.id,
-      senderId: m.sender_id,
-      recipientId: m.recipient_id,
-      content: m.content,
-      isRead: m.is_read,
-      sentAt: m.sent_at,
-      isMine: true
-    };
+    const message = formatMessage(result.rows[0], req.user.id);
 
     emitDirectMessage(req, message);
 
     res.status(201).json(message);
   } catch (error) {
     console.error('Error sending message:', error);
-    res.status(500).json({ error: 'Failed to send message' });
+    res.status(500).json({ error: error.message || 'Failed to send message' });
   }
 });
 
@@ -163,7 +312,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) =
     const contacts = await Promise.all(unitsResult.rows.map(async (row) => {
       const lastMsgResult = await pool.query(
         `
-        SELECT content, sent_at, sender_id
+        SELECT content, sent_at, sender_id, attachment_name
         FROM messages
         WHERE unit_id IS NULL
           AND ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
@@ -184,7 +333,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) =
         unitId: row.unit_id,
         unitCode: row.unit_code,
         unitName: row.unit_name,
-        lastMessage: lastMsgResult.rows[0]?.content || null,
+        lastMessage: lastMsgResult.rows[0]?.content || lastMsgResult.rows[0]?.attachment_name || null,
         lastMessageAt: lastMsgResult.rows[0]?.sent_at || null,
         unreadCount: parseInt(unreadResult.rows[0].count, 10)
       };
@@ -212,7 +361,9 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT m.id, m.sender_id, m.content, m.sent_at, u.name as sender_name
+      SELECT m.id, m.sender_id, m.content, m.sent_at,
+             m.attachment_url, m.attachment_name, m.attachment_type, m.attachment_size,
+             u.name as sender_name
       FROM messages m
       JOIN users u ON u.id = m.sender_id
       WHERE m.unit_id = $1
@@ -221,14 +372,7 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
       [unitId]
     );
 
-    res.json(result.rows.map(m => ({
-      id: m.id,
-      senderId: m.sender_id,
-      senderName: m.sender_name,
-      content: m.content,
-      sentAt: m.sent_at,
-      isMine: m.sender_id === req.user.id
-    })));
+    res.json(result.rows.map(m => formatMessage(m, req.user.id)));
   } catch (error) {
     console.error('Error fetching group chat:', error);
     res.status(500).json({ error: 'Failed to fetch group chat' });
@@ -236,35 +380,45 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
 });
 
 // Send a message to a unit's group chat
-router.post('/group/:unitId', verifyToken, async (req, res) => {
+router.post('/group/:unitId', verifyToken, upload.single('attachment'), async (req, res) => {
   try {
     const { unitId } = req.params;
     const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ error: 'content is required' });
+    const cleanContent = (content || '').trim();
+    if (!cleanContent && !req.file) {
+      return res.status(400).json({ error: 'message content or attachment is required' });
     }
 
     if (!(await canAccessUnit(req.user, unitId))) {
       return res.status(403).json({ error: 'You do not have access to this unit chat' });
     }
 
+    const attachment = await uploadAttachment(req.file, req.user.id, req);
+
     const result = await pool.query(
       `
-      INSERT INTO messages (sender_id, unit_id, content, sent_at)
-      VALUES ($1, $2, $3, NOW())
-      RETURNING id, sender_id, content, sent_at
+      INSERT INTO messages (
+        sender_id, unit_id, content, sent_at,
+        attachment_url, attachment_name, attachment_type, attachment_size
+      )
+      VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
+      RETURNING id, sender_id, content, sent_at,
+                attachment_url, attachment_name, attachment_type, attachment_size
       `,
-      [req.user.id, unitId, content.trim()]
+      [
+        req.user.id,
+        unitId,
+        cleanContent,
+        attachment?.url || null,
+        attachment?.name || null,
+        attachment?.type || null,
+        attachment?.size || null
+      ]
     );
 
-    const m = result.rows[0];
     const message = {
-      id: m.id,
-      senderId: m.sender_id,
-      senderName: req.user.name || null,
-      content: m.content,
-      sentAt: m.sent_at,
-      isMine: true
+      ...formatMessage(result.rows[0], req.user.id),
+      senderName: req.user.name || null
     };
 
     emitGroupMessage(req, unitId, message);
@@ -272,7 +426,7 @@ router.post('/group/:unitId', verifyToken, async (req, res) => {
     res.status(201).json(message);
   } catch (error) {
     console.error('Error sending group message:', error);
-    res.status(500).json({ error: 'Failed to send message' });
+    res.status(500).json({ error: error.message || 'Failed to send message' });
   }
 });
 
@@ -299,6 +453,21 @@ router.patch('/group/:unitId/read', verifyToken, async (req, res) => {
     console.error('Error marking group chat read:', error);
     res.status(500).json({ error: 'Failed to mark group chat as read' });
   }
+});
+
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'File is too large. Please choose a file under 5 MB.'
+      : error.message;
+    return res.status(400).json({ error: message });
+  }
+
+  if (error.message === 'Unsupported file type') {
+    return res.status(400).json({ error: error.message });
+  }
+
+  next(error);
 });
 
 module.exports = router;

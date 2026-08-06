@@ -30,7 +30,7 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
 const buildContact = async (currentUserId, otherUserId, name, email) => {
   const lastMsgResult = await pool.query(
     `
-    SELECT content, sent_at
+    SELECT content, sent_at, attachment_name
     FROM messages
     WHERE unit_id IS NULL
       AND ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
@@ -49,7 +49,7 @@ const buildContact = async (currentUserId, otherUserId, name, email) => {
     userId: otherUserId,
     name,
     email,
-    lastMessage: lastMsgResult.rows[0]?.content || null,
+    lastMessage: lastMsgResult.rows[0]?.content || lastMsgResult.rows[0]?.attachment_name || null,
     lastMessageAt: lastMsgResult.rows[0]?.sent_at || null,
     unreadCount: parseInt(unreadResult.rows[0].count, 10)
   };
