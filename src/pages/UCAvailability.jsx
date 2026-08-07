@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { availabilityAPI, unitsAPI } from "../config/api";
 import { useActiveUnit } from "../context/ActiveUnitContext";
 import UCSidebar from "../components/UCSidebar";
@@ -40,6 +40,9 @@ function LockIcon() {
 function UnlockIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>;
 }
+function SearchIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+}
 function TutorIcon({ type }) {
   if (type === "star") return <StarIcon />;
   if (type === "flag") return <FlagIcon />;
@@ -58,6 +61,7 @@ export default function UCAvailability({ onSendReminder }) {
   const [submissionStatus, setSubmissionStatus] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isTogglingLock, setIsTogglingLock] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!activeUnit) {
@@ -132,6 +136,14 @@ export default function UCAvailability({ onSendReminder }) {
     return val ? BADGE_MAP[val] : null;
   };
 
+  // Filter tutors by search query (name match), used for the grid columns only.
+  // Submission status list intentionally still shows everyone.
+  const filteredTutors = useMemo(() => {
+    if (!searchQuery.trim()) return tutors;
+    const q = searchQuery.trim().toLowerCase();
+    return tutors.filter(t => t.name.toLowerCase().includes(q));
+  }, [tutors, searchQuery]);
+
   if (unitLoading || isLoadingData) {
     return (
       <div className="uca-root">
@@ -190,6 +202,27 @@ export default function UCAvailability({ onSendReminder }) {
                 </div>
               </div>
               <div className="uca-toolbar">
+                <div className="uca-search">
+                  <span className="uca-search__icon"><SearchIcon /></span>
+                  <input
+                    type="text"
+                    className="uca-search__input"
+                    placeholder="Search tutor..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search tutor by name"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="uca-search__clear"
+                      onClick={() => setSearchQuery("")}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <button
                   className="uca-toolbar__btn uca-toolbar__btn--text"
                   onClick={handleToggleLock}
@@ -211,40 +244,47 @@ export default function UCAvailability({ onSendReminder }) {
               </div>
             </div>
 
-            <div className="uca-grid-outer">
-              <div className="uca-grid-scroller">
-                <table className="uca-grid" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }}>
-                  <thead>
-                    <tr>
-                      <th className="uca-grid__corner" />
-                      {tutors.map(tutor => (
-                        <th key={tutor.id} className="uca-grid__tutor-header">
-                          <span className="uca-grid__tutor-namerow">
-                            <span className="uca-grid__tutor-name">{tutor.name}</span>
-                            {tutor.icon && <span className="uca-grid__tutor-icon"><TutorIcon type={tutor.icon} /></span>}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TIME_SLOTS.map(slot => (
-                      <tr key={slot}>
-                        <td className="uca-grid__time">{slot}</td>
-                        {tutors.map(tutor => {
-                          const badge = getCellBadge(tutor.id, slot);
-                          return (
-                            <td key={tutor.id} className="uca-grid__cell">
-                              {badge && <span className={`uca-badge ${badge.cls}`}>{badge.label}</span>}
-                            </td>
-                          );
-                        })}
+            {filteredTutors.length === 0 ? (
+              <div className="uca-empty">No tutors match "{searchQuery}"</div>
+            ) : (
+              <div className="uca-grid-outer">
+                <div className="uca-grid-scroller">
+                  <table
+                    className="uca-grid"
+                    style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }}
+                  >
+                    <thead>
+                      <tr>
+                        <th className="uca-grid__corner" />
+                        {filteredTutors.map(tutor => (
+                          <th key={tutor.id} className="uca-grid__tutor-header">
+                            <span className="uca-grid__tutor-namerow">
+                              <span className="uca-grid__tutor-name">{tutor.name}</span>
+                              {tutor.icon && <span className="uca-grid__tutor-icon"><TutorIcon type={tutor.icon} /></span>}
+                            </span>
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {TIME_SLOTS.map(slot => (
+                        <tr key={slot}>
+                          <td className="uca-grid__time">{slot}</td>
+                          {filteredTutors.map(tutor => {
+                            const badge = getCellBadge(tutor.id, slot);
+                            return (
+                              <td key={tutor.id} className="uca-grid__cell">
+                                {badge && <span className={`uca-badge ${badge.cls}`}>{badge.label}</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="uca-card uca-card--status">

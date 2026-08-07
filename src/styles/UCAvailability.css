@@ -1,4 +1,3 @@
-
 /* ── Tokens ── */
 :root {
   --uca-font:            'DM Sans', 'Segoe UI', sans-serif;
@@ -314,6 +313,7 @@
   margin-bottom: 10px;
   gap: 16px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .uca-controls-left {
@@ -381,6 +381,7 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .uca-toolbar__btn {
@@ -425,6 +426,65 @@
   text-align: center;
 }
 
+/* ── Search ── */
+.uca-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.uca-search__icon {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.uca-search__input {
+  height: 36px;
+  padding: 0 30px 0 32px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-family: var(--uca-font);
+  font-size: 13px;
+  color: #374151;
+  width: 170px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, width 0.15s;
+}
+
+.uca-search__input::placeholder {
+  color: #9ca3af;
+}
+
+.uca-search__input:focus {
+  border-color: var(--uca-active-tab-bg);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  width: 210px;
+}
+
+.uca-search__clear {
+  position: absolute;
+  right: 8px;
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.uca-search__clear:hover {
+  color: #374151;
+  background: #f1f5f9;
+}
+
 /* ── Grid outer ── */
 .uca-grid-outer {
   border: 1px solid var(--uca-grid-border);
@@ -436,6 +496,12 @@
   display: flex;
   flex-direction: column;
 }
+
+/* When search has narrowed the columns, don't stretch the bordered
+   box's WIDTH to the card's full width — hug the compact table instead.
+   Height still grows to fill the card (flex:1, inherited), so there's
+   no blank gap below the box. */
+/* (no longer needed — filler column below handles this instead) */
 
 /* ── Grid scroller ── */
 .uca-grid-scroller {
@@ -482,9 +548,9 @@
 }
 
 .uca-grid__corner {
-  width: 70px;
-  min-width: 70px;
-  padding: 10px 12px;
+  width: 44px;
+  min-width: 44px;
+  padding: 10px 6px;
   border-right: 1px solid var(--uca-grid-border);
   background: var(--uca-grid-header-bg);
   position: sticky;
@@ -511,8 +577,8 @@
 }
 
 .uca-grid__tutor-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--uca-tutor-color);
   display: block;
 }
@@ -522,7 +588,7 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--uca-grid-time-color);
-  padding: 10px 12px;
+  padding: 10px 6px;
   text-align: right;
   white-space: nowrap;
   border-right: 1px solid var(--uca-grid-border);
@@ -531,8 +597,8 @@
   position: sticky;
   left: 0;
   z-index: 2;
-  width: 70px;
-  min-width: 70px;
+  width: 44px;
+  min-width: 44px;
 }
 
 /* Data cells */
