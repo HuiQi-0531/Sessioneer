@@ -9,8 +9,8 @@
 }
 
 .us-create-btn {
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
   border: none;
   padding: 10px 20px;
   border-radius: 8px;
@@ -19,13 +19,13 @@
 }
 
 .us-create-btn:hover {
-  background-color: #4338ca;
+  background-color: var(--color-primary-hover);
 }
 
 .us-empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .us-list {
@@ -40,10 +40,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 14px 18px;
-  background-color: #fff;
+  background-color: var(--color-surface);
   cursor: pointer;
 }
 
@@ -52,7 +52,7 @@
 }
 
 .us-unit-row.selected {
-  border-color: #4f46e5;
+  border-color: var(--color-primary);
   background-color: #eef2ff;
 }
 
@@ -62,19 +62,19 @@
 
 .us-unit-code {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .us-unit-meta {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .us-inactive-badge {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
-  border: 1px solid #d1d5db;
+  color: var(--color-text-subtle);
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
   padding: 2px 6px;
   margin-left: 8px;
@@ -100,17 +100,17 @@
 }
 
 .us-action-btn.edit {
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
 }
 
 .us-action-btn.edit:hover {
-  background-color: #4338ca;
+  background-color: var(--color-primary-hover);
 }
 
 .us-action-btn.delete {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .us-action-btn.delete:hover {
@@ -133,7 +133,7 @@
 }
 
 .us-modal-content {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 12px;
   padding: 24px 28px;
   max-width: 360px;
@@ -146,7 +146,7 @@
 }
 
 .us-modal-content p {
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 20px;
   font-size: 14px;
 }
@@ -166,11 +166,11 @@
 }
 
 .us-modal-buttons .confirm {
-  background-color: #b91c1c;
-  color: #fff;
+  background-color: var(--color-danger-text);
+  color: var(--color-surface);
 }
 
 .us-modal-buttons .cancel {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }

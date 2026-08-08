@@ -3,12 +3,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
+  background-color: var(--color-bg);
   padding: 20px;
 }
 
 .lo-card {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 16px;
   padding: 40px 36px;
   max-width: 420px;
@@ -21,8 +21,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,13 +31,13 @@
 
 .lo-card h1 {
   font-size: 20px;
-  color: #1f2937;
+  color: var(--color-text);
   margin-bottom: 10px;
 }
 
 .lo-card p {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   line-height: 1.5;
   margin-bottom: 28px;
 }
@@ -58,17 +58,17 @@
 }
 
 .lo-btn-cancel {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }
 
 .lo-btn-cancel:hover {
-  background-color: #e5e7eb;
+  background-color: var(--color-border);
 }
 
 .lo-btn-confirm {
-  background-color: #b91c1c;
-  color: #fff;
+  background-color: var(--color-danger-text);
+  color: var(--color-surface);
 }
 
 .lo-btn-confirm:hover {

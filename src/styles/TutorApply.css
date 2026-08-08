@@ -1,13 +1,13 @@
 .ta-page {
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background-color: var(--color-bg);
   padding: 40px 20px;
   display: flex;
   justify-content: center;
 }
 
 .ta-card {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 16px;
   padding: 36px 40px;
   max-width: 520px;
@@ -26,8 +26,8 @@
 .ta-logo-icon {
   width: 36px;
   height: 36px;
-  background-color: #e8f0fe;
-  color: #4285f4;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -39,18 +39,18 @@
 .ta-logo-text {
   font-size: 17px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .ta-card h1 {
   font-size: 22px;
-  color: #1f2937;
+  color: var(--color-text);
   margin-bottom: 6px;
 }
 
 .ta-card > p {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 28px;
 }
 
@@ -62,7 +62,7 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
 }
 
@@ -70,7 +70,7 @@
 .ta-field textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
@@ -83,7 +83,7 @@
 }
 
 .ta-file-input {
-  border: 2px dashed #d1d5db;
+  border: 2px dashed var(--color-border-strong);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -92,7 +92,7 @@
 }
 
 .ta-file-input:hover {
-  border-color: #4f46e5;
+  border-color: var(--color-primary);
 }
 
 .ta-file-input input {
@@ -101,14 +101,14 @@
 
 .ta-file-name {
   font-size: 13px;
-  color: #4f46e5;
+  color: var(--color-primary);
   font-weight: 600;
   margin-top: 8px;
 }
 
 .ta-file-hint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 4px;
 }
 
@@ -117,8 +117,8 @@
   padding: 12px;
   border: none;
   border-radius: 8px;
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -126,7 +126,7 @@
 }
 
 .ta-submit-btn:hover {
-  background-color: #4338ca;
+  background-color: var(--color-primary-hover);
 }
 
 .ta-submit-btn:disabled {
@@ -135,7 +135,7 @@
 }
 
 .ta-error {
-  color: #b91c1c;
+  color: var(--color-danger-text);
   font-size: 13px;
   margin-top: 10px;
 }
@@ -149,8 +149,8 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background-color: #d1fae5;
-  color: #059669;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
   display: flex;
   align-items: center;
   justify-content: center;

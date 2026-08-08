@@ -18,26 +18,26 @@
 }
 
 .ss-btn-primary {
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
 }
 
 .ss-btn-primary:hover {
-  background-color: #4338ca;
+  background-color: var(--color-primary-hover);
 }
 
 .ss-btn-secondary {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }
 
 .ss-btn-secondary:hover {
-  background-color: #e5e7eb;
+  background-color: var(--color-border);
 }
 
 .ss-form-card {
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 20px 24px;
   margin-bottom: 24px;
@@ -58,7 +58,7 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
 }
 
@@ -66,7 +66,7 @@
 .ss-field select {
   width: 100%;
   padding: 9px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
@@ -74,7 +74,7 @@
 .ss-field input:focus,
 .ss-field select:focus {
   outline: none;
-  border-color: #4f46e5;
+  border-color: var(--color-primary);
 }
 
 .ss-form-buttons {
@@ -83,7 +83,7 @@
 }
 
 .ss-error {
-  color: #b91c1c;
+  color: var(--color-danger-text);
   font-size: 13px;
   margin-bottom: 12px;
 }
@@ -91,29 +91,29 @@
 .ss-empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .ss-table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #fff;
+  background-color: var(--color-surface);
 }
 
 .ss-table th {
   text-align: left;
   font-size: 12px;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 10px 14px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .ss-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .ss-status-badge {
@@ -124,23 +124,23 @@
 }
 
 .ss-status-badge.confirmed {
-  background-color: #d1fae5;
-  color: #059669;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .ss-status-badge.tentative {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-hover);
 }
 
 .ss-status-badge.draft {
-  background-color: #e5e7eb;
-  color: #374151;
+  background-color: var(--color-border);
+  color: var(--color-text-secondary);
 }
 
 .ss-status-badge.cancelled {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .ss-row-actions {
@@ -152,16 +152,16 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 4px;
 }
 
 .ss-icon-btn:hover {
-  color: #4f46e5;
+  color: var(--color-primary);
 }
 
 .ss-icon-btn.delete:hover {
-  color: #b91c1c;
+  color: var(--color-danger-text);
 }
 
 .ss-modal-overlay {
@@ -175,7 +175,7 @@
 }
 
 .ss-modal-content {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 12px;
   padding: 24px 28px;
   max-width: 360px;
@@ -188,7 +188,7 @@
 }
 
 .ss-modal-content p {
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 20px;
   font-size: 14px;
 }
@@ -208,11 +208,11 @@
 }
 
 .ss-modal-buttons .confirm {
-  background-color: #b91c1c;
-  color: #fff;
+  background-color: var(--color-danger-text);
+  color: var(--color-surface);
 }
 
 .ss-modal-buttons .cancel {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }

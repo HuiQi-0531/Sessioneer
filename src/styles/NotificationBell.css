@@ -7,20 +7,20 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 6px;
 }
 
 .nb-bell-btn:hover {
-  color: #4f46e5;
+  color: var(--color-primary);
 }
 
 .nb-badge {
   position: absolute;
   top: 0;
   right: 0;
-  background-color: #ef4444;
-  color: #fff;
+  background-color: var(--color-danger);
+  color: var(--color-surface);
   font-size: 10px;
   font-weight: 700;
   border-radius: 10px;
@@ -37,8 +37,8 @@
   width: 340px;
   max-height: 420px;
   overflow-y: auto;
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   z-index: 80;
@@ -49,7 +49,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
 }
 
 .nb-dropdown-header h3 {
@@ -60,7 +60,7 @@
 .nb-mark-all-btn {
   background: none;
   border: none;
-  color: #4f46e5;
+  color: var(--color-primary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -69,7 +69,7 @@
 .nb-empty {
   padding: 30px 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-size: 13px;
 }
 
@@ -77,12 +77,12 @@
   display: flex;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid #f9fafb;
+  border-bottom: 1px solid var(--color-bg);
   cursor: pointer;
 }
 
 .nb-item:hover {
-  background-color: #f9fafb;
+  background-color: var(--color-bg);
 }
 
 .nb-item.unread {
@@ -93,7 +93,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #4f46e5;
+  background-color: var(--color-primary);
   flex-shrink: 0;
   margin-top: 6px;
 }
@@ -111,20 +111,20 @@
 .nb-item-title {
   font-size: 13px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-text);
   text-align: left;
 }
 
 .nb-item-content {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-top: 2px;
   text-align: left;
 }
 
 .nb-item-time {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 4px;
   text-align: left;
 }

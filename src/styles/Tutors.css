@@ -14,14 +14,14 @@
   width: 100%;
   max-width: 360px;
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 10px;
   font-size: 14px;
 }
 
 .tt-search-input:focus {
   outline: none;
-  border-color: #4f46e5;
+  border-color: var(--color-primary);
 }
 
 .tt-add-self-btn {
@@ -30,7 +30,7 @@
   border-radius: 8px;
   padding: 0 16px;
   background-color: #2563eb;
-  color: #ffffff;
+  color: var(--color-surface);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -49,7 +49,7 @@
 .tt-empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .tt-card-list {
@@ -59,8 +59,8 @@
 }
 
 .tt-card {
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 16px 20px;
   cursor: pointer;
@@ -80,7 +80,7 @@
 .tt-card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .tt-card-actions {
@@ -91,7 +91,7 @@
 
 .tt-card-meta {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 10px;
 }
 
@@ -106,7 +106,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-top: 10px;
   cursor: pointer;
 }
@@ -118,10 +118,10 @@
   border-radius: 5px;
 }
 
-.tt-badge.preferred { background-color: #d1fae5; color: #059669; }
-.tt-badge.standard { background-color: #f3f4f6; color: #6b7280; }
-.tt-badge.backup { background-color: #fef3c7; color: #b45309; }
-.tt-badge.risk { background-color: #fee2e2; color: #b91c1c; }
+.tt-badge.preferred { background-color: var(--color-success-bg); color: var(--color-success); }
+.tt-badge.standard { background-color: var(--color-bg-subtle); color: var(--color-text-muted); }
+.tt-badge.backup { background-color: var(--color-warning-bg); color: var(--color-warning-hover); }
+.tt-badge.risk { background-color: var(--color-danger-bg); color: var(--color-danger-text); }
 .tt-badge.tag { background-color: #ede9fe; color: #6d28d9; }
 
 /* Star / flag buttons */
@@ -137,7 +137,7 @@
 }
 
 .tt-star-btn {
-  color: #d1d5db;
+  color: var(--color-border-strong);
 }
 
 .tt-star-btn:hover {
@@ -149,15 +149,15 @@
 }
 
 .tt-flag-btn {
-  color: #d1d5db;
+  color: var(--color-border-strong);
 }
 
 .tt-flag-btn:hover {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .tt-flag-btn.flagged {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .tt-modal-icon {
@@ -184,7 +184,7 @@
 }
 
 .tt-modal-content {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 14px;
   padding: 28px 32px;
   max-width: 480px;
@@ -202,7 +202,7 @@
   border: none;
   font-size: 22px;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   line-height: 1;
 }
 
@@ -230,12 +230,12 @@
 .tt-modal-name {
   font-size: 18px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .tt-modal-role {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .tt-readonly-grid {
@@ -244,7 +244,7 @@
   gap: 12px 16px;
   margin-bottom: 20px;
   padding: 14px 16px;
-  background-color: #f9fafb;
+  background-color: var(--color-bg);
   border-radius: 10px;
 }
 
@@ -255,21 +255,21 @@
 .tt-readonly-label {
   font-size: 11px;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-weight: 600;
   margin-bottom: 2px;
 }
 
 .tt-readonly-value {
   font-size: 14px;
-  color: #1f2937;
+  color: var(--color-text);
   word-break: break-word;
 }
 
 .tt-readonly-note {
   grid-column: 1 / -1;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 4px;
 }
 
@@ -281,7 +281,7 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
 }
 
@@ -290,7 +290,7 @@
 .tt-field input {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
@@ -311,8 +311,8 @@
 
 .tt-tag-add-btn {
   border: none;
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
   border-radius: 8px;
   padding: 0 16px;
   font-weight: 600;
@@ -355,13 +355,13 @@
   padding: 12px;
   font-weight: 600;
   cursor: pointer;
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
   margin-top: 8px;
 }
 
 .tt-save-btn:hover {
-  background-color: #4338ca;
+  background-color: var(--color-primary-hover);
 }
 
 .tt-save-btn:disabled {
@@ -381,7 +381,7 @@
 }
 
 .tt-confirm-content {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 12px;
   padding: 24px 28px;
   max-width: 340px;
@@ -391,7 +391,7 @@
 
 .tt-confirm-content p {
   margin-bottom: 20px;
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .tt-confirm-buttons {
@@ -409,11 +409,11 @@
 }
 
 .tt-confirm-buttons .confirm {
-  background-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
 }
 
 .tt-confirm-buttons .cancel {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }

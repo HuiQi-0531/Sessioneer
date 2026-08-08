@@ -35,7 +35,7 @@
 .uc-user-footer-row {
   margin-top: auto;
   padding: 10px 14px;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--color-border);
 }
 
 .uc-user-footer-row .uc-user-profile {
@@ -87,7 +87,7 @@
 }
 
 .ucs-dropdown-arrow {
-  color: #4f46e5;
+  color: var(--color-primary);
   font-size: 12px;
   margin-left: 8px;
 }
@@ -98,8 +98,8 @@
   left: 0;
   right: 0;
   margin-top: 6px;
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   z-index: 40;
@@ -115,11 +115,11 @@
   border: none;
   background: none;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
 }
 
 .ucs-dropdown-item:hover {
-  background-color: #f9fafb;
+  background-color: var(--color-bg);
 }
 
 .ucs-dropdown-item.selected {
@@ -133,12 +133,12 @@
 .ucs-dropdown-code {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .ucs-dropdown-meta {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .ucs-dropdown-manage {
@@ -147,13 +147,13 @@
   padding: 10px;
   font-size: 13px;
   font-weight: 600;
-  color: #4f46e5;
+  color: var(--color-primary);
   text-decoration: none;
-  background-color: #f9fafb;
+  background-color: var(--color-bg);
 }
 
 .ucs-dropdown-manage:hover {
-  background-color: #f3f4f6;
+  background-color: var(--color-bg-subtle);
 }
 
 .ucs-role-switcher {
@@ -162,8 +162,8 @@
   gap: 4px;
   margin: -4px 16px 12px 16px;
   padding: 4px;
-  background-color: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
 }
 
@@ -179,11 +179,11 @@
 }
 
 .ucs-role-option:hover {
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .ucs-role-option.active {
-  background-color: #ffffff;
+  background-color: var(--color-surface);
   color: #2563eb;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }

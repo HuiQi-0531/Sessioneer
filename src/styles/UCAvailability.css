@@ -3,55 +3,55 @@
   --uca-font:            'DM Sans', 'Segoe UI', sans-serif;
 
   --uca-preferred-bg:    #22c55e;
-  --uca-preferred-text:  #fff;
+  --uca-preferred-text:  var(--color-surface);
   --uca-available-bg:    #60a5fa;
-  --uca-available-text:  #fff;
+  --uca-available-text:  var(--color-surface);
   --uca-avoid-bg:        #f87171;
-  --uca-avoid-text:      #fff;
+  --uca-avoid-text:      var(--color-surface);
 
   --uca-submitted-bg:    #22c55e;
-  --uca-submitted-text:  #fff;
+  --uca-submitted-text:  var(--color-surface);
   --uca-pending-bg:      #f87171;
-  --uca-pending-text:    #fff;
+  --uca-pending-text:    var(--color-surface);
 
   --uca-active-tab-bg:   #6366f1;
-  --uca-active-tab-text: #fff;
+  --uca-active-tab-text: var(--color-surface);
   --uca-tab-bg:          #f1f5f9;
   --uca-tab-text:        #475569;
   --uca-tab-hover-bg:    #e2e8f0;
 
   --uca-tutor-color:     #6366f1;
 
-  --uca-card-bg:         #fff;
+  --uca-card-bg:         var(--color-surface);
   --uca-card-radius:     12px;
   --uca-card-shadow:     0 1px 4px rgba(0,0,0,.08);
-  --uca-card-border:     1px solid #e5e7eb;
+  --uca-card-border:     1px solid var(--color-border);
 
-  --uca-grid-border:     #e5e7eb;
-  --uca-grid-header-bg:  #fafbfc;
-  --uca-grid-stripe:     #f8f9fa;
-  --uca-grid-time-color: #5f6368;
+  --uca-grid-border:     var(--color-border);
+  --uca-grid-header-bg:  var(--color-bg);
+  --uca-grid-stripe:     var(--color-bg);
+  --uca-grid-time-color: var(--color-text-muted);
 
   --uca-toolbar-btn-bg:       #f1f5f9;
   --uca-toolbar-btn-hover-bg: #e2e8f0;
-  --uca-toolbar-btn-color:    #374151;
+  --uca-toolbar-btn-color:    var(--color-text-secondary);
 
   --uca-bell-color:      #f59e0b;
   --uca-bell-sent-color: #adb5bd;
 
-  --uca-empty-color:     #9ca3af;
+  --uca-empty-color:     var(--color-text-subtle);
   
-  --uca-sidebar-bg:      #fff;
+  --uca-sidebar-bg:      var(--color-surface);
   --uca-sidebar-width:   228px;
-  --uca-nav-active:      #1967d2;
-  --uca-nav-hover:       #f1f3f4;
+  --uca-nav-active:      var(--color-primary);
+  --uca-nav-hover:       var(--color-bg-subtle);
 }
 
 /* ── Root wrapper ── */
 .uca-root {
   display: flex;
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--color-bg);
   box-sizing: border-box;
 }
 
@@ -59,7 +59,7 @@
 .uca-sidebar {
   width: var(--uca-sidebar-width);
   background: var(--uca-sidebar-bg);
-  border-right: 1px solid #e9ecef;
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -71,7 +71,7 @@
 
 .uca-sidebar__header {
   padding: 28px 20px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -86,8 +86,8 @@
 .uca-logo__icon {
   width: 40px;
   height: 40px;
-  background: #e8f0fe;
-  color: #4285f4;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,14 +100,14 @@
 .uca-logo__text {
   font-size: 18px;
   font-weight: 600;
-  color: #202124;
+  color: var(--color-text);
   margin: 0;
 }
 
 /* Active Unit Section */
 .uca-active-unit {
   padding: 16px 20px;
-  background: #e8f0fe;
+  background: var(--color-primary-light);
   margin: 0 12px 20px 12px;
   border-radius: 8px;
 }
@@ -115,7 +115,7 @@
 .uca-active-label {
   font-size: 11px;
   font-weight: 600;
-  color: #5f6368;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 4px 0;
@@ -124,13 +124,13 @@
 .uca-unit-code {
   font-size: 16px;
   font-weight: 600;
-  color: #1967d2;
+  color: var(--color-primary);
   margin: 0 0 2px 0;
 }
 
 .uca-unit-semester {
   font-size: 12px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -146,7 +146,7 @@
 .uca-nav__item {
   display: block;
   padding: 12px 16px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   font-size: 14px;
   font-weight: 400;
   text-decoration: none;
@@ -159,14 +159,14 @@
 }
 
 .uca-nav__item--active {
-  background: #e8f0fe;
+  background: var(--color-primary-light);
   color: var(--uca-nav-active);
   font-weight: 500;
 }
 
 .uca-sidebar__footer {
   padding: 20px;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--color-border);
 }
 
 .uca-user {
@@ -178,8 +178,8 @@
 .uca-user__avatar {
   width: 36px;
   height: 36px;
-  background: #e8f0fe;
-  color: #1967d2;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +197,7 @@
 .uca-user__name {
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -206,7 +206,7 @@
 
 .uca-user__role {
   font-size: 12px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -218,13 +218,13 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #f5f7fa;
+  background: var(--color-bg);
 }
 
 /* ── Top bar ── */
 .uca-topbar {
-  background: #fff;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   padding: 16px 32px;
   display: flex;
   align-items: center;
@@ -235,7 +235,7 @@
 .uca-topbar__title {
   font-size: 24px;
   font-weight: 400;
-  color: #202124;
+  color: var(--color-text);
   margin: 0;
 }
 
@@ -250,12 +250,12 @@
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s;
-  color: #5f6368;
+  color: var(--color-text-muted);
   font-size: 20px;
 }
 
 .uca-topbar__notification:hover {
-  background: #f1f3f4;
+  background: var(--color-bg-subtle);
 }
 
 /* ── Content area ── */
@@ -291,7 +291,7 @@
   bottom: 0;
   z-index: 9999;
   border-radius: 0;
-  background: #fff;
+  background: var(--color-surface);
   padding: 24px;
   overflow: auto;
 }
@@ -371,7 +371,7 @@
 
 .uca-legend__label {
   font-size: 12px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   margin-right: 8px;
 }
 
@@ -392,7 +392,7 @@
   height: 36px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   background: var(--uca-toolbar-btn-bg);
   color: var(--uca-toolbar-btn-color);
   font-family: var(--uca-font);
@@ -420,7 +420,7 @@
 .uca-toolbar__zoom {
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-secondary);
   padding: 0 8px;
   min-width: 50px;
   text-align: center;
@@ -439,7 +439,7 @@
   left: 10px;
   display: flex;
   align-items: center;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   pointer-events: none;
 }
 
@@ -447,18 +447,18 @@
   height: 36px;
   padding: 0 30px 0 32px;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   font-family: var(--uca-font);
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-secondary);
   width: 170px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s, width 0.15s;
 }
 
 .uca-search__input::placeholder {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
 }
 
 .uca-search__input:focus {
@@ -472,7 +472,7 @@
   right: 8px;
   border: none;
   background: none;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
@@ -481,7 +481,7 @@
 }
 
 .uca-search__clear:hover {
-  color: #374151;
+  color: var(--color-text-secondary);
   background: #f1f5f9;
 }
 
@@ -517,17 +517,17 @@
 }
 
 .uca-grid-scroller::-webkit-scrollbar-track {
-  background: #f1f3f4;
+  background: var(--color-bg-subtle);
   border-radius: 4px;
 }
 
 .uca-grid-scroller::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--color-border-strong);
   border-radius: 4px;
 }
 
 .uca-grid-scroller::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--color-text-subtle);
 }
 
 .uca-card--fullscreen .uca-grid-scroller {
@@ -558,7 +558,7 @@
   top: 0;
   z-index: 4;
   font-size: 11px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -611,7 +611,7 @@
   vertical-align: middle;
   min-width: 130px;
   width: 130px;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .uca-grid tbody tr:nth-child(even) .uca-grid__cell {
@@ -650,7 +650,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   margin: 0 0 10px;
   text-align: left;
@@ -676,17 +676,17 @@
 }
 
 .uca-status__list::-webkit-scrollbar-track {
-  background: #f1f3f4;
+  background: var(--color-bg-subtle);
   border-radius: 4px;
 }
 
 .uca-status__list::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--color-border-strong);
   border-radius: 4px;
 }
 
 .uca-status__list::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--color-text-subtle);
 }
 
 .uca-status__row {
@@ -695,7 +695,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -706,7 +706,7 @@
 .uca-status__name {
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: var(--color-text);
 }
 
 .uca-status__right {
@@ -748,8 +748,8 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
   padding: 0;

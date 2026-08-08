@@ -8,13 +8,13 @@
 
 .td-welcome h2 {
   font-size: 20px;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .td-loading {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .td-stats-grid {
@@ -24,8 +24,8 @@
 }
 
 .td-stat-card {
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 18px 22px;
   flex: 1;
@@ -34,19 +34,19 @@
 .td-stat-number {
   font-size: 28px;
   font-weight: 700;
-  color: #4f46e5;
+  color: var(--color-primary);
 }
 
 .td-stat-label {
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-secondary);
   margin-top: 4px;
   font-weight: 600;
 }
 
 .td-stat-sublabel {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 2px;
 }
 
@@ -63,37 +63,37 @@
 .td-empty {
   text-align: center;
   padding: 30px 20px;
-  color: #9ca3af;
-  background-color: #fff;
+  color: var(--color-text-subtle);
+  background-color: var(--color-surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   font-size: 13px;
 }
 
 .td-table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
 }
 
 .td-table th {
   text-align: left;
   font-size: 12px;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 10px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #f9fafb;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg);
 }
 
 .td-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .td-table tr:last-child td {
@@ -108,25 +108,25 @@
 }
 
 .td-badge.submitted {
-  background-color: #d1fae5;
-  color: #059669;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .td-badge.pending {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-hover);
 }
 
 .td-notification-list {
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   overflow: hidden;
 }
 
 .td-notification-item {
   padding: 14px 24px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
 }
 
 .td-notification-item:last-child {
@@ -135,14 +135,14 @@
 
 .td-notification-text {
   font-size: 13px;
-  color: #1f2937;
+  color: var(--color-text);
   font-weight: 600;
   text-align: left;
 }
 
 .td-notification-time {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 2px;
   text-align: left;
 }

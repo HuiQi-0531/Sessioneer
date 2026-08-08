@@ -9,9 +9,9 @@
 }
 
 .ts-toggle-btn {
-  border: 1px solid #d1d5db;
-  background-color: #fff;
-  color: #374151;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
   border-radius: 8px;
   padding: 8px 18px;
   font-weight: 600;
@@ -20,44 +20,44 @@
 }
 
 .ts-toggle-btn.active {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
-  color: #fff;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
 }
 
 .ts-empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
-  background-color: #fff;
+  color: var(--color-text-muted);
+  background-color: var(--color-surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
 }
 
 .ts-table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
 }
 
 .ts-table th {
   text-align: left;
   font-size: 12px;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 10px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #f9fafb;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg);
 }
 
 .ts-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .ts-table tr:last-child td {
@@ -73,18 +73,18 @@
 }
 
 .ts-status-badge.pending {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-hover);
 }
 
 .ts-status-badge.confirmed {
-  background-color: #d1fae5;
-  color: #059669;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .ts-status-badge.declined {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .ts-action-row {
@@ -99,12 +99,12 @@
   font-weight: 600;
   cursor: pointer;
   background-color: #22c55e;
-  color: #fff;
+  color: var(--color-surface);
   font-size: 13px;
 }
 
 .ts-confirm-btn:hover {
-  background-color: #16a34a;
+  background-color: var(--color-success);
 }
 
 .ts-decline-btn {
@@ -113,8 +113,8 @@
   padding: 7px 14px;
   font-weight: 600;
   cursor: pointer;
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
   font-size: 13px;
 }
 
@@ -124,7 +124,7 @@
 
 .ts-reject-reason {
   font-size: 12px;
-  color: #b91c1c;
+  color: var(--color-danger-text);
   margin-top: 4px;
 }
 
@@ -141,7 +141,7 @@
 }
 
 .ts-modal-content {
-  background-color: #fff;
+  background-color: var(--color-surface);
   border-radius: 14px;
   padding: 24px 28px;
   max-width: 420px;
@@ -153,7 +153,7 @@
 }
 
 .ts-modal-session-info {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 14px;
   margin-bottom: 16px;
 }
@@ -162,14 +162,14 @@
   width: 100%;
   min-height: 90px;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   font-size: 14px;
   resize: vertical;
 }
 
 .ts-modal-error {
-  color: #b91c1c;
+  color: var(--color-danger-text);
   font-size: 13px;
   margin-top: 8px;
 }
@@ -190,13 +190,13 @@
 }
 
 .ts-modal-buttons .cancel {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }
 
 .ts-modal-buttons .confirm {
-  background-color: #b91c1c;
-  color: #fff;
+  background-color: var(--color-danger-text);
+  color: var(--color-surface);
 }
 
 /* Grid view - reuses the same layout technique as the coordinator's Schedule Builder */
@@ -211,7 +211,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .ts-legend-dot {
@@ -223,11 +223,11 @@
 
 .ts-legend-dot.confirmed { background-color: #22c55e; }
 .ts-legend-dot.pending { background-color: #f59e0b; }
-.ts-legend-dot.declined { background-color: #ef4444; }
+.ts-legend-dot.declined { background-color: var(--color-danger); }
 
 .ts-grid-wrapper {
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 16px;
   overflow-x: auto;
@@ -237,34 +237,34 @@
   display: grid;
   grid-template-columns: 70px repeat(5, 1fr);
   min-width: 700px;
-  border-top: 1px solid #f3f4f6;
-  border-left: 1px solid #f3f4f6;
+  border-top: 1px solid var(--color-bg-subtle);
+  border-left: 1px solid var(--color-bg-subtle);
 }
 
 .ts-grid-corner {
   grid-column: 1;
   grid-row: 1;
-  border-bottom: 1px solid #f3f4f6;
-  border-right: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
+  border-right: 1px solid var(--color-bg-subtle);
 }
 
 .ts-grid-day-header {
   text-align: center;
   font-size: 13px;
   font-weight: 700;
-  color: #374151;
+  color: var(--color-text-secondary);
   padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
-  border-right: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
+  border-right: 1px solid var(--color-bg-subtle);
 }
 
 .ts-grid-time-label {
   grid-column: 1;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   padding: 4px 8px;
-  border-bottom: 1px solid #f3f4f6;
-  border-right: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-bg-subtle);
+  border-right: 1px solid var(--color-bg-subtle);
   display: flex;
   align-items: flex-start;
 }
@@ -288,24 +288,24 @@
 }
 
 .ts-grid-block.pending {
-  background-color: #fef3c7;
+  background-color: var(--color-warning-bg);
   border: 1px solid #fcd34d;
 }
 
 .ts-grid-block.declined {
-  background-color: #fee2e2;
+  background-color: var(--color-danger-bg);
   border: 1px solid #fca5a5;
 }
 
 .ts-grid-block-time {
   font-size: 11px;
   font-weight: 700;
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .ts-grid-block-type {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .ts-grid-block-status {
@@ -315,6 +315,6 @@
 
 .ts-grid-note {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin-top: 10px;
 }
