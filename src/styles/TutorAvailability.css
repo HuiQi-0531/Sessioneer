@@ -278,6 +278,161 @@
   color: #ef4444;
 }
  
+/* Paint Toolbar: pick a status once, then tap cells to apply it */
+.paint-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+
+.paint-toolbar-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #202124;
+  white-space: nowrap;
+}
+
+.paint-toolbar-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.paint-btn {
+  padding: 10px 18px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  color: white;
+  opacity: 0.55;
+}
+
+.paint-btn:hover {
+  opacity: 0.8;
+}
+
+.paint-btn.active {
+  opacity: 1;
+  border-color: #202124;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.paint-btn.preferred {
+  background-color: #16a34a;
+}
+
+.paint-btn.available {
+  background-color: #3b82f6;
+}
+
+.paint-btn.avoid {
+  background-color: #ef4444;
+}
+
+.paint-btn.clear {
+  background-color: #5f6368;
+}
+
+/* Header / row-label fill triggers (open a menu that fills a whole
+   column or row in one action) */
+.grid-table th {
+  position: relative;
+}
+
+.grid-table th > span {
+  margin-right: 4px;
+}
+
+.time-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.bulk-fill-trigger {
+  border: 1px solid #dadce0;
+  background-color: #ffffff;
+  color: #5f6368;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.bulk-fill-trigger:hover {
+  background-color: #f1f3f4;
+  border-color: #1967d2;
+  color: #1967d2;
+}
+
+.bulk-fill-menu {
+  position: fixed;
+  background-color: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+  z-index: 9999;
+}
+
+.bulk-fill-menu-title {
+  font-size: 12px;
+  color: #5f6368;
+  padding: 4px 6px 6px;
+  white-space: nowrap;
+}
+
+.bulk-fill-option {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: white;
+}
+
+.bulk-fill-option.preferred {
+  background-color: rgba(22, 163, 74, 0.85);
+}
+
+.bulk-fill-option.available {
+  background-color: rgba(59, 130, 246, 0.85);
+}
+
+.bulk-fill-option.avoid {
+  background-color: rgba(239, 68, 68, 0.85);
+}
+
+.bulk-fill-option.clear {
+  background-color: #5f6368;
+}
+
+.bulk-fill-option:hover {
+  filter: brightness(1.08);
+}
+
 /* Scrollable Grid */
 .availability-grid {
   overflow-x: auto;

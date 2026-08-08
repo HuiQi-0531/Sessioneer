@@ -32,6 +32,16 @@ const TutorAvailability = () => {
   const infoIconRef = useRef(null);
   const tooltipRef = useRef(null);
 
+  // "Paint mode": the tutor picks a status first, then just taps cells to
+  // apply it — no more cycling through 4 clicks per cell.
+  const [paintColor, setPaintColor] = useState('preferred');
+
+  // Bulk fill menu, opened from a day header (fills a whole column) or a
+  // time label (fills a whole row). { type: 'day' | 'time', value, top, left }
+  const [bulkMenu, setBulkMenu] = useState(null);
+  const bulkMenuRef = useRef(null);
+  const bulkTriggerRef = useRef(null);
+
   const toggleTooltip = () => {
     if (!showInfoTooltip && infoIconRef.current) {
       const rect = infoIconRef.current.getBoundingClientRect();
@@ -57,6 +67,24 @@ const TutorAvailability = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showInfoTooltip]);
+
+  useEffect(() => {
+    if (!bulkMenu) return;
+
+    const handleClickOutside = (event) => {
+      if (
+        bulkMenuRef.current &&
+        !bulkMenuRef.current.contains(event.target) &&
+        bulkTriggerRef.current &&
+        !bulkTriggerRef.current.contains(event.target)
+      ) {
+        setBulkMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [bulkMenu]);
 
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -131,29 +159,15 @@ const TutorAvailability = () => {
     loadSavedAvailability();
   }, [activeUnit, storageKey, isWindowClosed, hydrateTutorAvailability]);
 
+  // Single tap applies whichever status is currently selected as the
+  // "paint color". Tapping a cell that already has that exact status
+  // clears it again, so undoing a mistake is still just one tap.
   const handleSlotClick = (day, time) => {
     if (!isEditable || isWindowClosed) return;
 
     const slotKey = `${day}-${time}`;
     const currentState = availabilityData[slotKey] || 'unselected';
-
-    let nextState;
-    switch (currentState) {
-      case 'unselected':
-        nextState = 'preferred';
-        break;
-      case 'preferred':
-        nextState = 'available';
-        break;
-      case 'available':
-        nextState = 'avoid';
-        break;
-      case 'avoid':
-        nextState = 'unselected';
-        break;
-      default:
-        nextState = 'unselected';
-    }
+    const nextState = currentState === paintColor ? 'unselected' : paintColor;
 
     setAvailabilityData(prev => {
       const newData = { ...prev };
@@ -164,6 +178,44 @@ const TutorAvailability = () => {
       }
       return newData;
     });
+  };
+
+  const openBulkMenu = (type, value, event) => {
+    if (!isEditable || isWindowClosed) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    bulkTriggerRef.current = event.currentTarget;
+    setBulkMenu({
+      type,
+      value,
+      top: rect.bottom + 6,
+      left: rect.left
+    });
+  };
+
+  // Fills an entire day column ('day') or an entire time row ('time')
+  // with one status in a single action.
+  const applyBulkFill = (status) => {
+    if (!bulkMenu) return;
+    const { type, value } = bulkMenu;
+
+    setAvailabilityData(prev => {
+      const newData = { ...prev };
+      const keys = type === 'day'
+        ? timeSlots.map(time => `${value}-${time}`)
+        : days.map(day => `${day}-${value}`);
+
+      keys.forEach(key => {
+        if (status === 'unselected') {
+          delete newData[key];
+        } else {
+          newData[key] = status;
+        }
+      });
+
+      return newData;
+    });
+
+    setBulkMenu(null);
   };
 
   const getStatusCounts = () => {
@@ -302,11 +354,10 @@ const TutorAvailability = () => {
               textAlign: 'left',
             }}
         >
-          <p style={{ margin: '2px 0' }}>Click a time slot to cycle through:</p>
-          <p style={{ margin: '2px 0' }}>1st click — <strong style={{ color: '#16a34a' }}>Preferred</strong></p>
-          <p style={{ margin: '2px 0' }}>2nd click — <strong style={{ color: '#2563eb' }}>Available</strong></p>
-          <p style={{ margin: '2px 0' }}>3rd click — <strong style={{ color: '#dc2626' }}>Avoid</strong></p>
-          <p style={{ margin: '2px 0' }}>4th click — clears the selection</p>
+          <p style={{ margin: '2px 0' }}>1. Pick a status button above the grid.</p>
+          <p style={{ margin: '2px 0' }}>2. Tap any time slot to apply it.</p>
+          <p style={{ margin: '2px 0' }}>Tap it again to clear that slot.</p>
+          <p style={{ margin: '2px 0' }}>Or click a day / time header to fill a whole column or row at once.</p>
         </div>
       )}
     </div>
@@ -344,20 +395,82 @@ const TutorAvailability = () => {
               <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{submitError}</p>
             )}
 
+            {!isWindowClosed && isEditable && (
+              <div className="paint-toolbar">
+                <span className="paint-toolbar-label">1. Pick a status, then tap the times below:</span>
+                <div className="paint-toolbar-buttons">
+                  <button
+                    type="button"
+                    className={`paint-btn preferred ${paintColor === 'preferred' ? 'active' : ''}`}
+                    onClick={() => setPaintColor('preferred')}
+                  >
+                    Preferred
+                  </button>
+                  <button
+                    type="button"
+                    className={`paint-btn available ${paintColor === 'available' ? 'active' : ''}`}
+                    onClick={() => setPaintColor('available')}
+                  >
+                    Available
+                  </button>
+                  <button
+                    type="button"
+                    className={`paint-btn avoid ${paintColor === 'avoid' ? 'active' : ''}`}
+                    onClick={() => setPaintColor('avoid')}
+                  >
+                    Avoid
+                  </button>
+                  <button
+                    type="button"
+                    className={`paint-btn clear ${paintColor === 'unselected' ? 'active' : ''}`}
+                    onClick={() => setPaintColor('unselected')}
+                  >
+                    Eraser
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="availability-grid">
               <table className="grid-table">
                 <thead>
                   <tr>
                     <th></th>
                     {days.map(day => (
-                      <th key={day}>{day}</th>
+                      <th key={day}>
+                        <span>{day}</span>
+                        {!isWindowClosed && isEditable && (
+                          <button
+                            type="button"
+                            className="bulk-fill-trigger"
+                            onClick={(e) => openBulkMenu('day', day, e)}
+                            aria-label={`Fill all of ${day}`}
+                            title={`Fill all of ${day}`}
+                          >
+                            ▾
+                          </button>
+                        )}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {timeSlots.map(time => (
                     <tr key={time}>
-                      <td className="time-label">{time}</td>
+                      <td className="time-label">
+                        <span>{time}</span>
+                        {!isWindowClosed && isEditable && (
+                          <button
+                            type="button"
+                            className="bulk-fill-trigger"
+                            onClick={(e) => openBulkMenu('time', time, e)}
+                            aria-label={`Fill all of ${time}`}
+                            title={`Fill all of ${time}`}
+                          >
+                            ▾
+                          </button>
+                        )}
+                      </td>
                       {days.map(day => {
                         const state = getSlotState(day, time);
                         return (
@@ -393,6 +506,30 @@ const TutorAvailability = () => {
           </div>
         </div>
       </main>
+
+      {bulkMenu && (
+        <div
+          ref={bulkMenuRef}
+          className="bulk-fill-menu"
+          style={{ top: bulkMenu.top, left: bulkMenu.left }}
+        >
+          <div className="bulk-fill-menu-title">
+            Set all of {bulkMenu.type === 'day' ? bulkMenu.value : bulkMenu.value} to:
+          </div>
+          <button type="button" className="bulk-fill-option preferred" onClick={() => applyBulkFill('preferred')}>
+            Preferred
+          </button>
+          <button type="button" className="bulk-fill-option available" onClick={() => applyBulkFill('available')}>
+            Available
+          </button>
+          <button type="button" className="bulk-fill-option avoid" onClick={() => applyBulkFill('avoid')}>
+            Avoid
+          </button>
+          <button type="button" className="bulk-fill-option clear" onClick={() => applyBulkFill('unselected')}>
+            Clear
+          </button>
+        </div>
+      )}
 
       {showSuccess && (
         <div className="success-message">
