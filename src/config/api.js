@@ -37,6 +37,15 @@ const clearAvailabilityCache = (unitCode) => {
   availabilityCache.clear();
 };
 
+const REQUESTS_CACHE_TTL_MS = 30000;
+let requestsCache = null;
+let ucRequestsCache = null;
+
+const clearRequestsCache = () => {
+  requestsCache = null;
+  ucRequestsCache = null;
+};
+
 const SESSIONS_CACHE_TTL_MS = 30000;
 const sessionsCache = new Map();
 
@@ -153,11 +162,41 @@ export const authAPI = {
 export const requestsAPI = {
   // Get all requests
   getAll: async () => {
-    const response = await fetch(`${API_URL}/requests`, {
+    const now = Date.now();
+
+    if (requestsCache?.data && now - requestsCache.updatedAt < REQUESTS_CACHE_TTL_MS) {
+      return requestsCache.data;
+    }
+
+    if (requestsCache?.promise) {
+      return requestsCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/requests`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch requests');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch requests');
+        requestsCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        requestsCache = null;
+        throw error;
+      });
+
+    requestsCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  getFresh: async () => {
+    requestsCache = null;
+    return requestsAPI.getAll();
+  },
+
+  prefetch: async () => {
+    return requestsAPI.getAll();
   },
 
   // Create request
@@ -168,7 +207,9 @@ export const requestsAPI = {
       body: JSON.stringify(requestData)
     });
     if (!response.ok) throw new Error('Failed to create request');
-    return response.json();
+    const data = await response.json();
+    clearRequestsCache();
+    return data;
   },
 
   // Update request
@@ -179,7 +220,9 @@ export const requestsAPI = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update');
-    return res.json();
+    const result = await res.json();
+    clearRequestsCache();
+    return result;
   },
 
   // Delete request
@@ -189,7 +232,9 @@ export const requestsAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to delete request');
-    return response.json();
+    const data = await response.json();
+    clearRequestsCache();
+    return data;
   }
 
 };
@@ -197,22 +242,45 @@ export const requestsAPI = {
 export const ucAPI = {
 
   getAllRequests: async () => {
+    const now = Date.now();
 
-    const response = await fetch(
+    if (ucRequestsCache?.data && now - ucRequestsCache.updatedAt < REQUESTS_CACHE_TTL_MS) {
+      return ucRequestsCache.data;
+    }
+
+    if (ucRequestsCache?.promise) {
+      return ucRequestsCache.promise;
+    }
+
+    const promise = fetch(
       `${API_URL}/uc/requests`,
       {
         headers: authHeader()
       }
-    );
+    )
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch UC requests');
+        ucRequestsCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        ucRequestsCache = null;
+        throw error;
+      });
 
-    if (!response.ok) {
-      throw new Error(
-        'Failed to fetch UC requests'
-      );
-    }
+    ucRequestsCache = { promise, updatedAt: now };
+    return promise;
 
-    return response.json();
+  },
 
+  getFreshRequests: async () => {
+    ucRequestsCache = null;
+    return ucAPI.getAllRequests();
+  },
+
+  prefetchRequests: async () => {
+    return ucAPI.getAllRequests();
   },
 
   reviewRequest: async (
@@ -244,7 +312,9 @@ export const ucAPI = {
       );
     }
 
-    return response.json();
+    const data = await response.json();
+    clearRequestsCache();
+    return data;
 
   }
 
