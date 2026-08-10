@@ -83,7 +83,7 @@ useEffect(() => {
 
   const handleRoleSwitch = (role) => {
     setActiveViewRole(role);
-    navigate(role === 'coordinator' ? '/uc-requests' : '/', { replace: true });
+    navigate(role === 'coordinator' ? '/uc-requests' : '/tutor-dashboard', { replace: true });
   };
 
   const navItem = (label, path, key, showDot = false) => {
@@ -169,7 +169,7 @@ useEffect(() => {
       )}
 
       <nav className="uc-navigation">
-        {navItem('Dashboard', '/', 'dashboard')}
+        {navItem('Dashboard', '/tutor-dashboard', 'dashboard')}
         {navItem('Sessions', activeUnit ? `/tutor-sessions/${activeUnit.id}` : '#sessions', 'sessions')}
         {navItem('Availability', '/availability', 'availability')}
         {navItem('Schedule', activeUnit ? `/tutor-schedule/${activeUnit.id}` : '#schedule', 'schedule')}
