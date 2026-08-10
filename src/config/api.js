@@ -48,15 +48,19 @@ const clearRequestsCache = () => {
 
 const SESSIONS_CACHE_TTL_MS = 30000;
 const sessionsCache = new Map();
+const assignedSessionsCache = new Map();
 
 const getSessionsCacheKey = (unitId) => String(unitId || '');
 
 const clearSessionsCache = (unitId) => {
   if (unitId) {
-    sessionsCache.delete(getSessionsCacheKey(unitId));
+    const cacheKey = getSessionsCacheKey(unitId);
+    sessionsCache.delete(cacheKey);
+    assignedSessionsCache.delete(cacheKey);
     return;
   }
   sessionsCache.clear();
+  assignedSessionsCache.clear();
 };
 
 const TUTORS_CACHE_TTL_MS = 30000;
@@ -104,6 +108,17 @@ let profileCache = null;
 
 const clearProfileCache = () => {
   profileCache = null;
+};
+
+const DASHBOARD_CACHE_TTL_MS = 30000;
+let ucDashboardCache = null;
+let tutorDashboardCache = null;
+
+const NOTIFICATIONS_CACHE_TTL_MS = 15000;
+let notificationsCache = null;
+
+const clearNotificationsCache = () => {
+  notificationsCache = null;
 };
 
 export const authAPI = {
@@ -556,11 +571,39 @@ export const unitsAPI = {
 
 export const sessionsAPI = {
   getMyAssigned: async (unitId) => {
-    const response = await fetch(`${API_URL}/units/${unitId}/sessions/my-assigned`, {
+    const cacheKey = getSessionsCacheKey(unitId);
+    const cached = assignedSessionsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < SESSIONS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/units/${unitId}/sessions/my-assigned`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch your sessions');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch your sessions');
+        assignedSessionsCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        assignedSessionsCache.delete(cacheKey);
+        throw error;
+      });
+
+    assignedSessionsCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
+  },
+
+  getFreshMyAssigned: async (unitId) => {
+    assignedSessionsCache.delete(getSessionsCacheKey(unitId));
+    return sessionsAPI.getMyAssigned(unitId);
   },
 
   confirmSession: async (unitId, sessionId, confirmed, reason) => {
@@ -779,21 +822,71 @@ export const tutorsAPI = {
 
 export const ucDashboardAPI = {
   getSummary: async () => {
-    const response = await fetch(`${API_URL}/uc/dashboard-summary`, {
+    const now = Date.now();
+
+    if (ucDashboardCache?.data && now - ucDashboardCache.updatedAt < DASHBOARD_CACHE_TTL_MS) {
+      return ucDashboardCache.data;
+    }
+
+    if (ucDashboardCache?.promise) {
+      return ucDashboardCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/uc/dashboard-summary`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch dashboard summary');
+        ucDashboardCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        ucDashboardCache = null;
+        throw error;
+      });
+
+    ucDashboardCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  prefetch: async () => {
+    return ucDashboardAPI.getSummary();
   }
 };
 
 export const tutorDashboardAPI = {
   getSummary: async () => {
-    const response = await fetch(`${API_URL}/tutor/dashboard-summary`, {
+    const now = Date.now();
+
+    if (tutorDashboardCache?.data && now - tutorDashboardCache.updatedAt < DASHBOARD_CACHE_TTL_MS) {
+      return tutorDashboardCache.data;
+    }
+
+    if (tutorDashboardCache?.promise) {
+      return tutorDashboardCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/tutor/dashboard-summary`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch dashboard summary');
+        tutorDashboardCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        tutorDashboardCache = null;
+        throw error;
+      });
+
+    tutorDashboardCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  prefetch: async () => {
+    return tutorDashboardAPI.getSummary();
   }
 };
 
@@ -1198,11 +1291,36 @@ export const tutorApplicationsAPI = {
 
 export const notificationsAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_URL}/notifications`, {
+    const now = Date.now();
+
+    if (notificationsCache?.data && now - notificationsCache.updatedAt < NOTIFICATIONS_CACHE_TTL_MS) {
+      return notificationsCache.data;
+    }
+
+    if (notificationsCache?.promise) {
+      return notificationsCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/notifications`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch notifications');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch notifications');
+        notificationsCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        notificationsCache = null;
+        throw error;
+      });
+
+    notificationsCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  prefetch: async () => {
+    return notificationsAPI.getAll();
   },
 
   markRead: async (id) => {
@@ -1211,7 +1329,9 @@ export const notificationsAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to mark notification as read');
-    return response.json();
+    const data = await response.json();
+    clearNotificationsCache();
+    return data;
   },
 
   markAllRead: async () => {
@@ -1220,6 +1340,8 @@ export const notificationsAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to mark notifications as read');
-    return response.json();
+    const data = await response.json();
+    clearNotificationsCache();
+    return data;
   }
 };

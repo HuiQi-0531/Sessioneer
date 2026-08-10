@@ -264,6 +264,7 @@ const TutorAvailability = () => {
       <div className="dashboard-container">
         <TutorSidebar activePage="availability" />
         <main className="main-content">
+          <UCPageHeader title="My availability" />
           <div className="content-area">Loading...</div>
         </main>
       </div>

@@ -187,6 +187,7 @@ const Tutors = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="tutors" />
         <main className="uc-main-content">
+          <UCPageHeader title="Tutors" />
           <div className="tt-content"><div className="tt-empty-state">Loading...</div></div>
         </main>
       </div>

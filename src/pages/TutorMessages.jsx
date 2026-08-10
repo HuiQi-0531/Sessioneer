@@ -331,6 +331,7 @@ const TutorMessages = () => {
       <div className="uc-dashboard-container">
         <TutorSidebar activePage="messages" />
         <main className="uc-main-content">
+          <UCPageHeader title="Messages" />
           <div className="msg-empty-chat">Loading...</div>
         </main>
       </div>

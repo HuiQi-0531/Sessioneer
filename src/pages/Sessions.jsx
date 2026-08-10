@@ -163,6 +163,7 @@ const Sessions = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="sessions" />
         <main className="uc-main-content">
+          <UCPageHeader title="Sessions" />
           <div className="ss-content">
             <div className="ss-empty-state"><p>Loading...</p></div>
           </div>

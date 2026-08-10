@@ -75,7 +75,10 @@ const TutorSession = () => {
     return (
       <div className="dashboard-container">
         <TutorSidebar activePage="sessions" />
-        <main className="main-content"><div style={{ padding: 32 }}>Loading...</div></main>
+        <main className="main-content">
+          <UCPageHeader title="Sessions" />
+          <div style={{ padding: 32 }}>Loading sessions...</div>
+        </main>
       </div>
     );
   }

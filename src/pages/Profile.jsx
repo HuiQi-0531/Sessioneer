@@ -123,6 +123,7 @@ const Profile = () => {
       <div className="uc-dashboard-container">
         <Sidebar activePage="profile" />
         <main className="uc-main-content">
+          <UCPageHeader title="Profile & Settings" />
           <div className="pf-content">Loading...</div>
         </main>
       </div>

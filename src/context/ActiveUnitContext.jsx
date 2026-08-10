@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { availabilityAPI, messagesAPI, profileAPI, sessionsAPI, tutorApplicationsAPI, tutorsAPI, ucAPI, unitsAPI } from '../config/api';
+import { availabilityAPI, messagesAPI, notificationsAPI, profileAPI, requestsAPI, sessionsAPI, tutorApplicationsAPI, tutorDashboardAPI, tutorsAPI, ucAPI, ucDashboardAPI, unitsAPI } from '../config/api';
 
 const ActiveUnitContext = createContext(null);
 
@@ -112,6 +112,9 @@ export const ActiveUnitProvider = ({ children }) => {
     sessionsAPI.prefetch(activeUnit.id).catch(() => {
       // Schedule Builder will show its own error/loading state if the real page load fails.
     });
+    ucDashboardAPI.prefetch().catch(() => {
+      // Dashboard will show its own error/loading state if the real page load fails.
+    });
     tutorsAPI.prefetch(activeUnit.id).catch(() => {
       // Tutors page will show its own error/loading state if the real page load fails.
     });
@@ -129,6 +132,35 @@ export const ActiveUnitProvider = ({ children }) => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);
+
+  useEffect(() => {
+    if (!activeUnit?.id || activeViewRole !== 'tutor' || !activeUnitRoles.includes('tutor')) return;
+    sessionsAPI.prefetch(activeUnit.id).catch(() => {
+      // Tutor Sessions will show its own error/loading state if the real page load fails.
+    });
+    sessionsAPI.getMyAssigned(activeUnit.id).catch(() => {
+      // Tutor Schedule will show its own error/loading state if the real page load fails.
+    });
+    tutorDashboardAPI.prefetch().catch(() => {
+      // Tutor Dashboard will show its own error/loading state if the real page load fails.
+    });
+    availabilityAPI.prefetch(activeUnit.unitCode).catch(() => {
+      // Tutor Availability will show its own error/loading state if the real page load fails.
+    });
+    requestsAPI.prefetch().catch(() => {
+      // Tutor Requests will show its own error/loading state if the real page load fails.
+    });
+    messagesAPI.prefetchUnit(activeUnit.id).catch(() => {
+      // Tutor Messages will show its own error/loading state if the real page load fails.
+    });
+    profileAPI.prefetch().catch(() => {
+      // Profile page will show its own error/loading state if the real page load fails.
+    });
+    notificationsAPI.prefetch().catch(() => {
+      // Notification widgets will load normally if prefetch fails.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit?.id, activeUnit?.unitCode, activeViewRole, activeUnitRoleKey]);
 
   const setActiveViewRole = (role) => {
     if (!['coordinator', 'tutor'].includes(role)) return;

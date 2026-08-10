@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
-import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { formatTimeAgo } from '../utils/time';
@@ -8,8 +7,6 @@ import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
 
 const TutorDashboard = () => {
-  const { isLoading: unitsLoading } = useActiveUnit();
-
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -58,7 +55,7 @@ const TutorDashboard = () => {
             <h2>Welcome back, {displayName}</h2>
           </div>
 
-          {unitsLoading || isLoadingSummary ? (
+          {isLoadingSummary ? (
             <div className="td-loading">Loading your dashboard...</div>
           ) : !summary ? (
             <div className="td-loading">Could not load your dashboard. Please refresh.</div>

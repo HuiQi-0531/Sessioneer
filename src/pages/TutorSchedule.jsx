@@ -206,6 +206,7 @@ const TutorSchedule = () => {
       <div className="uc-dashboard-container">
         <TutorSidebar activePage="schedule" />
         <main className="uc-main-content">
+          <UCPageHeader title="Schedule" />
           <div className="ts-content"><div className="ts-empty-state">Loading...</div></div>
         </main>
       </div>
