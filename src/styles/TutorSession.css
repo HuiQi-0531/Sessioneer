@@ -161,6 +161,10 @@
 
 .sessions-top {
     margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
 }
 
 .sessions-title {
@@ -172,6 +176,44 @@
 .sessions-subtitle {
     font-size: 14px;
     color: var(--color-text-muted);
+}
+
+.sessions-unit-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+}
+
+.sessions-unit-arrow {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sessions-unit-arrow:hover {
+    background: var(--color-primary);
+    color: white;
+}
+
+.sessions-unit-position {
+    min-width: 42px;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 600;
 }
 
 .sessions-not-released {

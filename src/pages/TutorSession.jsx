@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -25,7 +26,9 @@ const getBlockState = (session) => {
 };
 
 const TutorSession = () => {
-  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+  const { unitId: unitIdFromUrl } = useParams();
+  const navigate = useNavigate();
+  const { activeUnit, activeUnitId, allUnits, setActiveUnitId, isLoading: unitLoading } = useActiveUnit();
 
   const [fullscreen, setFullscreen] = useState(false);
   const [rawSessions, setRawSessions] = useState([]);
@@ -33,9 +36,19 @@ const TutorSession = () => {
   const [notReleased, setNotReleased] = useState(false);
 
   useEffect(() => {
+    if (unitIdFromUrl && unitIdFromUrl !== activeUnitId) {
+      setActiveUnitId(unitIdFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitIdFromUrl]);
+
+  useEffect(() => {
     if (!activeUnit) {
       setIsLoadingSessions(false);
       return;
+    }
+    if (unitIdFromUrl !== activeUnit.id) {
+      navigate(`/tutor-sessions/${activeUnit.id}`, { replace: true });
     }
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +83,16 @@ const TutorSession = () => {
     hourFromTime(s.endTime) <= GRID_END_HOUR
   );
   const hiddenFromGridCount = rawSessions.length - gridSessions.length;
+  const activeUnitIndex = allUnits.findIndex(unit => unit.id === activeUnit?.id);
+  const hasMultipleUnits = allUnits.length > 1 && activeUnitIndex !== -1;
+
+  const handleUnitStep = (direction) => {
+    if (!hasMultipleUnits) return;
+    const nextIndex = (activeUnitIndex + direction + allUnits.length) % allUnits.length;
+    const nextUnit = allUnits[nextIndex];
+    setActiveUnitId(nextUnit.id);
+    navigate(`/tutor-sessions/${nextUnit.id}`);
+  };
 
   if (unitLoading) {
     return (
@@ -109,6 +132,29 @@ const TutorSession = () => {
                 <h3 className="sessions-title">{activeUnit.unitCode} - Session Schedule</h3>
                 <p className="sessions-subtitle">View all classes and tutoring sessions in this unit</p>
               </div>
+              {hasMultipleUnits && (
+                <div className="sessions-unit-switcher" aria-label="Switch unit sessions">
+                  <button
+                    type="button"
+                    className="sessions-unit-arrow"
+                    onClick={() => handleUnitStep(-1)}
+                    aria-label="Previous unit"
+                  >
+                    &lsaquo;
+                  </button>
+                  <span className="sessions-unit-position">
+                    {activeUnitIndex + 1} / {allUnits.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="sessions-unit-arrow"
+                    onClick={() => handleUnitStep(1)}
+                    aria-label="Next unit"
+                  >
+                    &rsaquo;
+                  </button>
+                </div>
+              )}
             </div>
 
             {isLoadingSessions ? (
