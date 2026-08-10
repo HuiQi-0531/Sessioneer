@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
-import { messagesAPI } from '../config/api';
 import { getSocket } from '../utils/socket';
+import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
 import '../styles/UCSidebar.css';
 
 const UCSidebar = ({ activePage }) => {
@@ -34,20 +34,8 @@ const UCSidebar = ({ activePage }) => {
     }
 
     try {
-      const results = await Promise.all(
-        allUnits.map(async (unit) => {
-          const [groupData, contacts] = await Promise.all([
-            messagesAPI.getGroupUnreadCount(unit.id),
-            messagesAPI.getUnitContacts(unit.id)
-          ]);
-          const groupUnread = groupData?.unreadCount || 0;
-          const directUnread = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-          return groupUnread + directUnread;
-        })
-      );
-
-      const totalUnread = results.reduce((sum, n) => sum + n, 0);
-      setHasUnreadMessages(totalUnread > 0);
+      const hasUnread = await getCachedHasUnreadMessages(allUnits);
+      setHasUnreadMessages(hasUnread);
     } catch (err) {
       console.error('Error checking unread messages:', err);
     }
@@ -62,6 +50,7 @@ const UCSidebar = ({ activePage }) => {
     if (!socket) return;
 
     const handleNewMessage = () => {
+      invalidateMessageUnreadCache();
       checkUnreadMessages();
     };
 

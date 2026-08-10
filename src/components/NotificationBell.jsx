@@ -5,6 +5,52 @@ import { formatTimeAgo } from '../utils/time';
 import '../styles/NotificationBell.css';
 
 const POLL_INTERVAL_MS = 15000;
+const CACHE_TTL_MS = 15000;
+
+let cachedNotifications = null;
+let cachedUnreadCount = 0;
+let cachedAt = 0;
+let pendingNotificationsRequest = null;
+
+const invalidateNotificationCache = () => {
+  cachedNotifications = null;
+  cachedUnreadCount = 0;
+  cachedAt = 0;
+  pendingNotificationsRequest = null;
+};
+
+const getCachedNotifications = async ({ force = false } = {}) => {
+  const now = Date.now();
+
+  if (!force && cachedNotifications && now - cachedAt < CACHE_TTL_MS) {
+    return {
+      notifications: cachedNotifications,
+      unreadCount: cachedUnreadCount
+    };
+  }
+
+  if (!force && pendingNotificationsRequest) {
+    return pendingNotificationsRequest;
+  }
+
+  pendingNotificationsRequest = notificationsAPI.getAll()
+    .then((data) => {
+      cachedNotifications = data.notifications || [];
+      cachedUnreadCount = data.unreadCount || 0;
+      cachedAt = Date.now();
+      pendingNotificationsRequest = null;
+      return {
+        notifications: cachedNotifications,
+        unreadCount: cachedUnreadCount
+      };
+    })
+    .catch((error) => {
+      pendingNotificationsRequest = null;
+      throw error;
+    });
+
+  return pendingNotificationsRequest;
+};
 
 const NotificationBell = () => {
   const navigate = useNavigate();
@@ -13,9 +59,9 @@ const NotificationBell = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options) => {
     try {
-      const data = await notificationsAPI.getAll();
+      const data = await getCachedNotifications(options);
       setNotifications(data.notifications);
       setUnreadCount(data.unreadCount);
     } catch (err) {
@@ -42,7 +88,8 @@ const NotificationBell = () => {
   const handleMarkAllRead = async () => {
     try {
       await notificationsAPI.markAllRead();
-      await load();
+      invalidateNotificationCache();
+      await load({ force: true });
     } catch (err) {
       console.error('Error marking all read:', err);
     }
@@ -52,7 +99,8 @@ const NotificationBell = () => {
     if (!n.isRead) {
       try {
         await notificationsAPI.markRead(n.id);
-        await load();
+        invalidateNotificationCache();
+        await load({ force: true });
       } catch (err) {
         console.error('Error marking notification read:', err);
       }
