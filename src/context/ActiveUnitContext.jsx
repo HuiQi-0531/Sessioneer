@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { availabilityAPI, sessionsAPI, unitsAPI } from '../config/api';
+import { availabilityAPI, sessionsAPI, tutorApplicationsAPI, tutorsAPI, unitsAPI } from '../config/api';
 
 const ActiveUnitContext = createContext(null);
 
@@ -111,6 +111,12 @@ export const ActiveUnitProvider = ({ children }) => {
     if (!activeUnit?.id || activeViewRole !== 'coordinator' || !activeUnitRoles.includes('coordinator')) return;
     sessionsAPI.prefetch(activeUnit.id).catch(() => {
       // Schedule Builder will show its own error/loading state if the real page load fails.
+    });
+    tutorsAPI.prefetch(activeUnit.id).catch(() => {
+      // Tutors page will show its own error/loading state if the real page load fails.
+    });
+    tutorApplicationsAPI.prefetch().catch(() => {
+      // Tutor Applications page will show its own error/loading state if the real page load fails.
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);

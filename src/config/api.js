@@ -50,6 +50,26 @@ const clearSessionsCache = (unitId) => {
   sessionsCache.clear();
 };
 
+const TUTORS_CACHE_TTL_MS = 30000;
+const tutorsCache = new Map();
+
+const getTutorsCacheKey = (unitId) => String(unitId || '');
+
+const clearTutorsCache = (unitId) => {
+  if (unitId) {
+    tutorsCache.delete(getTutorsCacheKey(unitId));
+    return;
+  }
+  tutorsCache.clear();
+};
+
+const APPLICATIONS_CACHE_TTL_MS = 30000;
+let applicationsCache = null;
+
+const clearApplicationsCache = () => {
+  applicationsCache = null;
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -571,11 +591,44 @@ export const scheduleAPI = {
 
 export const tutorsAPI = {
   getAll: async (unitId) => {
-    const response = await fetch(`${API_URL}/units/${unitId}/tutors`, {
+    const cacheKey = getTutorsCacheKey(unitId);
+    const cached = tutorsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < TUTORS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/units/${unitId}/tutors`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch tutors');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch tutors');
+        tutorsCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        tutorsCache.delete(cacheKey);
+        throw error;
+      });
+
+    tutorsCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
+  },
+
+  getFresh: async (unitId) => {
+    clearTutorsCache(unitId);
+    return tutorsAPI.getAll(unitId);
+  },
+
+  prefetch: async (unitId) => {
+    if (!unitId) return null;
+    return tutorsAPI.getAll(unitId);
   },
 
   updateMarker: async (unitId, tutorId, priorityTag, internalNotes, tags) => {
@@ -586,6 +639,7 @@ export const tutorsAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update tutor marker');
+    clearTutorsCache(unitId);
     return data;
     },
 
@@ -597,6 +651,7 @@ export const tutorsAPI = {
    });
    const data = await response.json();
    if (!response.ok) throw new Error(data.error || 'Failed to update early access');
+   clearTutorsCache(unitId);
    return data;
   },
 
@@ -608,6 +663,7 @@ export const tutorsAPI = {
    });
    const data = await response.json();
    if (!response.ok) throw new Error(data.error || 'Failed to update starred status');
+   clearTutorsCache(unitId);
    return data;
   },
 
@@ -619,6 +675,7 @@ export const tutorsAPI = {
    });
    const data = await response.json();
    if (!response.ok) throw new Error(data.error || 'Failed to update flagged status');
+   clearTutorsCache(unitId);
    return data;
   }
 };
@@ -790,15 +847,46 @@ export const tutorApplicationsAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to submit application');
+    clearApplicationsCache();
     return result;
   },
 
   getAll: async () => {
-    const response = await fetch(`${API_URL}/tutor-applications`, {
+    const now = Date.now();
+
+    if (applicationsCache?.data && now - applicationsCache.updatedAt < APPLICATIONS_CACHE_TTL_MS) {
+      return applicationsCache.data;
+    }
+
+    if (applicationsCache?.promise) {
+      return applicationsCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/tutor-applications`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch applications');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch applications');
+        applicationsCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        clearApplicationsCache();
+        throw error;
+      });
+
+    applicationsCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  getFresh: async () => {
+    clearApplicationsCache();
+    return tutorApplicationsAPI.getAll();
+  },
+
+  prefetch: async () => {
+    return tutorApplicationsAPI.getAll();
   },
 
   downloadResume: async (applicationId, filename) => {
@@ -830,6 +918,7 @@ export const tutorApplicationsAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
+    clearApplicationsCache();
     return result;
   },
 
@@ -841,6 +930,7 @@ export const tutorApplicationsAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create invite');
+    clearApplicationsCache();
     return result;
   },
 
@@ -859,6 +949,7 @@ export const tutorApplicationsAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create account');
+    clearApplicationsCache();
     return result;
   }
 };
