@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { unitsAPI } from '../config/api';
+import { availabilityAPI, unitsAPI } from '../config/api';
 
 const ActiveUnitContext = createContext(null);
 
@@ -98,6 +98,13 @@ export const ActiveUnitProvider = ({ children }) => {
   const activeUnit = allUnits.find(u => u.id === activeUnitId) || null;
   const activeUnitRoles = activeUnit?.roles || [];
   const canSwitchRole = activeUnitRoles.length > 1;
+
+  useEffect(() => {
+    if (!activeUnit?.unitCode) return;
+    availabilityAPI.prefetch(activeUnit.unitCode).catch(() => {
+      // Prefetch is only a speed improvement. The page itself will show errors if loading fails.
+    });
+  }, [activeUnit?.unitCode]);
 
   const setActiveViewRole = (role) => {
     if (!['coordinator', 'tutor'].includes(role)) return;

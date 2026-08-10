@@ -90,9 +90,12 @@ router.get('/', verifyToken, async (req, res) => {
     const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
     const visibleTutorIds = new Set(tutors.map(t => t.id));
 
+    const availabilityParams = isCoordinatorOwner ? [unit_id] : [unit_id, req.user.id];
+    const availabilityTutorWhere = isCoordinatorOwner ? '' : 'AND tutor_id = $2';
+
     const submittedResult = await pool.query(
-      'SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
-      [unit_id]
+      `SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+      availabilityParams
     );
     const submittedIds = new Set(
       submittedResult.rows
@@ -106,8 +109,8 @@ router.get('/', verifyToken, async (req, res) => {
     }));
 
     const availResult = await pool.query(
-      'SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
-      [unit_id]
+      `SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+      availabilityParams
     );
 
     const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };

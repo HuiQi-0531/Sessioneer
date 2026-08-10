@@ -144,7 +144,7 @@ export default function UCAvailability({ onSendReminder }) {
     return tutors.filter(t => t.name.toLowerCase().includes(q));
   }, [tutors, searchQuery]);
 
-  if (unitLoading || isLoadingData) {
+  if (unitLoading) {
     return (
       <div className="uca-root">
         <UCSidebar activePage="availability" />
@@ -244,7 +244,9 @@ export default function UCAvailability({ onSendReminder }) {
               </div>
             </div>
 
-            {filteredTutors.length === 0 ? (
+            {isLoadingData ? (
+              <div className="uca-empty">Loading availability...</div>
+            ) : filteredTutors.length === 0 ? (
               <div className="uca-empty">No tutors match "{searchQuery}"</div>
             ) : (
               <div className="uca-grid-outer">
@@ -289,7 +291,9 @@ export default function UCAvailability({ onSendReminder }) {
 
           <div className="uca-card uca-card--status">
             <h3 className="uca-status__title">SUBMISSION STATUS</h3>
-            {submissionStatus.length === 0 ? (
+            {isLoadingData ? (
+              <div className="uca-empty uca-empty--status">Loading submission status...</div>
+            ) : submissionStatus.length === 0 ? (
               <div className="uca-empty uca-empty--status">No submissions yet.</div>
             ) : (
               <ul className="uca-status__list">

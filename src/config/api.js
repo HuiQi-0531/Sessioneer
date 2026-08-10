@@ -24,6 +24,19 @@ const withTimeout = async (request, timeoutMessage = 'Request timed out. Please 
   }
 };
 
+const AVAILABILITY_CACHE_TTL_MS = 30000;
+const availabilityCache = new Map();
+
+const getAvailabilityCacheKey = (unitCode) => String(unitCode || '').trim().toUpperCase();
+
+const clearAvailabilityCache = (unitCode) => {
+  if (unitCode) {
+    availabilityCache.delete(getAvailabilityCacheKey(unitCode));
+    return;
+  }
+  availabilityCache.clear();
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -205,11 +218,50 @@ export const ucAPI = {
 };
 export const availabilityAPI = {
   get: async (unitCode) => {
+    const cacheKey = getAvailabilityCacheKey(unitCode);
+    const cached = availabilityCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && cached.data && now - cached.createdAt < AVAILABILITY_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/availability?unitCode=${unitCode}`, {
+      headers: authHeader()
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Failed to fetch availability');
+        const data = await response.json();
+        availabilityCache.set(cacheKey, { data, createdAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        availabilityCache.delete(cacheKey);
+        throw error;
+      });
+
+    availabilityCache.set(cacheKey, { promise, createdAt: now });
+    return promise;
+  },
+
+  getFresh: async (unitCode) => {
+    clearAvailabilityCache(unitCode);
     const response = await fetch(`${API_URL}/availability?unitCode=${unitCode}`, {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to fetch availability');
-    return response.json();
+    const data = await response.json();
+    availabilityCache.set(getAvailabilityCacheKey(unitCode), { data, createdAt: Date.now() });
+    return data;
+  },
+
+  prefetch: async (unitCode) => {
+    if (!unitCode) return null;
+    return availabilityAPI.get(unitCode);
   },
 
   submit: async (unitCode, slots) => {
@@ -230,6 +282,7 @@ export const availabilityAPI = {
       throw new Error('Failed to submit availability');
     }
 
+    clearAvailabilityCache(unitCode);
     return response.json();
   }
 };

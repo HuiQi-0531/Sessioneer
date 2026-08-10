@@ -130,6 +130,15 @@ const TutorAvailability = () => {
 
     const loadSavedAvailability = async () => {
       setSubmitError('');
+      const savedData = localStorage.getItem(storageKey);
+
+      if (savedData) {
+        setAvailabilityData(JSON.parse(savedData));
+        setIsEditable(false);
+      } else {
+        setAvailabilityData({});
+        setIsEditable(!isWindowClosed);
+      }
 
       try {
         const data = await availabilityAPI.get(activeUnit.unitCode);
@@ -144,15 +153,6 @@ const TutorAvailability = () => {
         }
       } catch (error) {
         console.error('Could not load saved availability:', error);
-      }
-
-      const savedData = localStorage.getItem(storageKey);
-      if (savedData) {
-        setAvailabilityData(JSON.parse(savedData));
-        setIsEditable(false);
-      } else {
-        setAvailabilityData({});
-        setIsEditable(!isWindowClosed);
       }
     };
 
