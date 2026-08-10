@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { availabilityAPI, sessionsAPI, tutorApplicationsAPI, tutorsAPI, ucAPI, unitsAPI } from '../config/api';
+import { availabilityAPI, messagesAPI, sessionsAPI, tutorApplicationsAPI, tutorsAPI, ucAPI, unitsAPI } from '../config/api';
 
 const ActiveUnitContext = createContext(null);
 
@@ -120,6 +120,9 @@ export const ActiveUnitProvider = ({ children }) => {
     });
     ucAPI.prefetchRequests().catch(() => {
       // Requests page will show its own error/loading state if the real page load fails.
+    });
+    messagesAPI.prefetchUnit(activeUnit.id).catch(() => {
+      // Messages page will show its own error/loading state if the real page load fails.
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);

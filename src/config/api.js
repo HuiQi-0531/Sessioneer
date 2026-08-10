@@ -79,6 +79,26 @@ const clearApplicationsCache = () => {
   applicationsCache = null;
 };
 
+const MESSAGE_THREAD_CACHE_TTL_MS = 5000;
+const MESSAGE_CONTACTS_CACHE_TTL_MS = 15000;
+const groupThreadCache = new Map();
+const directThreadCache = new Map();
+const unitContactsCache = new Map();
+const groupUnreadCache = new Map();
+
+const getMessageCacheKey = (id) => String(id || '');
+
+const clearMessageUnitCache = (unitId) => {
+  const cacheKey = getMessageCacheKey(unitId);
+  groupThreadCache.delete(cacheKey);
+  unitContactsCache.delete(cacheKey);
+  groupUnreadCache.delete(cacheKey);
+};
+
+const clearDirectMessageCache = (otherUserId) => {
+  directThreadCache.delete(getMessageCacheKey(otherUserId));
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -772,11 +792,39 @@ export const tutorDashboardAPI = {
 
 export const messagesAPI = {
   getGroupThread: async (unitId) => {
-    const response = await fetch(`${API_URL}/messages/group/${unitId}`, {
+    const cacheKey = getMessageCacheKey(unitId);
+    const cached = groupThreadCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < MESSAGE_THREAD_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/messages/group/${unitId}`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch group chat');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch group chat');
+        groupThreadCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        groupThreadCache.delete(cacheKey);
+        throw error;
+      });
+
+    groupThreadCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
+  },
+
+  getFreshGroupThread: async (unitId) => {
+    groupThreadCache.delete(getMessageCacheKey(unitId));
+    return messagesAPI.getGroupThread(unitId);
   },
 
   sendGroup: async (unitId, content, attachment) => {
@@ -793,6 +841,7 @@ export const messagesAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to send message');
+    clearMessageUnitCache(unitId);
     return data;
   },
 
@@ -802,23 +851,80 @@ export const messagesAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to mark as read');
-    return response.json();
+    const data = await response.json();
+    groupUnreadCache.delete(getMessageCacheKey(unitId));
+    return data;
   },
 
   getGroupUnreadCount: async (unitId) => {
-    const response = await fetch(`${API_URL}/units/${unitId}/messages/group-unread-count`, {
+    const cacheKey = getMessageCacheKey(unitId);
+    const cached = groupUnreadCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < MESSAGE_CONTACTS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/units/${unitId}/messages/group-unread-count`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch unread count');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch unread count');
+        groupUnreadCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        groupUnreadCache.delete(cacheKey);
+        throw error;
+      });
+
+    groupUnreadCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
   },
 
   getUnitContacts: async (unitId) => {
-    const response = await fetch(`${API_URL}/units/${unitId}/messages/contacts`, {
+    const cacheKey = getMessageCacheKey(unitId);
+    const cached = unitContactsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < MESSAGE_CONTACTS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/units/${unitId}/messages/contacts`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch contacts');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch contacts');
+        unitContactsCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        unitContactsCache.delete(cacheKey);
+        throw error;
+      });
+
+    unitContactsCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
+  },
+
+  prefetchUnit: async (unitId) => {
+    if (!unitId) return null;
+    return Promise.allSettled([
+      messagesAPI.getGroupThread(unitId),
+      messagesAPI.getUnitContacts(unitId),
+      messagesAPI.getGroupUnreadCount(unitId)
+    ]);
   },
 
   getMyContacts: async () => {
@@ -830,11 +936,34 @@ export const messagesAPI = {
   },
 
   getThread: async (otherUserId) => {
-    const response = await fetch(`${API_URL}/messages/thread/${otherUserId}`, {
+    const cacheKey = getMessageCacheKey(otherUserId);
+    const cached = directThreadCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < MESSAGE_THREAD_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/messages/thread/${otherUserId}`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch messages');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch messages');
+        directThreadCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        directThreadCache.delete(cacheKey);
+        throw error;
+      });
+
+    directThreadCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
   },
 
   send: async (recipientId, content, attachment) => {
@@ -852,6 +981,7 @@ export const messagesAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to send message');
+    clearDirectMessageCache(recipientId);
     return data;
   },
 
@@ -861,7 +991,9 @@ export const messagesAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to mark as read');
-    return response.json();
+    const data = await response.json();
+    clearDirectMessageCache(otherUserId);
+    return data;
   }
 };
 
