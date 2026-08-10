@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { availabilityAPI, unitsAPI } from '../config/api';
+import { availabilityAPI, sessionsAPI, unitsAPI } from '../config/api';
 
 const ActiveUnitContext = createContext(null);
 
@@ -97,6 +97,7 @@ export const ActiveUnitProvider = ({ children }) => {
 
   const activeUnit = allUnits.find(u => u.id === activeUnitId) || null;
   const activeUnitRoles = activeUnit?.roles || [];
+  const activeUnitRoleKey = activeUnitRoles.join('|');
   const canSwitchRole = activeUnitRoles.length > 1;
 
   useEffect(() => {
@@ -105,6 +106,14 @@ export const ActiveUnitProvider = ({ children }) => {
       // Prefetch is only a speed improvement. The page itself will show errors if loading fails.
     });
   }, [activeUnit?.unitCode]);
+
+  useEffect(() => {
+    if (!activeUnit?.id || activeViewRole !== 'coordinator' || !activeUnitRoles.includes('coordinator')) return;
+    sessionsAPI.prefetch(activeUnit.id).catch(() => {
+      // Schedule Builder will show its own error/loading state if the real page load fails.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);
 
   const setActiveViewRole = (role) => {
     if (!['coordinator', 'tutor'].includes(role)) return;

@@ -37,6 +37,19 @@ const clearAvailabilityCache = (unitCode) => {
   availabilityCache.clear();
 };
 
+const SESSIONS_CACHE_TTL_MS = 30000;
+const sessionsCache = new Map();
+
+const getSessionsCacheKey = (unitId) => String(unitId || '');
+
+const clearSessionsCache = (unitId) => {
+  if (unitId) {
+    sessionsCache.delete(getSessionsCacheKey(unitId));
+    return;
+  }
+  sessionsCache.clear();
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -441,15 +454,49 @@ export const sessionsAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update session');
+    clearSessionsCache(unitId);
     return data;
   },
 
   getAll: async (unitId) => {
-    const response = await fetch(`${API_URL}/units/${unitId}/sessions`, {
+    const cacheKey = getSessionsCacheKey(unitId);
+    const cached = sessionsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached?.data && now - cached.updatedAt < SESSIONS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    if (cached?.promise) {
+      return cached.promise;
+    }
+
+    const promise = fetch(`${API_URL}/units/${unitId}/sessions`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch sessions');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch sessions');
+        sessionsCache.set(cacheKey, { data, updatedAt: Date.now() });
+        return data;
+      })
+      .catch((error) => {
+        sessionsCache.delete(cacheKey);
+        throw error;
+      });
+
+    sessionsCache.set(cacheKey, { promise, updatedAt: now });
+    return promise;
+  },
+
+  getFresh: async (unitId) => {
+    clearSessionsCache(unitId);
+    return sessionsAPI.getAll(unitId);
+  },
+
+  prefetch: async (unitId) => {
+    if (!unitId) return null;
+    return sessionsAPI.getAll(unitId);
   },
 
   create: async (unitId, sessionData) => {
@@ -460,6 +507,7 @@ export const sessionsAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to create session');
+    clearSessionsCache(unitId);
     return data;
   },
 
@@ -471,6 +519,7 @@ export const sessionsAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to update session');
+    clearSessionsCache(unitId);
     return data;
   },
 
@@ -480,7 +529,9 @@ export const sessionsAPI = {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to delete session');
-    return response.json();
+    const data = await response.json();
+    clearSessionsCache(unitId);
+    return data;
   },
 
   import: async (unitId, sessions, replace) => {
@@ -491,6 +542,7 @@ export const sessionsAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to import sessions');
+    clearSessionsCache(unitId);
     return data;
   }
 };
@@ -512,6 +564,7 @@ export const scheduleAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to assign tutor');
+    clearSessionsCache(unitId);
     return data;
   }
 };
