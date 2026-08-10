@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback} from 'react';
+import React, { useState, useEffect, useMemo, useCallback} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
@@ -9,15 +9,11 @@ const TutorSidebar = ({ activePage }) => {
   const {
     activeUnit,
     allUnits,
-    setActiveUnitId,
-    isLoading,
     activeViewRole,
     activeUnitRoles,
     canSwitchRole,
     setActiveViewRole
   } = useActiveUnit();
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   const currentUser = useMemo(() => {
@@ -66,21 +62,6 @@ useEffect(() => {
   const displayName = currentUser?.name || 'Guest';
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSelectUnit = (unitId) => {
-    setActiveUnitId(unitId);
-    setShowDropdown(false);
-  };
-
   const handleRoleSwitch = (role) => {
     setActiveViewRole(role);
     navigate(role === 'coordinator' ? '/uc-requests' : '/tutor-dashboard', { replace: true });
@@ -117,40 +98,6 @@ useEffect(() => {
       <div className="uc-logo-section">
         <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
         <h2 className="uc-brand-name">Sessioneer</h2>
-      </div>
-
-      <div className="ucs-active-unit-wrapper" ref={dropdownRef}>
-        <button
-          className="ucs-active-unit-btn"
-          onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || allUnits.length === 0}
-        >
-          <div className="ucs-active-unit-text">
-            <p className="uc-active-label">Active Unit</p>
-            <p className="uc-unit-code">
-              {isLoading ? 'Loading...' : (activeUnit ? activeUnit.unitCode : 'No unit yet')}
-            </p>
-            {activeUnit && (
-              <p className="uc-unit-semester">{activeUnit.semester}, {activeUnit.year}</p>
-            )}
-          </div>
-          {allUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
-        </button>
-
-        {showDropdown && (
-          <div className="ucs-dropdown">
-            {allUnits.map(unit => (
-              <button
-                key={unit.id}
-                className={`ucs-dropdown-item ${unit.id === activeUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
-                onClick={() => handleSelectUnit(unit.id)}
-              >
-                <span className="ucs-dropdown-code">{unit.unitCode}</span>
-                <span className="ucs-dropdown-meta">{unit.semester}, {unit.year}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {canSwitchRole && (
