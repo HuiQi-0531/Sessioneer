@@ -8,6 +8,13 @@
   align-items: center;
   gap: 16px;
   margin-bottom: 28px;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.pf-avatar-row > div:last-child {
+  min-width: 0;
+  text-align: left;
 }
 
 .pf-avatar {
