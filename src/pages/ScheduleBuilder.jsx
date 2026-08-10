@@ -274,6 +274,7 @@ const ScheduleBuilder = () => {
       <div className="uc-dashboard-container">
         <UCSidebar activePage="schedule-builder" />
         <main className="uc-main-content">
+          <UCPageHeader title="Schedule Builder" />
           <div className="sb-content"><div className="sb-loading">Loading...</div></div>
         </main>
       </div>
