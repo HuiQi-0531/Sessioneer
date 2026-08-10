@@ -83,7 +83,7 @@ const UCSidebar = ({ activePage }) => {
 
   const handleRoleSwitch = (role) => {
     setActiveViewRole(role);
-    navigate(role === 'coordinator' ? '/uc-requests' : '/', { replace: true });
+    navigate(role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard', { replace: true });
   };
 
   const navItem = (label, path, key, showDot = false) => {
