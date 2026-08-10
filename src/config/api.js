@@ -99,6 +99,13 @@ const clearDirectMessageCache = (otherUserId) => {
   directThreadCache.delete(getMessageCacheKey(otherUserId));
 };
 
+const PROFILE_CACHE_TTL_MS = 30000;
+let profileCache = null;
+
+const clearProfileCache = () => {
+  profileCache = null;
+};
+
 export const authAPI = {
   register: async (registerData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
@@ -999,11 +1006,41 @@ export const messagesAPI = {
 
 export const profileAPI = {
   get: async () => {
-    const response = await fetch(`${API_URL}/profile`, {
+    const now = Date.now();
+
+    if (profileCache?.data && now - profileCache.updatedAt < PROFILE_CACHE_TTL_MS) {
+      return profileCache.data;
+    }
+
+    if (profileCache?.promise) {
+      return profileCache.promise;
+    }
+
+    const promise = fetch(`${API_URL}/profile`, {
       headers: authHeader()
-    });
-    if (!response.ok) throw new Error('Failed to fetch profile');
-    return response.json();
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch profile');
+        profileCache = { data, updatedAt: Date.now() };
+        return data;
+      })
+      .catch((error) => {
+        clearProfileCache();
+        throw error;
+      });
+
+    profileCache = { promise, updatedAt: now };
+    return promise;
+  },
+
+  getFresh: async () => {
+    clearProfileCache();
+    return profileAPI.get();
+  },
+
+  prefetch: async () => {
+    return profileAPI.get();
   },
 
   update: async (data) => {
@@ -1014,6 +1051,7 @@ export const profileAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to update profile');
+    profileCache = { data: result, updatedAt: Date.now() };
     return result;
   },
 
@@ -1025,6 +1063,7 @@ export const profileAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to change password');
+    clearProfileCache();
     return result;
   },
 
@@ -1036,6 +1075,7 @@ export const profileAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to update notification preferences');
+    clearProfileCache();
     return result;
   }
 };

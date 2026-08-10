@@ -41,7 +41,7 @@ const Login = () => {
             localStorage.setItem('token', data.token);
 
             await refreshUnits();
-            navigate('/');
+            navigate(data.user.role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard');
 
         } catch (err) {
             setError(err.message || 'Login failed. Please try again.');

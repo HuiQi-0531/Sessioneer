@@ -19,7 +19,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     const effectiveRole = activeViewRole || currentUser.role;
     if (isLoading) return null;
     if (!allowedRoles.includes(effectiveRole)) {
-      return <Navigate to="/" replace />;
+      const fallbackPath = effectiveRole === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard';
+      return <Navigate to={fallbackPath} replace />;
     }
   }
 

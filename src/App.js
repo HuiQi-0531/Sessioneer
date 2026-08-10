@@ -1,6 +1,6 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import RoleBasedHome from './components/RoleBasedHome.jsx'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import TutorAvailability from './pages/TutorAvailability.jsx';
+import TutorDashboard from './pages/TutorDashboard.jsx';
 import TutorSession from './pages/TutorSession.jsx';
 import TutorMessages from './pages/TutorMessages.jsx';
 import UCDashboard from './pages/UCDashboard.jsx';
@@ -33,8 +33,9 @@ function App() {
       <div className="App">
         <ActiveUnitProvider>
         <Routes>
-          <Route path="/" element={
-            <ProtectedRoute><RoleBasedHome /></ProtectedRoute>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/tutor-dashboard" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorDashboard /></ProtectedRoute>
           } />
           <Route path="/availability" element={
             <ProtectedRoute><TutorAvailability /></ProtectedRoute>
