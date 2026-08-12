@@ -175,11 +175,11 @@ const UCSidebar = ({ activePage }) => {
       <nav className="uc-navigation">
         {navItem('Dashboard', '/uc-dashboard', 'dashboard')}
         {navItem('Unit Setup', '/unit-setup', 'unit-setup')}
-        {navItem('Sessions', activeUnit ? `/sessions/${activeUnit.id}` : '/unit-setup', 'sessions')}
-        {navItem('Tutors', activeUnit ? `/tutors/${activeUnit.id}` : '/unit-setup', 'tutors')}
+        {navItem('Sessions', activeUnit ? '/sessions' : '/unit-setup', 'sessions')}
+        {navItem('Tutors', activeUnit ? '/tutors' : '/unit-setup', 'tutors')}
         {navItem('Applications', '/tutor-applications', 'applications')}
         {navItem('Availability', '/uc-availability', 'availability')}
-        {navItem('Schedule Builder', activeUnit ? `/schedule-builder/${activeUnit.id}` : '/unit-setup', 'schedule-builder')}
+        {navItem('Schedule Builder', activeUnit ? '/schedule-builder' : '/unit-setup', 'schedule-builder')}
         {navItem('Requests', '/uc-requests', 'requests')}
         {navItem('Messages', '/messages', 'messages', hasUnreadMessages)}
       </nav>

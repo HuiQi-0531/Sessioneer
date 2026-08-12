@@ -26,6 +26,7 @@ const ImportSessions = () => {
   const { unitId } = useParams();
   const navigate = useNavigate();
   const { activeUnit } = useActiveUnit();
+  const effectiveUnitId = unitId || activeUnit?.id;
 
   const fileInputRef = useRef(null);
   const [step, setStep] = useState('upload'); // 'upload' | 'mapping' | 'result'
@@ -139,8 +140,12 @@ const ImportSessions = () => {
 
   const handleConfirmImportClick = async () => {
     setError('');
+    if (!effectiveUnitId) {
+      setError('Please select a unit before importing sessions.');
+      return;
+    }
     try {
-      const existing = await sessionsAPI.getAll(unitId);
+      const existing = await sessionsAPI.getAll(effectiveUnitId);
       if (existing.length > 0) {
         setShowReplaceModal(true);
       } else {
@@ -159,7 +164,7 @@ const ImportSessions = () => {
     const sessions = buildSessionsPayload();
 
     try {
-      const result = await sessionsAPI.import(unitId, sessions, replace);
+      const result = await sessionsAPI.import(effectiveUnitId, sessions, replace);
       setImportResult(result);
       setStep('result');
     } catch (err) {
@@ -181,7 +186,7 @@ const ImportSessions = () => {
   };
 
   const handleDone = () => {
-    navigate(`/sessions/${unitId}`);
+    navigate('/sessions');
   };
 
   const totalRowCount = blocks.reduce((sum, b) => sum + b.rows.length, 0);

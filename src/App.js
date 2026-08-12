@@ -58,14 +58,26 @@ function App() {
           <Route path="/unit-setup/edit/:id" element={
             <ProtectedRoute allowedRoles={['coordinator']}><CreateUnit /></ProtectedRoute>
           } />
+          <Route path="/sessions" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><Sessions /></ProtectedRoute>
+          } />
           <Route path="/sessions/:unitId" element={
             <ProtectedRoute allowedRoles={['coordinator']}><Sessions /></ProtectedRoute>
+          } />
+          <Route path="/sessions/import" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><ImportSessions /></ProtectedRoute>
           } />
           <Route path="/sessions/:unitId/import" element={
             <ProtectedRoute allowedRoles={['coordinator']}><ImportSessions /></ProtectedRoute>
           } />
+          <Route path="/tutors" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><Tutors /></ProtectedRoute>
+          } />
           <Route path="/tutors/:unitId" element={
             <ProtectedRoute allowedRoles={['coordinator']}><Tutors /></ProtectedRoute>
+          } />
+          <Route path="/schedule-builder" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><ScheduleBuilder /></ProtectedRoute>
           } />
           <Route path="/schedule-builder/:unitId" element={
             <ProtectedRoute allowedRoles={['coordinator']}><ScheduleBuilder /></ProtectedRoute>
@@ -73,8 +85,14 @@ function App() {
           <Route path="/messages" element={
             <ProtectedRoute allowedRoles={['coordinator']}><Messages /></ProtectedRoute>
           } />
+          <Route path="/tutor-schedule" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorSchedule /></ProtectedRoute>
+          } />
           <Route path="/tutor-schedule/:unitId" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorSchedule /></ProtectedRoute>
+          } />
+          <Route path="/tutor-sessions" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>
           } />
           <Route path="/tutor-sessions/:unitId" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>

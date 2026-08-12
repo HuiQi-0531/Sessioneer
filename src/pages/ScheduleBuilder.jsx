@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { sessionsAPI, scheduleAPI, unitsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
@@ -28,7 +28,6 @@ const getSessionState = (session) => {
 
 const ScheduleBuilder = () => {
   const { unitId: unitIdFromUrl } = useParams();
-  const navigate = useNavigate();
   const { activeUnit, activeUnitId, setActiveUnitId, isLoading: unitLoading, refreshUnits } = useActiveUnit();
 
   const [sessions, setSessions] = useState([]);
@@ -57,9 +56,6 @@ const ScheduleBuilder = () => {
     if (!activeUnit) {
       setIsLoadingSessions(false);
       return;
-    }
-    if (unitIdFromUrl !== activeUnit.id) {
-      navigate(`/schedule-builder/${activeUnit.id}`, { replace: true });
     }
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

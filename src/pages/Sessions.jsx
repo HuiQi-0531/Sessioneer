@@ -45,13 +45,9 @@ const Sessions = () => {
   }, []);
 
   // Whenever the active unit changes (via the sidebar dropdown or the effect
-  // above), keep the URL in sync and reload sessions for that unit.
+  // above), reload sessions for that unit without exposing the unit ID in the URL.
   useEffect(() => {
     if (!activeUnit) return;
-
-    if (unitIdFromUrl !== activeUnit.id) {
-      navigate(`/sessions/${activeUnit.id}`, { replace: true });
-    }
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
@@ -197,7 +193,7 @@ const Sessions = () => {
 
         <div className="ss-content">
           <div className="ss-top-row">
-            <button className="ss-btn ss-btn-secondary" onClick={() => navigate(`/sessions/${activeUnit.id}/import`)}>
+            <button className="ss-btn ss-btn-secondary" onClick={() => navigate('/sessions/import')}>
               Upload Session
             </button>
             <button className="ss-btn ss-btn-primary" onClick={openAddForm}>

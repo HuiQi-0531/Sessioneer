@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -26,7 +26,6 @@ const getStatus = (session) => {
 
 const TutorSchedule = () => {
   const { unitId: unitIdFromUrl } = useParams();
-  const navigate = useNavigate();
   const { activeUnit, activeUnitId, setActiveUnitId, isLoading: unitLoading } = useActiveUnit();
 
   const [sessions, setSessions] = useState([]);
@@ -49,9 +48,6 @@ const TutorSchedule = () => {
     if (!activeUnit) {
       setIsLoadingSessions(false);
       return;
-    }
-    if (unitIdFromUrl !== activeUnit.id) {
-      navigate(`/tutor-schedule/${activeUnit.id}`, { replace: true });
     }
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

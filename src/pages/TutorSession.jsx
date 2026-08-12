@@ -47,9 +47,6 @@ const TutorSession = () => {
       setIsLoadingSessions(false);
       return;
     }
-    if (unitIdFromUrl !== activeUnit.id) {
-      navigate(`/tutor-sessions/${activeUnit.id}`, { replace: true });
-    }
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
@@ -91,7 +88,7 @@ const TutorSession = () => {
     const nextIndex = (activeUnitIndex + direction + allUnits.length) % allUnits.length;
     const nextUnit = allUnits[nextIndex];
     setActiveUnitId(nextUnit.id);
-    navigate(`/tutor-sessions/${nextUnit.id}`);
+    navigate('/tutor-sessions');
   };
 
   if (unitLoading) {

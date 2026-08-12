@@ -23,7 +23,7 @@ const UnitSetup = () => {
 
   const handleViewSessions = () => {
     if (!activeUnit) return;
-    navigate(`/sessions/${activeUnit.id}`);
+    navigate('/sessions');
   };
 
   const handleDeleteClick = () => {

@@ -118,9 +118,9 @@ useEffect(() => {
 
       <nav className="uc-navigation">
         {navItem('Dashboard', '/tutor-dashboard', 'dashboard')}
-        {navItem('Sessions', activeUnit ? `/tutor-sessions/${activeUnit.id}` : '#sessions', 'sessions')}
+        {navItem('Sessions', activeUnit ? '/tutor-sessions' : '#sessions', 'sessions')}
         {navItem('Availability', '/availability', 'availability')}
-        {navItem('Schedule', activeUnit ? `/tutor-schedule/${activeUnit.id}` : '#schedule', 'schedule')}
+        {navItem('Schedule', activeUnit ? '/tutor-schedule' : '#schedule', 'schedule')}
         {navItem('Requests', '/requests', 'requests')}
         {navItem('Messages', '/tutor-messages', 'messages', hasUnreadMessages)}
       </nav>
