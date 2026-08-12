@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { joinUserName } = require('./userNames');
 
 // Maps a notification type prefix to the users column that controls it.
 // Types that don't match either prefix are always created (e.g. none currently).
@@ -50,11 +51,11 @@ const createNotification = async ({ userId, type, title, content, unitId, sessio
 
 const getUserDisplayName = async (userId) => {
   const result = await pool.query(
-    'SELECT name, email FROM users WHERE id = $1',
+    'SELECT name, last_name, email FROM users WHERE id = $1',
     [userId]
   );
   const user = result.rows[0];
-  return user?.name || user?.email || 'Someone';
+  return joinUserName(user?.name, user?.last_name) || user?.email || 'Someone';
 };
 
 module.exports = { createNotification, getUserDisplayName };

@@ -425,6 +425,13 @@ pool.query(`
   BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'last_name'
+    ) THEN
+      ALTER TABLE users ADD COLUMN last_name VARCHAR(255);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
       WHERE table_name = 'users' AND column_name = 'notify_session_updates'
     ) THEN
       ALTER TABLE users ADD COLUMN notify_session_updates BOOLEAN DEFAULT TRUE;

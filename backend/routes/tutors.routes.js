@@ -24,7 +24,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        u.id, u.name, u.email, u.phone_number, u.work_experience,
+        u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.phone_number, u.work_experience,
         u.maximum_hours, u.contract_type,
         m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
@@ -33,7 +33,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       LEFT JOIN unit_memberships um
         ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
       WHERE u.role = 'tutor' OR um.id IS NOT NULL
-      ORDER BY u.name
+      ORDER BY name
       `,
       [unitId]
     );

@@ -139,7 +139,7 @@ router.get('/requests', verifyToken, requireRole('tutor', 'coordinator'), async 
         cr.current_session as "currentSession",
         cr.preferred_swap_to as "preferredSwapTo",
         cr.priority,
-        u.name as "tutorName",
+        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as "tutorName",
         un.unit_code as "unitCode"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
@@ -173,7 +173,7 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
         un.unit_code,
         un.unit_name,
         un.unit_coordinator_id,
-        uc.name as coordinator_name,
+        TRIM(CONCAT(uc.name, ' ', COALESCE(uc.last_name, ''))) as coordinator_name,
         uc.email as coordinator_email
       FROM units un
       LEFT JOIN users uc ON uc.id = un.unit_coordinator_id
@@ -350,7 +350,7 @@ router.get('/sessions', verifyToken, async (req, res) => {
     const result = await pool.query(`
       SELECT 
         s.*,
-        u.name as assigned_tutor_name,
+        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as assigned_tutor_name,
         un.unit_code
       FROM sessions s
       LEFT JOIN users u ON s.assigned_tutor_id = u.id
@@ -379,7 +379,7 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
         cr.current_session as "currentSession",
         cr.preferred_swap_to as "preferredSwapTo",
         cr.priority,
-        u.name as "tutorName",
+        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as "tutorName",
         un.unit_code as "unitCode"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
@@ -440,7 +440,7 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
       SELECT
         un.unit_code,
         un.unit_name,
-        tutor.name as tutor_name,
+        TRIM(CONCAT(tutor.name, ' ', COALESCE(tutor.last_name, ''))) as tutor_name,
         tutor.email as tutor_email
       FROM units un
       LEFT JOIN users tutor ON tutor.id = $2

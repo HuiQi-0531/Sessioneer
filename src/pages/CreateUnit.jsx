@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unitsAPI } from '../config/api';
+import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/CreateUnit.css';
 import UCPageHeader from '../components/UCPageHeader';
@@ -46,8 +47,8 @@ const CreateUnit = () => {
     return savedUser ? JSON.parse(savedUser) : null;
   }, []);
 
-  const displayName = currentUser?.name || 'Guest';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const displayName = getDisplayName(currentUser);
+  const avatarLetter = getAvatarLetter(currentUser);
 
   useEffect(() => {
     if (!isEditMode) return;

@@ -4,6 +4,7 @@ import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/Profile.css';
 
@@ -21,7 +22,8 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     phoneNumber: '',
     workExperience: '',
     maximumHours: '',
@@ -46,7 +48,8 @@ const Profile = () => {
       const data = await profileAPI.get();
       setProfile(data);
       setFormData({
-        name: data.name || '',
+        firstName: data.firstName || data.name || '',
+        lastName: data.lastName || '',
         phoneNumber: data.phoneNumber || '',
         workExperience: data.workExperience || '',
         maximumHours: data.maximumHours ?? '',
@@ -73,6 +76,9 @@ const Profile = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         parsed.name = updated.name;
+        parsed.firstName = updated.firstName;
+        parsed.lastName = updated.lastName;
+        parsed.displayName = updated.displayName;
         localStorage.setItem('currentUser', JSON.stringify(parsed));
       }
 
@@ -139,9 +145,9 @@ const Profile = () => {
 
         <div className="pf-content">
           <div className="pf-avatar-row">
-            <div className="pf-avatar">{profile?.name?.charAt(0).toUpperCase()}</div>
+            <div className="pf-avatar">{getAvatarLetter(profile)}</div>
             <div>
-              <div className="pf-avatar-name">{profile?.name}</div>
+              <div className="pf-avatar-name">{getDisplayName(profile)}</div>
               <div className="pf-avatar-role">{isTutor ? 'Tutor' : 'Unit Coordinator'}</div>
             </div>
           </div>
@@ -157,13 +163,24 @@ const Profile = () => {
 
             <div className="pf-row">
               <div className="pf-field">
-                <label>Name</label>
+                <label>First name</label>
                 <input
                   type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  value={formData.firstName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                 />
               </div>
+              <div className="pf-field">
+                <label>Last name</label>
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="pf-row">
               <div className="pf-field">
                 <label>Phone number</label>
                 <input

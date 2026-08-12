@@ -105,7 +105,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT s.*, u.name as assigned_tutor_name
+      SELECT s.*, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as assigned_tutor_name
       FROM sessions s
       LEFT JOIN users u ON s.assigned_tutor_id = u.id
       WHERE s.unit_id = $1
@@ -345,13 +345,13 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 
     const tutorsResult = await pool.query(
       `
-      SELECT u.id, u.name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
       FROM users u
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       LEFT JOIN unit_memberships um
         ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
       WHERE u.role = 'tutor' OR um.id IS NOT NULL
-      ORDER BY u.name
+      ORDER BY name
       `,
       [unitId]
     );
@@ -491,7 +491,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
 
     const tutorResult = await pool.query(
       `
-      SELECT u.id, u.name, u.maximum_hours
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours
       FROM users u
       LEFT JOIN unit_memberships um
         ON um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor'
@@ -551,7 +551,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
 
     const withName = await pool.query(
       `
-      SELECT s.*, u.name as assigned_tutor_name
+      SELECT s.*, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as assigned_tutor_name
       FROM sessions s
       LEFT JOIN users u ON s.assigned_tutor_id = u.id
       WHERE s.id = $1

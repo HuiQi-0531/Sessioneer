@@ -5,6 +5,7 @@ import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { formatTimeAgo } from '../utils/time';
+import { getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
 
@@ -15,7 +16,7 @@ const UCDashboard = () => {
     const savedUser = localStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
   }, []);
-  const displayName = currentUser?.name || 'Guest';
+  const displayName = getDisplayName(currentUser);
 
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);

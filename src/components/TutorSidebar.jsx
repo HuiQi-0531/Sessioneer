@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
+import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCSidebar.css';
 
 const TutorSidebar = ({ activePage }) => {
@@ -59,8 +60,8 @@ useEffect(() => {
   };
 }, [checkUnreadMessages]);
 
-  const displayName = currentUser?.name || 'Guest';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const displayName = getDisplayName(currentUser);
+  const avatarLetter = getAvatarLetter(currentUser);
 
   const handleRoleSwitch = (role) => {
     setActiveViewRole(role);

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { disconnectSocket } from '../utils/socket';
+import { getDisplayName } from '../utils/userName';
 import '../styles/LogoutConfirm.css';
 
 const LogoutConfirm = () => {
@@ -22,6 +23,8 @@ const LogoutConfirm = () => {
     navigate(-1);
   };
 
+  const displayName = currentUser ? getDisplayName(currentUser, '') : '';
+
   return (
     <div className="lo-page">
       <div className="lo-card">
@@ -36,7 +39,7 @@ const LogoutConfirm = () => {
 
         <h1>Log out of Sessioneer?</h1>
         <p>
-          {currentUser?.name ? `You're signed in as ${currentUser.name}. ` : ''}
+          {displayName ? `You're signed in as ${displayName}. ` : ''}
           You'll need to log back in to access your account.
         </p>
 

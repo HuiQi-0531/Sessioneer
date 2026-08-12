@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const { sendEmail } = require('../utils/email');
+const { formatUserNameFields, splitDisplayName } = require('../utils/userNames');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const verifyPassword = (password, storedHash) => {
 
 const formatUser = (user) => ({
   id: user.id,
-  name: user.name,
+  ...formatUserNameFields(user),
   email: user.email,
   role: user.role
 });
@@ -56,9 +57,12 @@ const sendPasswordResetEmail = async (email, resetLink) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { fullName, email, role, password, confirmPassword } = req.body;
+    const { firstName, lastName, fullName, email, role, password, confirmPassword } = req.body;
+    const legacyName = splitDisplayName(fullName);
+    const cleanFirstName = String(firstName || legacyName.firstName || '').trim();
+    const cleanLastName = String(lastName || legacyName.lastName || '').trim();
 
-    if (!fullName || !email || !role || !password || !confirmPassword) {
+    if (!cleanFirstName || !cleanLastName || !email || !role || !password || !confirmPassword) {
       return res.status(400).json({ error: 'Please fill in all fields' });
     }
 
@@ -71,11 +75,11 @@ router.post('/register', async (req, res) => {
 
     const result = await pool.query(
       `
-      INSERT INTO users (name, email, role, password_hash)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, name, email, role
+      INSERT INTO users (name, last_name, email, role, password_hash)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, name, last_name, email, role
       `,
-      [fullName, email.toLowerCase(), normalizedRole, passwordHash]
+      [cleanFirstName, cleanLastName || null, email.toLowerCase(), normalizedRole, passwordHash]
     );
 
     res.status(201).json({
@@ -101,7 +105,7 @@ router.post('/login', async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, name, email, role, password_hash
+      SELECT id, name, last_name, email, role, password_hash
       FROM users
       WHERE email = $1
       LIMIT 1

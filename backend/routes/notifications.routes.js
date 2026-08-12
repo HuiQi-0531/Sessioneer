@@ -1,14 +1,16 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken } = require('../middleware/auth');
+const { joinUserName } = require('../utils/userNames');
 
 const router = express.Router();
 
 const replaceEmailsWithNames = (content, users) => {
   if (!content) return content;
   return users.reduce((text, user) => {
-    if (!user.email || !user.name) return text;
-    return text.replaceAll(user.email, user.name);
+    const displayName = joinUserName(user.name, user.last_name);
+    if (!user.email || !displayName) return text;
+    return text.replaceAll(user.email, displayName);
   }, content);
 };
 
@@ -41,7 +43,7 @@ router.get('/', verifyToken, async (req, res) => {
       'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = FALSE',
       [req.user.id]
     );
-    const usersResult = await pool.query('SELECT name, email FROM users');
+    const usersResult = await pool.query('SELECT name, last_name, email FROM users');
 
     res.json({
       notifications: result.rows.map(n => formatNotification(n, usersResult.rows)),

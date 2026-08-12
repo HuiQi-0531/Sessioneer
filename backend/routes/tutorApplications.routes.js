@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { splitDisplayName } = require('../utils/userNames');
 
 const router = express.Router();
 
@@ -221,14 +222,15 @@ router.post('/accept-invite', async (req, res) => {
     await client.query('BEGIN');
 
     const passwordHash = hashPassword(password);
+    const { firstName, lastName } = splitDisplayName(application.name);
     const newUserResult = await client.query(
       `
-      INSERT INTO users (name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)
-      VALUES ($1, $2, 'tutor', $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO users (name, last_name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)
+      VALUES ($1, $2, $3, 'tutor', $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id
       `,
       [
-        application.name, application.email, passwordHash,
+        firstName || application.name, lastName || null, application.email, passwordHash,
         application.phone_number, application.work_experience, 
         application.maximum_hours, application.contract_type,
         application.resume_filename, application.resume_mime_type, application.resume_data

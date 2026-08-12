@@ -81,12 +81,12 @@ router.get('/', verifyToken, async (req, res) => {
     const [tutorResult, submittedResult, availResult] = await Promise.all([
       pool.query(
         `
-        SELECT DISTINCT u.id, u.name
+        SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name
         FROM users u
         LEFT JOIN unit_memberships um
           ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
         WHERE (u.role = 'tutor' OR um.id IS NOT NULL) ${tutorWhere}
-        ORDER BY u.name
+        ORDER BY name
         `,
         tutorParams
       ),

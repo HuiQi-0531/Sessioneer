@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken } = require('../middleware/auth');
+const { formatUserNameFields } = require('../utils/userNames');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const verifyPassword = (password, storedHash) => {
 
 const formatProfile = (u) => ({
   id: u.id,
-  name: u.name,
+  ...formatUserNameFields(u),
   email: u.email,
   role: u.role,
   phoneNumber: u.phone_number,
@@ -40,7 +41,7 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT id, name, email, role, phone_number, work_experience,
+      SELECT id, name, last_name, email, role, phone_number, work_experience,
              maximum_hours, contract_type, notify_session_updates, notify_request_updates
       FROM users WHERE id = $1
       `,
@@ -54,10 +55,13 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// PUT /profile - update editable fields (name, phone, and tutor-only fields for tutors)
+// PUT /profile - update editable fields (first/last name, phone, and tutor-only fields for tutors)
 router.put('/', verifyToken, async (req, res) => {
   try {
-    const { name, phoneNumber, workExperience, maximumHours, contractType } = req.body;
+    const { name, firstName, lastName, phoneNumber, workExperience, maximumHours, contractType } = req.body;
+    const cleanFirstName = String(firstName || name || '').trim();
+    const cleanLastName = String(lastName || '').trim();
+    const hasLastNameField = Object.prototype.hasOwnProperty.call(req.body, 'lastName');
 
     // Tutor-only fields are only ever written if the logged-in user is a tutor,
     // regardless of what a coordinator's request body might contain.
@@ -68,15 +72,16 @@ router.put('/', verifyToken, async (req, res) => {
       UPDATE users
       SET
         name = COALESCE($1, name),
-        phone_number = COALESCE($2, phone_number),
-        work_experience = CASE WHEN $3 THEN COALESCE($4, work_experience) ELSE work_experience END,
-        maximum_hours = CASE WHEN $3 THEN COALESCE($5, maximum_hours) ELSE maximum_hours END,
-        contract_type = CASE WHEN $3 THEN COALESCE($6, contract_type) ELSE contract_type END
-      WHERE id = $7
-      RETURNING id, name, email, role, phone_number, work_experience,
+        last_name = CASE WHEN $2 THEN $3 ELSE last_name END,
+        phone_number = COALESCE($4, phone_number),
+        work_experience = CASE WHEN $5 THEN COALESCE($6, work_experience) ELSE work_experience END,
+        maximum_hours = CASE WHEN $5 THEN COALESCE($7, maximum_hours) ELSE maximum_hours END,
+        contract_type = CASE WHEN $5 THEN COALESCE($8, contract_type) ELSE contract_type END
+      WHERE id = $9
+      RETURNING id, name, last_name, email, role, phone_number, work_experience,
                 maximum_hours, contract_type, notify_session_updates, notify_request_updates
       `,
-      [name || null, phoneNumber || null, isTutor, workExperience || null, maximumHours ?? null, contractType || null, req.user.id]
+      [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, maximumHours ?? null, contractType || null, req.user.id]
     );
 
     res.json(formatProfile(result.rows[0]));
@@ -126,7 +131,7 @@ router.put('/notifications', verifyToken, async (req, res) => {
         notify_session_updates = COALESCE($1, notify_session_updates),
         notify_request_updates = COALESCE($2, notify_request_updates)
       WHERE id = $3
-      RETURNING id, name, email, role, phone_number, work_experience,
+      RETURNING id, name, last_name, email, role, phone_number, work_experience,
                 maximum_hours, contract_type, notify_session_updates, notify_request_updates
       `,
       [notifySessionUpdates, notifyRequestUpdates, req.user.id]

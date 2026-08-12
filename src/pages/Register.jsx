@@ -6,7 +6,8 @@ import '../styles/Register.css';
 const Register = () => {
 
     const [formData, setFormData] = useState({
-        fullName: '',
+        firstName: '',
+        lastName: '',
         email: '',
         role: 'Tutor',
         password: '',
@@ -28,7 +29,8 @@ const Register = () => {
         e.preventDefault();
 
         if (
-            !formData.fullName ||
+            !formData.firstName ||
+            !formData.lastName ||
             !formData.email ||
             !formData.password ||
             !formData.confirmPassword
@@ -66,15 +68,28 @@ const Register = () => {
 
                 <form onSubmit={handleSubmit}>
 
-                    <div className="form-group">
-                        <label>Full Name</label>
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label>First Name</label>
 
-                        <input
-                            type="text"
-                            name="fullName"
-                            value={formData.fullName}
-                            onChange={handleChange}
-                        />
+                            <input
+                                type="text"
+                                name="firstName"
+                                value={formData.firstName}
+                                onChange={handleChange}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Last Name</label>
+
+                            <input
+                                type="text"
+                                name="lastName"
+                                value={formData.lastName}
+                                onChange={handleChange}
+                            />
+                        </div>
                     </div>
 
                     <div className="form-group">

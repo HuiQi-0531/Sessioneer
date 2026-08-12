@@ -297,7 +297,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) =
     const unitsResult = await pool.query(
       `
       SELECT DISTINCT u.id as unit_id, u.unit_code, u.unit_name, u.unit_coordinator_id,
-             c.id as coordinator_id, c.name as coordinator_name
+             c.id as coordinator_id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) as coordinator_name
       FROM units u
       JOIN users c ON c.id = u.unit_coordinator_id
       WHERE u.id IN (
@@ -363,7 +363,7 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
       `
       SELECT m.id, m.sender_id, m.content, m.sent_at,
              m.attachment_url, m.attachment_name, m.attachment_type, m.attachment_size,
-             u.name as sender_name
+             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as sender_name
       FROM messages m
       JOIN users u ON u.id = m.sender_id
       WHERE m.unit_id = $1
