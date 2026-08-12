@@ -75,28 +75,32 @@ router.get('/', verifyToken, async (req, res) => {
     const tutorParams = isCoordinatorOwner ? [unit_id] : [req.user.id, unit_id];
     const tutorWhere = isCoordinatorOwner ? '' : 'AND u.id = $1';
     const membershipUnitParam = isCoordinatorOwner ? '$1' : '$2';
-
-    const tutorResult = await pool.query(
-      `
-      SELECT DISTINCT u.id, u.name
-      FROM users u
-      LEFT JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
-      WHERE (u.role = 'tutor' OR um.id IS NOT NULL) ${tutorWhere}
-      ORDER BY u.name
-      `,
-      tutorParams
-    );
-    const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
-    const visibleTutorIds = new Set(tutors.map(t => t.id));
-
     const availabilityParams = isCoordinatorOwner ? [unit_id] : [unit_id, req.user.id];
     const availabilityTutorWhere = isCoordinatorOwner ? '' : 'AND tutor_id = $2';
 
-    const submittedResult = await pool.query(
-      `SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
-      availabilityParams
-    );
+    const [tutorResult, submittedResult, availResult] = await Promise.all([
+      pool.query(
+        `
+        SELECT DISTINCT u.id, u.name
+        FROM users u
+        LEFT JOIN unit_memberships um
+          ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
+        WHERE (u.role = 'tutor' OR um.id IS NOT NULL) ${tutorWhere}
+        ORDER BY u.name
+        `,
+        tutorParams
+      ),
+      pool.query(
+        `SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+        availabilityParams
+      ),
+      pool.query(
+        `SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+        availabilityParams
+      ),
+    ]);
+    const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
+    const visibleTutorIds = new Set(tutors.map(t => t.id));
     const submittedIds = new Set(
       submittedResult.rows
         .map(r => r.tutor_id)
@@ -107,11 +111,6 @@ router.get('/', verifyToken, async (req, res) => {
       tutorId: t.id,
       submitted: submittedIds.has(t.id),
     }));
-
-    const availResult = await pool.query(
-      `SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
-      availabilityParams
-    );
 
     const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
     for (const row of availResult.rows) {

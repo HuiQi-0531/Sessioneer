@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { availabilityAPI, unitsAPI } from "../config/api";
 import { useActiveUnit } from "../context/ActiveUnitContext";
 import UCSidebar from "../components/UCSidebar";
@@ -62,28 +62,39 @@ export default function UCAvailability({ onSendReminder }) {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isTogglingLock, setIsTogglingLock] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
+  const loadAvailabilityData = useCallback(async () => {
     if (!activeUnit) {
+      setTutors([]);
+      setAvailability({});
+      setSubmissionStatus([]);
+      setLoadError("");
       setIsLoadingData(false);
       return;
     }
 
-    const fetchData = async () => {
-      setIsLoadingData(true);
-      try {
-        const data = await availabilityAPI.get(activeUnit.unitCode);
-        setTutors(data.tutors ?? []);
-        setAvailability(data.availability ?? {});
-        setSubmissionStatus(data.submissionStatus ?? []);
-      } catch (err) {
-        console.error('Could not load availability data:', err);
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
-    fetchData();
+    setIsLoadingData(true);
+    setLoadError("");
+    try {
+      const data = await availabilityAPI.get(activeUnit.unitCode);
+      setTutors(data.tutors ?? []);
+      setAvailability(data.availability ?? {});
+      setSubmissionStatus(data.submissionStatus ?? []);
+    } catch (err) {
+      console.error('Could not load availability data:', err);
+      setTutors([]);
+      setAvailability({});
+      setSubmissionStatus([]);
+      setLoadError('Could not load availability. Please try again.');
+    } finally {
+      setIsLoadingData(false);
+    }
   }, [activeUnit]);
+
+  useEffect(() => {
+    loadAvailabilityData();
+  }, [loadAvailabilityData]);
 
   const zoomIn    = () => setZoom(z => Math.min(z + 10, 200));
   const zoomOut   = () => setZoom(z => Math.max(z - 10, 50));
@@ -246,6 +257,13 @@ export default function UCAvailability({ onSendReminder }) {
 
             {isLoadingData ? (
               <div className="uca-empty">Loading availability...</div>
+            ) : loadError ? (
+              <div className="uca-empty">
+                <p>{loadError}</p>
+                <button type="button" className="uca-toolbar__btn uca-toolbar__btn--text" onClick={loadAvailabilityData}>
+                  Retry
+                </button>
+              </div>
             ) : filteredTutors.length === 0 ? (
               <div className="uca-empty">No tutors match "{searchQuery}"</div>
             ) : (
@@ -293,6 +311,8 @@ export default function UCAvailability({ onSendReminder }) {
             <h3 className="uca-status__title">SUBMISSION STATUS</h3>
             {isLoadingData ? (
               <div className="uca-empty uca-empty--status">Loading submission status...</div>
+            ) : loadError ? (
+              <div className="uca-empty uca-empty--status">Submission status is unavailable until availability reloads.</div>
             ) : submissionStatus.length === 0 ? (
               <div className="uca-empty uca-empty--status">No submissions yet.</div>
             ) : (

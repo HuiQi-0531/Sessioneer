@@ -27,7 +27,15 @@ const withTimeout = async (request, timeoutMessage = 'Request timed out. Please 
 const AVAILABILITY_CACHE_TTL_MS = 30000;
 const availabilityCache = new Map();
 
-const getAvailabilityCacheKey = (unitCode) => String(unitCode || '').trim().toUpperCase();
+const getAvailabilityCacheKey = (unitCode) => {
+  const savedUser = localStorage.getItem('currentUser');
+  const currentUser = savedUser ? JSON.parse(savedUser) : null;
+  const viewRole = localStorage.getItem('activeViewRole') || currentUser?.role || 'unknown';
+  const userId = currentUser?.id || currentUser?.email || 'anonymous';
+  const unit = String(unitCode || '').trim().toUpperCase();
+
+  return `${unit}:${userId}:${viewRole}`;
+};
 
 const clearAvailabilityCache = (unitCode) => {
   if (unitCode) {
@@ -410,14 +418,10 @@ export const availabilityAPI = {
   },
 
   submit: async (unitCode, slots) => {
-    const savedUser = localStorage.getItem('currentUser');
-    const currentUser = savedUser ? JSON.parse(savedUser) : null;
-
     const response = await fetch(`${API_URL}/availability/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({
-        tutorEmail: currentUser?.email,
         unitCode,
         slots
       })

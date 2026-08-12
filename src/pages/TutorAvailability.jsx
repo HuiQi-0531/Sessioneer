@@ -27,6 +27,8 @@ const TutorAvailability = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [isLoadingLatest, setIsLoadingLatest] = useState(false);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const infoIconRef = useRef(null);
@@ -130,6 +132,7 @@ const TutorAvailability = () => {
 
     const loadSavedAvailability = async () => {
       setSubmitError('');
+      setLoadError('');
       const savedData = localStorage.getItem(storageKey);
 
       if (savedData) {
@@ -140,6 +143,7 @@ const TutorAvailability = () => {
         setIsEditable(!isWindowClosed);
       }
 
+      setIsLoadingLatest(true);
       try {
         const data = await availabilityAPI.get(activeUnit.unitCode);
         const backendAvailability = hydrateTutorAvailability(data);
@@ -153,6 +157,9 @@ const TutorAvailability = () => {
         }
       } catch (error) {
         console.error('Could not load saved availability:', error);
+        setLoadError('Could not load the latest availability from the database. Showing any saved local data.');
+      } finally {
+        setIsLoadingLatest(false);
       }
     };
 
@@ -394,6 +401,14 @@ const TutorAvailability = () => {
 
             {submitError && (
               <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{submitError}</p>
+            )}
+
+            {loadError && (
+              <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{loadError}</p>
+            )}
+
+            {isLoadingLatest && (
+              <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>Loading latest availability...</p>
             )}
 
             {!isWindowClosed && isEditable && (
