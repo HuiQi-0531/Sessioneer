@@ -98,15 +98,19 @@
   width: 100%;
   border-collapse: collapse;
   background-color: var(--color-surface);
+  table-layout: fixed;
 }
 
 .ss-table th {
-  text-align: left;
+  text-align: center;
   font-size: 12px;
   text-transform: uppercase;
   color: var(--color-text-muted);
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ss-table td {
@@ -114,6 +118,10 @@
   border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
   color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .ss-status-badge {
@@ -145,6 +153,7 @@
 
 .ss-row-actions {
   display: flex;
+  justify-content: center;
   gap: 10px;
 }
 
