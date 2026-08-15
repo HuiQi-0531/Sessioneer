@@ -115,10 +115,10 @@ const UCSidebar = ({ activePage }) => {
 
   return (
     <aside className="uc-sidebar">
-      <div className="uc-logo-section">
+      <Link to="/uc-dashboard" className="uc-logo-section" style={{ textDecoration: 'none', cursor: 'pointer' }}>
         <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
         <h2 className="uc-brand-name">Sessioneer</h2>
-      </div>
+      </Link>
 
       <div className="ucs-active-unit-wrapper" ref={dropdownRef}>
         <button

@@ -96,10 +96,10 @@ useEffect(() => {
 
   return (
     <aside className="uc-sidebar">
-      <div className="uc-logo-section">
+      <Link to="/tutor-dashboard" className="uc-logo-section" style={{ textDecoration: 'none', cursor: 'pointer' }}>
         <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
         <h2 className="uc-brand-name">Sessioneer</h2>
-      </div>
+      </Link>
 
       {canSwitchRole && (
         <div className="ucs-role-switcher" aria-label="Viewing role">
