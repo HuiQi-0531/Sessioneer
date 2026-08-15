@@ -241,6 +241,14 @@ const TutorSession = () => {
                       <div key={label} className="sb-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
                     ))}
 
+                    {HOUR_LABELS.map((label, i) => (
+                      <div
+                        key={`gridline-${label}`}
+                        className="sb-grid-hour-line"
+                        style={{ gridRow: i + 2, gridColumn: '1 / -1' }}
+                      />
+                    ))}
+
                     {gridSessions.map(session => {
                     const dayIndex = DAYS.indexOf(session.day);
                     const startHour = hourFromTime(session.startTime);
