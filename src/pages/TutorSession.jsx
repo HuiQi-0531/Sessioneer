@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -74,11 +74,68 @@ const TutorSession = () => {
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
   const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
 
+  // New helpers for overlap detection:
+  const timeToMinutes = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
+  const computeOverlapPlacements = (sessions) => {
+    const sorted = [...sessions].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const placements = {};
+    let columnEnds = [];
+    let cluster = [];
+    let clusterEnd = -Infinity;
+
+  const finalizeCluster = () => {
+    if (cluster.length === 0) return;
+    const maxCol = Math.max(...cluster.map(s => placements[s.id].col)) + 1;
+    cluster.forEach(s => { placements[s.id].total = maxCol; });
+    cluster = [];
+  };
+
+  sorted.forEach(s => {
+    const start = timeToMinutes(s.startTime);
+    const end = timeToMinutes(s.endTime);
+
+    if (start >= clusterEnd) {
+      finalizeCluster();
+      columnEnds = [];
+      clusterEnd = -Infinity;
+    }
+
+    let colIndex = columnEnds.findIndex(endTime => start >= endTime);
+    if (colIndex === -1) {
+      colIndex = columnEnds.length;
+      columnEnds.push(end);
+    } else {
+      columnEnds[colIndex] = end;
+    }
+
+    placements[s.id] = { col: colIndex };
+    cluster.push(s);
+    clusterEnd = Math.max(clusterEnd, end);
+  });
+
+  finalizeCluster();
+  return placements;
+};
+
   const gridSessions = rawSessions.filter(s =>
     DAYS.includes(s.day) &&
     hourFromTime(s.startTime) >= GRID_START_HOUR &&
     hourFromTime(s.endTime) <= GRID_END_HOUR
   );
+
+  const overlapPlacements = useMemo(() => {
+  const byDay = {};
+  DAYS.forEach(day => {
+    const daySessions = gridSessions.filter(s => s.day === day);
+    byDay[day] = computeOverlapPlacements(daySessions);
+  });
+  return byDay;
+}, [gridSessions]);
+
   const hiddenFromGridCount = rawSessions.length - gridSessions.length;
   const activeUnitIndex = allUnits.findIndex(unit => unit.id === activeUnit?.id);
   const hasMultipleUnits = allUnits.length > 1 && activeUnitIndex !== -1;
@@ -185,19 +242,29 @@ const TutorSession = () => {
                     ))}
 
                     {gridSessions.map(session => {
-                      const dayIndex = DAYS.indexOf(session.day);
-                      const startHour = hourFromTime(session.startTime);
-                      const endHour = hourFromTime(session.endTime);
-                      const rowStart = (startHour - GRID_START_HOUR) + 2;
-                      const rowEnd = (endHour - GRID_START_HOUR) + 2;
-                      const state = getBlockState(session);
+                    const dayIndex = DAYS.indexOf(session.day);
+                    const startHour = hourFromTime(session.startTime);
+                    const endHour = hourFromTime(session.endTime);
+                    const rowStart = (startHour - GRID_START_HOUR) + 2;
+                    const rowEnd = (endHour - GRID_START_HOUR) + 2;
+                    const state = getBlockState(session);
 
-                      return (
-                        <div
-                          key={session.id}
-                          className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}`}
-                          style={{ gridColumn: dayIndex + 2, gridRow: `${rowStart} / ${rowEnd}` }}
-                        >
+                    const placement = overlapPlacements[session.day]?.[session.id] || { col: 0, total: 1 };
+                    const widthPct = 100 / placement.total;
+                    const leftPct = widthPct * placement.col;
+
+                    return (
+                      <div
+                        key={session.id}
+                        className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}`}
+                        style={{
+                          gridColumn: dayIndex + 2,
+                          gridRow: `${rowStart} / ${rowEnd}`,
+                          width: `calc(${widthPct}% - 4px)`,
+                          marginLeft: `calc(${leftPct}% + 2px)`,
+                          boxSizing: 'border-box',
+                        }}
+                      >
                           <div className="sb-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
                           <div className="sb-grid-block-type">
                             {session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}
