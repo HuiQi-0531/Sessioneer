@@ -38,6 +38,7 @@
 .sb-section h2 {
   font-size: 16px;
   margin-bottom: 12px;
+  text-align: left;
 }
 
 .sb-empty-state {
@@ -58,6 +59,10 @@
   border: 1px solid var(--color-border);
 }
 
+.sb-table {
+  table-layout: fixed;
+}
+
 .sb-table th {
   text-align: left;
   font-size: 12px;
@@ -66,6 +71,9 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-bg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sb-table td {
@@ -73,10 +81,19 @@
   border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
   color: var(--color-text);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sb-table tr:last-child td {
   border-bottom: none;
+}
+
+.sb-table td:last-child,
+.sb-table th:last-child {
+  text-align: center;
 }
 
 .sb-row-clickable {

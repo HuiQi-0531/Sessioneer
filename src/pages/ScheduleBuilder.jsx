@@ -391,6 +391,15 @@ const ScheduleBuilder = () => {
                   <div className="sb-empty-state">All sessions have a tutor assigned.</div>
                 ) : (
                   <table className="sb-table">
+                     <colgroup>
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '13%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>Day</th>
@@ -398,6 +407,7 @@ const ScheduleBuilder = () => {
                         <th>Location</th>
                         <th>Type</th>
                         <th>Capacity</th>
+                        <th></th>
                         <th></th>
                       </tr>
                     </thead>
@@ -418,6 +428,7 @@ const ScheduleBuilder = () => {
                                </span>
                              )}
                            </td>
+                           <td></td>
                            <td>
                              <button
                                className="sb-assign-btn"
@@ -441,6 +452,15 @@ const ScheduleBuilder = () => {
                   <div className="sb-empty-state">No sessions have been assigned yet.</div>
                 ) : (
                   <table className="sb-table">
+                    <colgroup>
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '13%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>Day</th>
@@ -449,6 +469,7 @@ const ScheduleBuilder = () => {
                         <th>Type</th>
                         <th>Capacity</th>
                         <th>Tutor</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -470,6 +491,8 @@ const ScheduleBuilder = () => {
                            </td>
                            <td>
                              <span className="sb-assigned-pill">{session.assignedTutorName}</span>
+                            </td>
+                            <td>
                              {!isLocked && (
                                <button className="sb-change-link" onClick={() => openAssignModal(session)}>
                                  Change
