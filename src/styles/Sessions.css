@@ -225,3 +225,130 @@
   background-color: var(--color-bg-subtle);
   color: var(--color-text-secondary);
 }
+
+.ss-btn-cover {
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  margin-right: auto;
+}
+
+.ss-btn-cover:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.ss-cover-success {
+  color: var(--color-success);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.ss-unassigned {
+  color: var(--color-text-subtle);
+  font-style: italic;
+}
+
+.ss-cover-modal {
+  max-width: 460px;
+  text-align: left;
+}
+
+.ss-cover-modal p {
+  text-align: left;
+}
+
+.ss-cover-session-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.ss-cover-session-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--color-bg-subtle);
+}
+
+.ss-cover-session-list li:last-child {
+  border-bottom: none;
+}
+
+.ss-cover-modal .confirm {
+  background-color: var(--color-primary);
+}
+
+.ss-cover-modal .confirm:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.ss-cover-modal textarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+  margin-bottom: 12px;
+}
+
+.ss-cover-field {
+  margin-bottom: 16px;
+}
+
+.ss-cover-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.ss-cover-field select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.ss-cover-empty {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.ss-cover-list-header {
+  margin-bottom: 8px;
+}
+
+.ss-cover-select-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.ss-cover-session-list-checkable li {
+  padding: 0;
+}
+
+.ss-cover-session-list-checkable label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+}

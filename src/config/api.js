@@ -289,6 +289,62 @@ export const requestsAPI = {
 
 };
 
+export const coverAPI = {
+  // UC: broadcast selected sessions to every other tutor on the unit
+  broadcast: async (sessionIds, reason) => {
+    const response = await fetch(`${API_URL}/uc/cover-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ sessionIds, reason })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to broadcast cover request');
+    return data;
+  },
+
+  // UC: track status of past broadcasts
+  getUcHistory: async () => {
+    const response = await fetch(`${API_URL}/uc/cover-requests`, { headers: authHeader() });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch cover requests');
+    return data;
+  },
+
+  // Tutor: list everything currently open and claimable
+  getOpen: async () => {
+    const response = await fetch(`${API_URL}/cover-requests/open`, { headers: authHeader() });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch open cover requests');
+    return data;
+  },
+
+  // Tutor: claim one - first come, first served
+  claim: async (id) => {
+    const response = await fetch(`${API_URL}/cover-requests/${id}/claim`, {
+      method: 'POST',
+      headers: authHeader()
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const err = new Error(data.error || 'Failed to claim session');
+      err.status = response.status;
+      throw err;
+    }
+    return data;
+  },
+
+  // UC: cancel an open broadcast batch
+  cancelBatch: async (batchId) => {
+    const response = await fetch(`${API_URL}/uc/cover-requests/batch/${batchId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to cancel cover batch');
+    return data;
+  }
+};
+
 export const ucAPI = {
 
   getAllRequests: async () => {

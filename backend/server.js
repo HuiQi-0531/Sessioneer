@@ -20,6 +20,7 @@ const notificationsRoutes = require('./routes/notifications.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const profileRoutes = require('./routes/profile.routes');
 const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
+const coverRoutes = require('./routes/cover.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -507,6 +508,40 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Cover-request broadcast tables: a UC selects sessions an absent tutor
+// can't cover, they get broadcast to every other tutor on the unit, and the
+// first one to claim each session gets it (first come, first served).
+pool.query(`
+  CREATE TABLE IF NOT EXISTS cover_batches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_by_id UUID REFERENCES users(id),
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS cover_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    batch_id UUID REFERENCES cover_batches(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    original_tutor_id UUID REFERENCES users(id),
+    claimed_by_id UUID REFERENCES users(id),
+    status VARCHAR(20) DEFAULT 'open',
+    reason TEXT,
+    created_by_id UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    claimed_at TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_cover_requests_status ON cover_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_cover_requests_unit ON cover_requests(unit_id);
+`).then(() => {
+  console.log('cover_requests schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -542,6 +577,7 @@ app.use('/', dashboardRoutes);
 app.use('/profile', profileRoutes);
 app.use('/tutor-applications', tutorApplicationsRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
+app.use('/', coverRoutes);          // /cover-requests, /uc/cover-requests
 app.use('/availability', availabilityRoutes);
 
 // Handle 404

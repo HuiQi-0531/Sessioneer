@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { requestsAPI, sessionsAPI } from '../config/api';
+import { requestsAPI, sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/TutorRequests.css';
+import '../styles/CoverRequests.css';
 
 const labelFromValue = (value) => {
   if (!value) return '';
@@ -67,7 +68,47 @@ const TutorRequests = () => {
   const activeRequests = requests.filter(r => isActive(r.status));
   const processedRequests = requests.filter(r => isProcessed(r.status));
 
+  // Cover requests: sessions other tutors can't make, broadcast on a
+  // first-come-first-served basis. Lives here since it's still "requests
+  // that involve my schedule", just initiated by the UC instead of by me.
+  const [coverRequests, setCoverRequests] = useState([]);
+  const [isLoadingCover, setIsLoadingCover] = useState(true);
+  const [claimingId, setClaimingId] = useState(null);
+  const [coverMessage, setCoverMessage] = useState(null);
+
+  const fetchCoverRequests = async () => {
+    setIsLoadingCover(true);
+    try {
+      const data = await coverAPI.getOpen();
+      setCoverRequests(data);
+    } catch (err) {
+      console.error('Error loading cover requests:', err);
+    } finally {
+      setIsLoadingCover(false);
+    }
+  };
+
+  const handleClaimCover = async (request) => {
+    setClaimingId(request.id);
+    setCoverMessage(null);
+    try {
+      await coverAPI.claim(request.id);
+      setCoverMessage({ type: 'success', text: `You're now covering ${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.` });
+      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
+    } catch (err) {
+      if (err.status === 409) {
+        setCoverMessage({ type: 'error', text: 'Too slow — someone else already claimed that session.' });
+        setCoverRequests(prev => prev.filter(r => r.id !== request.id));
+      } else {
+        setCoverMessage({ type: 'error', text: err.message || 'Failed to claim session.' });
+      }
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => { fetchCoverRequests(); }, []);
 
   useEffect(() => {
     if (!formData.selectedUnit) {
@@ -372,6 +413,55 @@ const TutorRequests = () => {
 
       <main className="main-content">
         <UCPageHeader title="Request & Swap" />
+
+        <section className="requests-section">
+          <div className="requests-header">
+            <div>
+              <h2 className="section-title">Cover Requests</h2>
+              <p className="section-count">Sessions other tutors can't make — first come, first served.</p>
+            </div>
+          </div>
+
+          {coverMessage && (
+            <p className={coverMessage.type === 'success' ? 'cvr-success' : 'cvr-error'}>{coverMessage.text}</p>
+          )}
+
+          {isLoadingCover ? (
+            <div className="empty-state"><p className="empty-title">Loading...</p></div>
+          ) : coverRequests.length === 0 ? (
+            <div className="empty-state">
+              <p className="empty-title">Nothing needs cover right now</p>
+              <p className="empty-subtitle">Check back later, or you'll be notified when one opens up</p>
+            </div>
+          ) : (
+            <div className="cvr-list">
+              {coverRequests.map(request => (
+                <div key={request.id} className="cvr-card">
+                  <div className="cvr-card-main">
+                    <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
+                    <div className="cvr-card-time">{request.day}, {request.startTime.slice(0, 5)} - {request.endTime.slice(0, 5)}</div>
+                    <div className="cvr-card-details">
+                      {request.location ? `${request.location} · ` : ''}{request.sessionType || 'Session'}
+                    </div>
+                    {request.originalTutorName && (
+                      <div className="cvr-card-original">Originally {request.originalTutorName}</div>
+                    )}
+                    {request.reason && (
+                      <div className="cvr-card-reason">"{request.reason}"</div>
+                    )}
+                  </div>
+                  <button
+                    className="cvr-claim-btn"
+                    onClick={() => handleClaimCover(request)}
+                    disabled={claimingId === request.id}
+                  >
+                    {claimingId === request.id ? 'Claiming...' : 'Claim This Session'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className="requests-section">
           <div className="requests-header">

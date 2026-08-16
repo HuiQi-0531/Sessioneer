@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { sessionsAPI } from '../config/api';
+import { sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -34,6 +34,18 @@ const Sessions = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Cover-request broadcast: instead of ticking rows in the main table, the
+  // UC opens a small modal, picks WHICH tutor can't make it, then ticks
+  // just that tutor's sessions inside the modal. Keeps the table itself
+  // untouched - no checkbox column cluttering the day-to-day view.
+  const [showCoverModal, setShowCoverModal] = useState(false);
+  const [coverTutorId, setCoverTutorId] = useState('');
+  const [coverSelectedIds, setCoverSelectedIds] = useState(new Set());
+  const [coverReason, setCoverReason] = useState('');
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [coverError, setCoverError] = useState('');
+  const [coverSuccess, setCoverSuccess] = useState('');
 
   // If we arrived via a direct link like /sessions/:unitId, make sure that
   // becomes the active unit (e.g. clicked "Sessions" from the unit list).
@@ -154,6 +166,64 @@ const Sessions = () => {
     return `${shorten(start)} - ${shorten(end)}`;
   };
 
+  // Every tutor who currently has at least one session, for the "who's out" dropdown.
+  const tutorsWithSessions = Array.from(
+    new Map(
+      sessions
+        .filter(s => s.assignedTutorId)
+        .map(s => [s.assignedTutorId, s.assignedTutorName])
+    ).entries()
+  ).map(([id, name]) => ({ id, name }));
+
+  const tutorSessions = sessions.filter(s => s.assignedTutorId === coverTutorId);
+  const coverSelectedSessions = tutorSessions.filter(s => coverSelectedIds.has(s.id));
+
+  const openCoverModal = () => {
+    setCoverTutorId('');
+    setCoverSelectedIds(new Set());
+    setCoverReason('');
+    setCoverError('');
+    setCoverSuccess('');
+    setShowCoverModal(true);
+  };
+
+  const handleCoverTutorChange = (tutorId) => {
+    setCoverTutorId(tutorId);
+    setCoverSelectedIds(new Set());
+  };
+
+  const toggleCoverSession = (sessionId) => {
+    setCoverSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  };
+
+  const toggleCoverSelectAll = () => {
+    if (coverSelectedIds.size === tutorSessions.length) {
+      setCoverSelectedIds(new Set());
+    } else {
+      setCoverSelectedIds(new Set(tutorSessions.map(s => s.id)));
+    }
+  };
+
+  const submitCoverBroadcast = async () => {
+    if (coverSelectedSessions.length === 0) return;
+    setIsBroadcasting(true);
+    setCoverError('');
+    try {
+      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim());
+      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
+      setShowCoverModal(false);
+    } catch (err) {
+      setCoverError(err.message || 'Failed to broadcast cover request.');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
   if (unitLoading) {
     return (
       <div className="uc-dashboard-container">
@@ -193,6 +263,9 @@ const Sessions = () => {
 
         <div className="ss-content">
           <div className="ss-top-row">
+            <button className="ss-btn ss-btn-cover" onClick={openCoverModal}>
+              Request Cover
+            </button>
             <button className="ss-btn ss-btn-secondary" onClick={() => navigate('/sessions/import')}>
               Upload Session
             </button>
@@ -200,6 +273,10 @@ const Sessions = () => {
               Add Session
             </button>
           </div>
+
+          {coverSuccess && !showCoverModal && (
+            <p className="ss-cover-success">{coverSuccess}</p>
+          )}
 
           {showForm && (
             <div className="ss-form-card">
@@ -330,7 +407,7 @@ const Sessions = () => {
                     <td>{session.campus || '-'}</td>
                     <td>{session.sessionType || '-'}</td>
                     <td>{session.capacity || '-'}</td>
-                    <td>{session.requiredTutors || 1}</td>
+                    <td>{session.assignedTutorName || <span className="ss-unassigned">Unassigned</span>}</td>
                     <td>
                       <span className={`ss-status-badge ${(session.status || '').toLowerCase()}`}>
                         {session.status}
@@ -353,6 +430,80 @@ const Sessions = () => {
           )}
         </div>
       </main>
+
+      {showCoverModal && (
+        <div className="ss-modal-overlay" onClick={() => !isBroadcasting && setShowCoverModal(false)}>
+          <div className="ss-modal-content ss-cover-modal" onClick={e => e.stopPropagation()}>
+            <h3>Request Cover</h3>
+            <p>Pick the tutor who can't make it, tick which of their sessions need covering, and every other tutor on the unit gets notified. First to claim each session gets it.</p>
+
+            <div className="ss-cover-field">
+              <label>Which tutor?</label>
+              <select value={coverTutorId} onChange={(e) => handleCoverTutorChange(e.target.value)}>
+                <option value="">-- Select a tutor --</option>
+                {tutorsWithSessions.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {coverTutorId && (
+              tutorSessions.length === 0 ? (
+                <p className="ss-cover-empty">This tutor has no sessions in this unit.</p>
+              ) : (
+                <>
+                  <div className="ss-cover-list-header">
+                    <label className="ss-cover-select-all">
+                      <input
+                        type="checkbox"
+                        checked={coverSelectedIds.size === tutorSessions.length}
+                        onChange={toggleCoverSelectAll}
+                      />
+                      Select all ({tutorSessions.length})
+                    </label>
+                  </div>
+                  <ul className="ss-cover-session-list ss-cover-session-list-checkable">
+                    {tutorSessions.map(s => (
+                      <li key={s.id}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={coverSelectedIds.has(s.id)}
+                            onChange={() => toggleCoverSession(s.id)}
+                          />
+                          {s.day}, {formatTimeRange(s.startTime, s.endTime)}
+                          {s.location ? ` at ${s.location}` : ''}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <textarea
+                    placeholder="Reason (optional) — e.g. Alex is on leave this week"
+                    value={coverReason}
+                    onChange={(e) => setCoverReason(e.target.value)}
+                  />
+                </>
+              )
+            )}
+
+            {coverError && <p className="ss-error">{coverError}</p>}
+
+            <div className="ss-modal-buttons">
+              <button className="cancel" onClick={() => setShowCoverModal(false)} disabled={isBroadcasting}>
+                Cancel
+              </button>
+              <button
+                className="confirm"
+                onClick={submitCoverBroadcast}
+                disabled={isBroadcasting || coverSelectedSessions.length === 0}
+              >
+                {isBroadcasting ? 'Sending...' : `Send (${coverSelectedSessions.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div className="ss-modal-overlay" onClick={() => setDeleteTarget(null)}>

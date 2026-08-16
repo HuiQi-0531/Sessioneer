@@ -1,0 +1,306 @@
+const express = require('express');
+const pool = require('../db');
+const { verifyToken, requireRole } = require('../middleware/auth');
+const { createNotification, getUserDisplayName } = require('../utils/notify');
+
+const router = express.Router();
+
+const formatTimeRange = (start, end) => `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`;
+
+// ---------------------------------------------------------------------------
+// UC: broadcast a set of sessions as "needs cover" to every other tutor on
+// the unit. Sessions can be a single day or a whole week - the UC just
+// selects whichever rows the absent tutor can't make.
+// ---------------------------------------------------------------------------
+router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { sessionIds, reason } = req.body;
+
+    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one session to broadcast.' });
+    }
+
+    // Pull the sessions and make sure every single one belongs to a unit this
+    // coordinator actually owns - otherwise a UC could broadcast someone
+    // else's timetable.
+    const sessionsResult = await client.query(
+      `
+      SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time, s.location,
+             s.assigned_tutor_id, un.unit_code, un.unit_coordinator_id
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = ANY($1::uuid[])
+      `,
+      [sessionIds]
+    );
+
+    if (sessionsResult.rows.length !== sessionIds.length) {
+      return res.status(404).json({ error: 'One or more sessions could not be found.' });
+    }
+
+    const notOwned = sessionsResult.rows.find(s => s.unit_coordinator_id !== req.user.id);
+    if (notOwned) {
+      return res.status(403).json({ error: 'You can only broadcast sessions from your own units.' });
+    }
+
+    const unitIds = [...new Set(sessionsResult.rows.map(s => s.unit_id))];
+    if (unitIds.length > 1) {
+      return res.status(400).json({ error: 'Select sessions from a single unit at a time.' });
+    }
+    const unitId = unitIds[0];
+    const unitCode = sessionsResult.rows[0].unit_code;
+
+    await client.query('BEGIN');
+
+    const batchResult = await client.query(
+      `INSERT INTO cover_batches (unit_id, created_by_id, reason) VALUES ($1, $2, $3) RETURNING id`,
+      [unitId, req.user.id, reason || null]
+    );
+    const batchId = batchResult.rows[0].id;
+
+    const created = [];
+    for (const session of sessionsResult.rows) {
+      const insertResult = await client.query(
+        `
+        INSERT INTO cover_requests (batch_id, session_id, unit_id, original_tutor_id, reason, created_by_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, session_id, status
+        `,
+        [batchId, session.id, unitId, session.assigned_tutor_id, reason || null, req.user.id]
+      );
+      created.push({ ...insertResult.rows[0], day: session.day, startTime: session.start_time, endTime: session.end_time });
+    }
+
+    await client.query('COMMIT');
+
+    // Notify every tutor on this unit except whoever was originally assigned
+    // to these sessions - they're the one who can't make it.
+    const excludedTutorIds = new Set(sessionsResult.rows.map(s => s.assigned_tutor_id).filter(Boolean));
+    const tutorsResult = await pool.query(
+      `SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role = 'tutor'`,
+      [unitId]
+    );
+    const recipientIds = tutorsResult.rows
+      .map(r => r.user_id)
+      .filter(id => id && !excludedTutorIds.has(id));
+
+    const sessionSummary = sessionsResult.rows.length === 1
+      ? `${sessionsResult.rows[0].day} ${formatTimeRange(sessionsResult.rows[0].start_time, sessionsResult.rows[0].end_time)}`
+      : `${sessionsResult.rows.length} sessions`;
+
+    await Promise.all(recipientIds.map(userId => createNotification({
+      userId,
+      type: 'session_cover_open',
+      title: 'Cover needed - first come, first served',
+      content: `${unitCode} needs cover for ${sessionSummary}. Claim it from Requests before someone else does.`,
+      unitId,
+      actionUrl: '/requests'
+    })));
+
+    console.log('Cover broadcast created:', batchId, 'sessions:', created.length, 'notified:', recipientIds.length);
+    res.status(201).json({ batchId, requests: created, notifiedCount: recipientIds.length });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error creating cover broadcast:', error);
+    res.status(500).json({ error: 'Failed to broadcast cover request.' });
+  } finally {
+    client.release();
+  }
+});
+
+// UC: see how a broadcast batch is progressing (which sessions got claimed).
+router.get('/uc/cover-requests', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        cr.id,
+        cr.batch_id as "batchId",
+        cr.status,
+        cr.reason,
+        cr.created_at as "createdAt",
+        cr.claimed_at as "claimedAt",
+        s.day, s.start_time as "startTime", s.end_time as "endTime", s.location,
+        un.unit_code as "unitCode",
+        TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName",
+        TRIM(CONCAT(claimer.name, ' ', COALESCE(claimer.last_name, ''))) as "claimedByName"
+      FROM cover_requests cr
+      JOIN sessions s ON s.id = cr.session_id
+      JOIN units un ON un.id = cr.unit_id
+      LEFT JOIN users orig ON orig.id = cr.original_tutor_id
+      LEFT JOIN users claimer ON claimer.id = cr.claimed_by_id
+      WHERE un.unit_coordinator_id = $1
+      ORDER BY cr.created_at DESC
+      `,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching UC cover requests:', error);
+    res.status(500).json({ error: 'Failed to fetch cover requests.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tutor: view every open cover request on units they belong to (never their
+// own sessions - you can't cover your own class).
+// ---------------------------------------------------------------------------
+router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        cr.id,
+        cr.reason,
+        cr.created_at as "createdAt",
+        s.id as "sessionId", s.day, s.start_time as "startTime", s.end_time as "endTime",
+        s.location, s.session_type as "sessionType",
+        un.unit_code as "unitCode", un.unit_name as "unitName",
+        TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName"
+      FROM cover_requests cr
+      JOIN sessions s ON s.id = cr.session_id
+      JOIN units un ON un.id = cr.unit_id
+      LEFT JOIN users orig ON orig.id = cr.original_tutor_id
+      WHERE cr.status = 'open'
+        AND cr.unit_id IN (
+          SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        )
+        AND (cr.original_tutor_id IS NULL OR cr.original_tutor_id != $1)
+      ORDER BY cr.created_at DESC
+      `,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching open cover requests:', error);
+    res.status(500).json({ error: 'Failed to fetch open cover requests.' });
+  }
+});
+
+// Tutor: claim a session. First tutor whose UPDATE lands while status is
+// still 'open' wins - the WHERE clause makes this atomic so two tutors
+// clicking at the same instant can never both succeed.
+router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    // Confirm this tutor actually belongs to the unit this request is on.
+    const eligible = await client.query(
+      `
+      SELECT cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status
+      FROM cover_requests cr
+      WHERE cr.id = $1
+        AND cr.unit_id IN (SELECT unit_id FROM unit_memberships WHERE user_id = $2 AND role = 'tutor')
+      `,
+      [id, req.user.id]
+    );
+
+    if (eligible.rows.length === 0) {
+      return res.status(404).json({ error: 'Cover request not found.' });
+    }
+
+    const request = eligible.rows[0];
+    if (request.original_tutor_id === req.user.id) {
+      return res.status(400).json({ error: "You can't claim your own session." });
+    }
+
+    await client.query('BEGIN');
+
+    // The atomic part: only succeeds if it's still 'open'.
+    const claimResult = await client.query(
+      `
+      UPDATE cover_requests
+      SET status = 'claimed', claimed_by_id = $1, claimed_at = NOW()
+      WHERE id = $2 AND status = 'open'
+      RETURNING id, session_id, unit_id, original_tutor_id
+      `,
+      [req.user.id, id]
+    );
+
+    if (claimResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Someone else already claimed this session.' });
+    }
+
+    const claimed = claimResult.rows[0];
+
+    await client.query(
+      `UPDATE sessions SET assigned_tutor_id = $1, tutor_confirmed = TRUE, tutor_reject_reason = NULL WHERE id = $2`,
+      [req.user.id, claimed.session_id]
+    );
+
+    await client.query(
+      `INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor') ON CONFLICT (unit_id, user_id, role) DO NOTHING`,
+      [claimed.unit_id, req.user.id]
+    );
+
+    await client.query('COMMIT');
+
+    const claimerName = await getUserDisplayName(req.user.id);
+    const unitResult = await pool.query('SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1', [claimed.unit_id]);
+    const unitCode = unitResult.rows[0]?.unit_code || 'the unit';
+    const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
+
+    if (claimed.original_tutor_id) {
+      await createNotification({
+        userId: claimed.original_tutor_id,
+        type: 'session_cover_claimed',
+        title: 'Your session was covered',
+        content: `${claimerName} picked up your session in ${unitCode}.`,
+        unitId: claimed.unit_id,
+        sessionId: claimed.session_id,
+        actionUrl: '/tutor-schedule'
+      });
+    }
+    if (coordinatorId) {
+      await createNotification({
+        userId: coordinatorId,
+        type: 'session_cover_claimed',
+        title: 'Cover request claimed',
+        content: `${claimerName} claimed a cover request in ${unitCode}.`,
+        unitId: claimed.unit_id,
+        sessionId: claimed.session_id,
+        actionUrl: '/uc-requests'
+      });
+    }
+
+    console.log('Cover request claimed:', id, 'by', req.user.id);
+    res.json({ success: true, sessionId: claimed.session_id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error claiming cover request:', error);
+    res.status(500).json({ error: 'Failed to claim session.' });
+  } finally {
+    client.release();
+  }
+});
+
+// UC: cancel a broadcast batch that's no longer needed (e.g. tutor turned out
+// to be available after all). Only pulls back requests still 'open'.
+router.delete('/uc/cover-requests/batch/:batchId', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const result = await pool.query(
+      `
+      UPDATE cover_requests
+      SET status = 'cancelled'
+      FROM cover_batches cb
+      JOIN units un ON un.id = cb.unit_id
+      WHERE cover_requests.batch_id = $1
+        AND cover_requests.batch_id = cb.id
+        AND un.unit_coordinator_id = $2
+        AND cover_requests.status = 'open'
+      RETURNING cover_requests.id
+      `,
+      [batchId, req.user.id]
+    );
+    res.json({ success: true, cancelledCount: result.rows.length });
+  } catch (error) {
+    console.error('Error cancelling cover batch:', error);
+    res.status(500).json({ error: 'Failed to cancel cover batch.' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,98 @@
+.cvr-content {
+  padding: 24px 32px;
+  max-width: 720px;
+}
+
+.cvr-intro {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.cvr-success {
+  color: var(--color-success);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.cvr-error {
+  color: var(--color-danger-text);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.cvr-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-text-muted);
+}
+
+.cvr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cvr-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.cvr-card-unit {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+
+.cvr-card-time {
+  font-size: 14px;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.cvr-card-details {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.cvr-card-original {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.cvr-card-reason {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.cvr-claim-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cvr-claim-btn:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.cvr-claim-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
