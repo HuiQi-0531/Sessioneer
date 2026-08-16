@@ -180,7 +180,7 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   padding: 32px;
-  max-width: 1200px;
+  max-width: 100%;
 }
  
 .unit-info {

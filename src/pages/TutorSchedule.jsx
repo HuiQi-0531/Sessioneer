@@ -270,6 +270,14 @@ const TutorSchedule = () => {
             </>
           ) : (
             <table className="ts-table">
+              <colgroup>
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '17%' }} />
+                <col style={{ width: '20%' }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Day</th>
