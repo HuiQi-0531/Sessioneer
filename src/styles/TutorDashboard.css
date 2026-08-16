@@ -29,6 +29,16 @@
   border-radius: 12px;
   padding: 18px 22px;
   flex: 1;
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+
+.td-stat-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
 }
 
 .td-stat-number {

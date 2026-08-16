@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -63,23 +64,23 @@ const TutorDashboard = () => {
           ) : (
             <>
               <div className="td-stats-grid">
-                <div className="td-stat-card">
+                <Link to="/availability" className="td-stat-card">
                   <div className="td-stat-number">{summary.availabilitySubmittedCount}</div>
                   <div className="td-stat-label">Availability Submitted</div>
                   <div className="td-stat-sublabel">of {summary.totalUnits} unit{summary.totalUnits !== 1 ? 's' : ''}</div>
-                </div>
+                </Link>
 
-                <div className="td-stat-card">
+                <Link to="/requests" className="td-stat-card">
                   <div className="td-stat-number">{summary.pendingRequestsCount}</div>
                   <div className="td-stat-label">Pending Requests</div>
                   <div className="td-stat-sublabel">Waiting for approval</div>
-                </div>
+                </Link>
 
-                <div className="td-stat-card">
+                <Link to="/tutor-schedule" className="td-stat-card">
                   <div className="td-stat-number">{summary.totalSessions}</div>
                   <div className="td-stat-label">Sessions</div>
                   <div className="td-stat-sublabel">{summary.confirmedSessions} confirmed</div>
-                </div>
+                </Link>
               </div>
 
               <section className="td-section">
