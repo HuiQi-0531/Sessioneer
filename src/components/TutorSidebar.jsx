@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback} from 'react';
+import React, { useState, useEffect, useCallback} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
@@ -17,12 +17,23 @@ const TutorSidebar = ({ activePage }) => {
   } = useActiveUnit();
   const navigate = useNavigate();
 
-  const currentUser = useMemo(() => {
-  const savedUser = localStorage.getItem('currentUser');
-  return savedUser ? JSON.parse(savedUser) : null;
-}, []);
+  const readCurrentUser = () => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  };
+  const [currentUser, setCurrentUser] = useState(readCurrentUser);
 
 const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+useEffect(() => {
+  const handleUserUpdate = () => setCurrentUser(readCurrentUser());
+  window.addEventListener('sessioneer-user-updated', handleUserUpdate);
+  window.addEventListener('storage', handleUserUpdate);
+  return () => {
+    window.removeEventListener('sessioneer-user-updated', handleUserUpdate);
+    window.removeEventListener('storage', handleUserUpdate);
+  };
+}, []);
 
 const checkUnreadMessages = useCallback(async () => {
   if (!allUnits || allUnits.length === 0) {
@@ -127,7 +138,13 @@ useEffect(() => {
 
       <div className="uc-user-footer-row">
         <Link to="/profile" className="uc-user-profile" style={{ textDecoration: 'none' }}>
-          <div className="uc-user-avatar">{avatarLetter}</div>
+          <div className="uc-user-avatar">
+            {currentUser?.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={displayName} className="uc-user-avatar-img" />
+            ) : (
+              avatarLetter
+            )}
+          </div>
           <div className="uc-user-info">
             <p className="uc-user-name">{displayName}</p>
             <p className="uc-user-role">Tutor</p>

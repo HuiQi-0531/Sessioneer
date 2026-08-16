@@ -17,7 +17,8 @@
   text-align: left;
 }
 
-.pf-avatar {
+.pf-avatar,
+.pf-avatar-upload {
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -30,6 +31,46 @@
   font-size: 24px;
 }
 
+.pf-avatar-upload {
+  position: relative;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.pf-avatar-upload input {
+  display: none;
+}
+
+.pf-avatar-upload.uploading {
+  cursor: wait;
+}
+
+.pf-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pf-avatar-overlay {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 5px 4px;
+  background: rgba(17, 24, 39, 0.72);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.pf-avatar-upload:hover .pf-avatar-overlay,
+.pf-avatar-upload.uploading .pf-avatar-overlay {
+  opacity: 1;
+}
+
 .pf-avatar-name {
   font-size: 18px;
   font-weight: 700;
@@ -39,6 +80,12 @@
 .pf-avatar-role {
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+.pf-avatar-hint {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin-top: 3px;
 }
 
 .pf-card {

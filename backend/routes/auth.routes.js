@@ -27,7 +27,8 @@ const formatUser = (user) => ({
   id: user.id,
   ...formatUserNameFields(user),
   email: user.email,
-  role: user.role
+  role: user.role,
+  avatarUrl: user.avatar_url || null
 });
 
 const hashResetToken = (token) => {
@@ -77,7 +78,7 @@ router.post('/register', async (req, res) => {
       `
       INSERT INTO users (name, last_name, email, role, password_hash)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, name, last_name, email, role
+      RETURNING id, name, last_name, email, role, avatar_url
       `,
       [cleanFirstName, cleanLastName || null, email.toLowerCase(), normalizedRole, passwordHash]
     );
@@ -105,7 +106,7 @@ router.post('/login', async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, name, last_name, email, role, password_hash
+      SELECT id, name, last_name, email, role, password_hash, avatar_url
       FROM users
       WHERE email = $1
       LIMIT 1

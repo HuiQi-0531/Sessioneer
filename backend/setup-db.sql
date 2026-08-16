@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     work_experience TEXT,
     maximum_hours INTEGER,
     contract_type VARCHAR(50),
+    avatar_url TEXT,
     application_status VARCHAR(50),
     applied_at TIMESTAMP,
     approved_at TIMESTAMP,

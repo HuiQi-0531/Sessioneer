@@ -444,9 +444,16 @@ pool.query(`
     ) THEN
       ALTER TABLE users ADD COLUMN notify_request_updates BOOLEAN DEFAULT TRUE;
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'avatar_url'
+    ) THEN
+      ALTER TABLE users ADD COLUMN avatar_url TEXT;
+    END IF;
   END $$;
 `).then(() => {
-  console.log('users notification preference columns OK');
+  console.log('users profile columns OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });

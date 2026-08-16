@@ -1208,6 +1208,21 @@ export const profileAPI = {
     return result;
   },
 
+  uploadAvatar: async (file) => {
+    const body = new FormData();
+    body.append('avatar', file);
+
+    const response = await fetch(`${API_URL}/profile/avatar`, {
+      method: 'POST',
+      headers: authHeader(),
+      body
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to upload profile picture');
+    profileCache = { data: result, updatedAt: Date.now() };
+    return result;
+  },
+
   changePassword: async (currentPassword, newPassword) => {
     const response = await fetch(`${API_URL}/profile/password`, {
       method: 'PUT',

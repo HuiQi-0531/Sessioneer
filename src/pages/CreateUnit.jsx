@@ -153,7 +153,13 @@ const CreateUnit = () => {
         </nav>
 
         <div className="uc-user-profile">
-          <div className="uc-user-avatar">{avatarLetter}</div>
+          <div className="uc-user-avatar">
+            {currentUser?.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={displayName} className="uc-user-avatar-img" />
+            ) : (
+              avatarLetter
+            )}
+          </div>
           <div className="uc-user-info">
             <p className="uc-user-name">{displayName}</p>
             <p className="uc-user-role">Unit Coordinator</p>

@@ -30,6 +30,7 @@ const Profile = () => {
     contractType: ''
   });  
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [profileMessage, setProfileMessage] = useState(null);
 
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -61,6 +62,48 @@ const Profile = () => {
     }
   };
 
+  const syncCurrentUser = (updated) => {
+    const saved = localStorage.getItem('currentUser');
+    if (!saved) return;
+
+    const parsed = JSON.parse(saved);
+    parsed.name = updated.name;
+    parsed.firstName = updated.firstName;
+    parsed.lastName = updated.lastName;
+    parsed.displayName = updated.displayName;
+    parsed.avatarUrl = updated.avatarUrl;
+    localStorage.setItem('currentUser', JSON.stringify(parsed));
+    window.dispatchEvent(new Event('sessioneer-user-updated'));
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setProfileMessage({ type: 'error', text: 'Please choose an image file.' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileMessage({ type: 'error', text: 'Please choose an image under 2 MB.' });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setProfileMessage(null);
+    try {
+      const updated = await profileAPI.uploadAvatar(file);
+      setProfile(updated);
+      syncCurrentUser(updated);
+      setProfileMessage({ type: 'success', text: 'Profile picture updated successfully.' });
+    } catch (err) {
+      setProfileMessage({ type: 'error', text: err.message || 'Failed to upload profile picture.' });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleProfileSave = async () => {
     setIsSavingProfile(true);
     setProfileMessage(null);
@@ -69,18 +112,9 @@ const Profile = () => {
         ...formData,
         maximumHours: formData.maximumHours === '' ? null : parseInt(formData.maximumHours, 10)
       };
-      const updated = await profileAPI.update(payload);      setProfile(updated);
-
-      // Keep the sidebar's cached name in sync
-      const saved = localStorage.getItem('currentUser');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        parsed.name = updated.name;
-        parsed.firstName = updated.firstName;
-        parsed.lastName = updated.lastName;
-        parsed.displayName = updated.displayName;
-        localStorage.setItem('currentUser', JSON.stringify(parsed));
-      }
+      const updated = await profileAPI.update(payload);
+      setProfile(updated);
+      syncCurrentUser(updated);
 
       setProfileMessage({ type: 'success', text: 'Profile updated successfully.' });
     } catch (err) {
@@ -145,10 +179,24 @@ const Profile = () => {
 
         <div className="pf-content">
           <div className="pf-avatar-row">
-            <div className="pf-avatar">{getAvatarLetter(profile)}</div>
+            <label className={`pf-avatar-upload ${isUploadingAvatar ? 'uploading' : ''}`}>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
+              />
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt={getDisplayName(profile)} className="pf-avatar-img" />
+              ) : (
+                <span>{getAvatarLetter(profile)}</span>
+              )}
+              <span className="pf-avatar-overlay">{isUploadingAvatar ? 'Uploading...' : 'Change'}</span>
+            </label>
             <div>
               <div className="pf-avatar-name">{getDisplayName(profile)}</div>
               <div className="pf-avatar-role">{isTutor ? 'Tutor' : 'Unit Coordinator'}</div>
+              <div className="pf-avatar-hint">Click the picture to upload a JPG, PNG, WEBP, or GIF.</div>
             </div>
           </div>
 
