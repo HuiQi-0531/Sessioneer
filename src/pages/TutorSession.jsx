@@ -81,15 +81,36 @@ const TutorSession = () => {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [notReleased, setNotReleased] = useState(false);
 
-  useEffect(() => {
-    if (unitIdFromUrl && unitIdFromUrl !== activeUnitId) {
-      setActiveUnitId(unitIdFromUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unitIdFromUrl]);
+  const tutorUnits = useMemo(
+    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    [allUnits]
+  );
 
   useEffect(() => {
-    if (!activeUnit) {
+    if (!unitIdFromUrl || unitLoading) {
+      return;
+    }
+
+    const targetTutorUnit = tutorUnits.find(unit => unit.id === unitIdFromUrl);
+    if (targetTutorUnit && targetTutorUnit.id !== activeUnitId) {
+      setActiveUnitId(targetTutorUnit.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitIdFromUrl, unitLoading, tutorUnits, activeUnitId]);
+
+  useEffect(() => {
+    if (unitLoading || tutorUnits.length === 0) {
+      return;
+    }
+
+    if (!activeUnit || !activeUnit.roles?.includes('tutor')) {
+      setActiveUnitId(tutorUnits[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitLoading, tutorUnits, activeUnit]);
+
+  useEffect(() => {
+    if (!activeUnit || !activeUnit.roles?.includes('tutor')) {
       setIsLoadingSessions(false);
       return;
     }
@@ -136,13 +157,13 @@ const TutorSession = () => {
 }, [gridSessions]);
 
   const hiddenFromGridCount = rawSessions.length - gridSessions.length;
-  const activeUnitIndex = allUnits.findIndex(unit => unit.id === activeUnit?.id);
-  const hasMultipleUnits = allUnits.length > 1 && activeUnitIndex !== -1;
+  const activeUnitIndex = tutorUnits.findIndex(unit => unit.id === activeUnit?.id);
+  const hasMultipleUnits = tutorUnits.length > 1 && activeUnitIndex !== -1;
 
   const handleUnitStep = (direction) => {
     if (!hasMultipleUnits) return;
-    const nextIndex = (activeUnitIndex + direction + allUnits.length) % allUnits.length;
-    const nextUnit = allUnits[nextIndex];
+    const nextIndex = (activeUnitIndex + direction + tutorUnits.length) % tutorUnits.length;
+    const nextUnit = tutorUnits[nextIndex];
     setActiveUnitId(nextUnit.id);
     navigate('/tutor-sessions');
   };
@@ -166,6 +187,18 @@ const TutorSession = () => {
         <main className="main-content">
           <UCPageHeader title="Sessions" />
           <div style={{ padding: 32 }}>No unit selected. Once you're linked to a unit, it'll show up here.</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!activeUnit.roles?.includes('tutor')) {
+    return (
+      <div className="dashboard-container">
+        <TutorSidebar activePage="sessions" />
+        <main className="main-content">
+          <UCPageHeader title="Sessions" />
+          <div style={{ padding: 32 }}>Loading your tutor units...</div>
         </main>
       </div>
     );
@@ -196,7 +229,7 @@ const TutorSession = () => {
                     &lsaquo;
                   </button>
                   <span className="sessions-unit-position">
-                    {activeUnitIndex + 1} / {allUnits.length}
+                    {activeUnitIndex + 1} / {tutorUnits.length}
                   </span>
                   <button
                     type="button"
