@@ -25,6 +25,52 @@ const getBlockState = (session) => {
   return 'pending';
 };
 
+const timeToMinutes = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
+const computeOverlapPlacements = (sessions) => {
+  const sorted = [...sessions].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+  const placements = {};
+  let columnEnds = [];
+  let cluster = [];
+  let clusterEnd = -Infinity;
+
+  const finalizeCluster = () => {
+    if (cluster.length === 0) return;
+    const maxCol = Math.max(...cluster.map(s => placements[s.id].col)) + 1;
+    cluster.forEach(s => { placements[s.id].total = maxCol; });
+    cluster = [];
+  };
+
+  sorted.forEach(s => {
+    const start = timeToMinutes(s.startTime);
+    const end = timeToMinutes(s.endTime);
+
+    if (start >= clusterEnd) {
+      finalizeCluster();
+      columnEnds = [];
+      clusterEnd = -Infinity;
+    }
+
+    let colIndex = columnEnds.findIndex(endTime => start >= endTime);
+    if (colIndex === -1) {
+      colIndex = columnEnds.length;
+      columnEnds.push(end);
+    } else {
+      columnEnds[colIndex] = end;
+    }
+
+    placements[s.id] = { col: colIndex };
+    cluster.push(s);
+    clusterEnd = Math.max(clusterEnd, end);
+  });
+
+  finalizeCluster();
+  return placements;
+};
+
 const TutorSession = () => {
   const { unitId: unitIdFromUrl } = useParams();
   const navigate = useNavigate();
@@ -73,53 +119,6 @@ const TutorSession = () => {
 
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
   const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
-
-  // New helpers for overlap detection:
-  const timeToMinutes = (timeStr) => {
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + (m || 0);
-};
-
-  const computeOverlapPlacements = (sessions) => {
-    const sorted = [...sessions].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-    const placements = {};
-    let columnEnds = [];
-    let cluster = [];
-    let clusterEnd = -Infinity;
-
-  const finalizeCluster = () => {
-    if (cluster.length === 0) return;
-    const maxCol = Math.max(...cluster.map(s => placements[s.id].col)) + 1;
-    cluster.forEach(s => { placements[s.id].total = maxCol; });
-    cluster = [];
-  };
-
-  sorted.forEach(s => {
-    const start = timeToMinutes(s.startTime);
-    const end = timeToMinutes(s.endTime);
-
-    if (start >= clusterEnd) {
-      finalizeCluster();
-      columnEnds = [];
-      clusterEnd = -Infinity;
-    }
-
-    let colIndex = columnEnds.findIndex(endTime => start >= endTime);
-    if (colIndex === -1) {
-      colIndex = columnEnds.length;
-      columnEnds.push(end);
-    } else {
-      columnEnds[colIndex] = end;
-    }
-
-    placements[s.id] = { col: colIndex };
-    cluster.push(s);
-    clusterEnd = Math.max(clusterEnd, end);
-  });
-
-  finalizeCluster();
-  return placements;
-};
 
   const gridSessions = rawSessions.filter(s =>
     DAYS.includes(s.day) &&
