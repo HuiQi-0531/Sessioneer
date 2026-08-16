@@ -67,29 +67,29 @@ const UCDashboard = () => {
           ) : (
             <>
               <div className="ucd-stats-grid">
-                <div className="ucd-stat-card">
+                <Link to="/unit-setup" className="ucd-stat-card">
                   <div className="ucd-stat-number">{summary.activeUnitCount}</div>
                   <div className="ucd-stat-label">Active Units</div>
                   <div className="ucd-stat-sublabel">of {summary.totalUnits} total</div>
-                </div>
+                </Link>
 
-                <div className={`ucd-stat-card ${summary.pendingRequestsCount > 0 ? 'warn' : ''}`}>
+                <Link to="/uc-requests" className={`ucd-stat-card ${summary.pendingRequestsCount > 0 ? 'warn' : ''}`}>
                   <div className="ucd-stat-number">{summary.pendingRequestsCount}</div>
                   <div className="ucd-stat-label">Pending Requests</div>
                   <div className="ucd-stat-sublabel">Waiting for your review</div>
-                </div>
+                </Link>
 
-                <div className={`ucd-stat-card ${summary.unassignedSessions > 0 ? 'warn' : ''}`}>
+                <Link to="/sessions" className={`ucd-stat-card ${summary.unassignedSessions > 0 ? 'warn' : ''}`}>
                   <div className="ucd-stat-number">{summary.unassignedSessions}</div>
                   <div className="ucd-stat-label">Unassigned Sessions</div>
                   <div className="ucd-stat-sublabel">of {summary.totalSessions} total</div>
-                </div>
+                </Link>
 
-                <div className={`ucd-stat-card ${summary.pendingConfirmations > 0 ? 'warn' : ''}`}>
+                <Link to="/sessions" className={`ucd-stat-card ${summary.pendingConfirmations > 0 ? 'warn' : ''}`}>
                   <div className="ucd-stat-number">{summary.pendingConfirmations}</div>
                   <div className="ucd-stat-label">Awaiting Tutor Confirmation</div>
                   <div className="ucd-stat-sublabel">Sessions assigned, not yet confirmed</div>
-                </div>
+                </Link>
               </div>
 
               <section className="ucd-section">
