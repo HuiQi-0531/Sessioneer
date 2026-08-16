@@ -124,29 +124,33 @@ const TutorApplications = () => {
                     <span className={`tap-badge ${app.status}`}>{app.status}</span>
                   </div>
 
-                  {app.phoneNumber && (
+                
+                  <div className="tap-card-details">
+                    {app.phoneNumber && (
+                      <div className="tap-card-detail-row">
+                        <span className="tap-card-detail-label">Phone</span>{app.phoneNumber}
+                      </div>
+                    )}
+                    {app.workExperience && (
+                      <div className="tap-card-detail-row">
+                        <span className="tap-card-detail-label">Experience</span>{app.workExperience}
+                      </div>
+                    )}
+                    {app.maximumHours != null && (
+                      <div className="tap-card-detail-row">
+                        <span className="tap-card-detail-label">Max hours</span>{app.maximumHours} hrs/week
+                      </div>
+                    )}
+                    {app.contractType && (
+                      <div className="tap-card-detail-row">
+                        <span className="tap-card-detail-label">Contract</span>{app.contractType}
+                      </div>
+                    )}
                     <div className="tap-card-detail-row">
-                      <span className="tap-card-detail-label">Phone</span>{app.phoneNumber}
+                      <span className="tap-card-detail-label">Applied</span>{formatDate(app.appliedAt)}
                     </div>
-                  )}
-                  {app.workExperience && (
-                    <div className="tap-card-detail-row">
-                      <span className="tap-card-detail-label">Experience</span>{app.workExperience}
-                    </div>
-                  )}
-                  {app.maximumHours != null && (
-                    <div className="tap-card-detail-row">
-                      <span className="tap-card-detail-label">Max hours</span>{app.maximumHours} hrs/week
-                    </div>
-                  )}
-                  {app.contractType && (
-                    <div className="tap-card-detail-row">
-                      <span className="tap-card-detail-label">Contract</span>{app.contractType}
-                    </div>
-                  )}
-                  <div className="tap-card-detail-row">
-                    <span className="tap-card-detail-label">Applied</span>{formatDate(app.appliedAt)}
                   </div>
+                
 
                   <div className="tap-card-actions">
                     {app.hasResume && (
