@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -9,6 +9,7 @@ import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
 
 const TutorDashboard = () => {
+  const navigate = useNavigate();
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -43,6 +44,27 @@ const TutorDashboard = () => {
     } catch (err) {
       console.error('Error loading notifications:', err);
     }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification.actionUrl) {
+      return;
+    }
+
+    if (!notification.isRead) {
+      try {
+        await notificationsAPI.markRead(notification.id);
+        setNotifications(prev =>
+          prev.map(item =>
+            item.id === notification.id ? { ...item, isRead: true } : item
+          )
+        );
+      } catch (err) {
+        console.error('Error marking notification read:', err);
+      }
+    }
+
+    navigate(notification.actionUrl);
   };
 
   return (
@@ -120,10 +142,16 @@ const TutorDashboard = () => {
                 ) : (
                   <div className="td-notification-list">
                     {notifications.map(n => (
-                      <div key={n.id} className="td-notification-item">
+                      <button
+                        key={n.id}
+                        type="button"
+                        className={`td-notification-item ${n.actionUrl ? 'clickable' : ''}`}
+                        onClick={() => handleNotificationClick(n)}
+                        disabled={!n.actionUrl}
+                      >
                         <p className="td-notification-text">{n.title}</p>
                         <p className="td-notification-time">{formatTimeAgo(n.createdAt)}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}

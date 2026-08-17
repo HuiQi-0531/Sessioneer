@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { notificationsAPI, ucDashboardAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
@@ -10,6 +10,7 @@ import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
 
 const UCDashboard = () => {
+  const navigate = useNavigate();
   const { isLoading: unitsLoading } = useActiveUnit();
 
   const currentUser = useMemo(() => {
@@ -46,6 +47,27 @@ const UCDashboard = () => {
     } catch (err) {
       console.error('Error loading notifications:', err);
     }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification.actionUrl) {
+      return;
+    }
+
+    if (!notification.isRead) {
+      try {
+        await notificationsAPI.markRead(notification.id);
+        setNotifications(prev =>
+          prev.map(item =>
+            item.id === notification.id ? { ...item, isRead: true } : item
+          )
+        );
+      } catch (err) {
+        console.error('Error marking notification read:', err);
+      }
+    }
+
+    navigate(notification.actionUrl);
   };
 
   return (
@@ -136,10 +158,16 @@ const UCDashboard = () => {
                 ) : (
                   <div className="ucd-notification-list">
                     {notifications.map(n => (
-                      <div key={n.id} className="ucd-notification-item">
+                      <button
+                        key={n.id}
+                        type="button"
+                        className={`ucd-notification-item ${n.actionUrl ? 'clickable' : ''}`}
+                        onClick={() => handleNotificationClick(n)}
+                        disabled={!n.actionUrl}
+                      >
                         <p className="ucd-notification-text">{n.title}</p>
                         <p className="ucd-notification-time">{formatTimeAgo(n.createdAt)}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
