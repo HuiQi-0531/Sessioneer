@@ -27,7 +27,7 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
   return result.rows.length > 0;
 };
 
-const buildContact = async (currentUserId, otherUserId, name, email) => {
+const buildContact = async (currentUserId, otherUserId, name, email, avatarUrl = null) => {
   const lastMsgResult = await pool.query(
     `
     SELECT content, sent_at, attachment_name
@@ -49,6 +49,7 @@ const buildContact = async (currentUserId, otherUserId, name, email) => {
     userId: otherUserId,
     name,
     email,
+    avatarUrl,
     lastMessage: lastMsgResult.rows[0]?.content || lastMsgResult.rows[0]?.attachment_name || null,
     lastMessageAt: lastMsgResult.rows[0]?.sent_at || null,
     unreadCount: parseInt(unreadResult.rows[0].count, 10)
@@ -71,7 +72,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
 
       const tutorsResult = await pool.query(
         `
-        SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email
+        SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url
         FROM users u
         WHERE u.role = 'tutor'
           AND (
@@ -85,7 +86,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
       );
 
       const contacts = await Promise.all(
-        tutorsResult.rows.map(t => buildContact(req.user.id, t.id, t.name, t.email))
+        tutorsResult.rows.map(t => buildContact(req.user.id, t.id, t.name, t.email, t.avatar_url || null))
       );
       return res.json(contacts);
     }
@@ -96,7 +97,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
 
       const unitResult = await pool.query(
         `
-        SELECT c.id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) AS name, c.email
+        SELECT c.id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) AS name, c.email, c.avatar_url
         FROM units u
         JOIN users c ON c.id = u.unit_coordinator_id
         WHERE u.id = $1
@@ -107,7 +108,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
 
       const peerTutorsResult = await pool.query(
   `
-        SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email
+        SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url
         FROM users u
         WHERE u.role = 'tutor'
           AND u.id != $1
@@ -123,10 +124,10 @@ router.get('/contacts', verifyToken, async (req, res) => {
 
       const contacts = [];
       if (coordinator) {
-        contacts.push(await buildContact(req.user.id, coordinator.id, coordinator.name, coordinator.email));
+        contacts.push(await buildContact(req.user.id, coordinator.id, coordinator.name, coordinator.email, coordinator.avatar_url || null));
       }
       for (const t of peerTutorsResult.rows) {
-        contacts.push(await buildContact(req.user.id, t.id, t.name, t.email));
+        contacts.push(await buildContact(req.user.id, t.id, t.name, t.email, t.avatar_url || null));
       }
 
       return res.json(contacts);

@@ -58,6 +58,7 @@ const formatMessage = (m, currentUserId) => ({
   senderId: m.sender_id,
   recipientId: m.recipient_id || null,
   senderName: m.sender_name || null,
+  senderAvatarUrl: m.sender_avatar_url || null,
   content: m.content,
   isRead: m.is_read,
   sentAt: m.sent_at,
@@ -206,13 +207,16 @@ router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, sender_id, recipient_id, content, is_read, sent_at,
+      SELECT m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.sent_at,
+             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as sender_name,
+             u.avatar_url as sender_avatar_url,
              attachment_url, attachment_name, attachment_type, attachment_size
-      FROM messages
-      WHERE unit_id IS NULL
-        AND ((sender_id = $1 AND recipient_id = $2)
-         OR (sender_id = $2 AND recipient_id = $1))
-      ORDER BY sent_at ASC
+      FROM messages m
+      JOIN users u ON u.id = m.sender_id
+      WHERE m.unit_id IS NULL
+        AND ((m.sender_id = $1 AND m.recipient_id = $2)
+         OR (m.sender_id = $2 AND m.recipient_id = $1))
+      ORDER BY m.sent_at ASC
       `,
       [req.user.id, otherUserId]
     );
@@ -256,7 +260,20 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
       ]
     );
 
-    const message = formatMessage(result.rows[0], req.user.id);
+    const senderResult = await pool.query(
+      `
+      SELECT TRIM(CONCAT(name, ' ', COALESCE(last_name, ''))) as sender_name,
+             avatar_url as sender_avatar_url
+      FROM users
+      WHERE id = $1
+      `,
+      [req.user.id]
+    );
+
+    const message = formatMessage(
+      { ...result.rows[0], ...senderResult.rows[0] },
+      req.user.id
+    );
 
     emitDirectMessage(req, message);
 
@@ -297,7 +314,9 @@ router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) =
     const unitsResult = await pool.query(
       `
       SELECT DISTINCT u.id as unit_id, u.unit_code, u.unit_name, u.unit_coordinator_id,
-             c.id as coordinator_id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) as coordinator_name
+             c.id as coordinator_id,
+             TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) as coordinator_name,
+             c.avatar_url as coordinator_avatar_url
       FROM units u
       JOIN users c ON c.id = u.unit_coordinator_id
       WHERE u.id IN (
@@ -330,6 +349,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) =
       return {
         userId: row.coordinator_id,
         name: row.coordinator_name,
+        avatarUrl: row.coordinator_avatar_url || null,
         unitId: row.unit_id,
         unitCode: row.unit_code,
         unitName: row.unit_name,
@@ -363,7 +383,8 @@ router.get('/group/:unitId', verifyToken, async (req, res) => {
       `
       SELECT m.id, m.sender_id, m.content, m.sent_at,
              m.attachment_url, m.attachment_name, m.attachment_type, m.attachment_size,
-             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as sender_name
+             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as sender_name,
+             u.avatar_url as sender_avatar_url
       FROM messages m
       JOIN users u ON u.id = m.sender_id
       WHERE m.unit_id = $1
@@ -416,10 +437,20 @@ router.post('/group/:unitId', verifyToken, upload.single('attachment'), async (r
       ]
     );
 
-    const message = {
-      ...formatMessage(result.rows[0], req.user.id),
-      senderName: req.user.name || null
-    };
+    const senderResult = await pool.query(
+      `
+      SELECT TRIM(CONCAT(name, ' ', COALESCE(last_name, ''))) as sender_name,
+             avatar_url as sender_avatar_url
+      FROM users
+      WHERE id = $1
+      `,
+      [req.user.id]
+    );
+
+    const message = formatMessage(
+      { ...result.rows[0], ...senderResult.rows[0] },
+      req.user.id
+    );
 
     emitGroupMessage(req, unitId, message);
 

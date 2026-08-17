@@ -4,6 +4,7 @@ import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/Messages.css';
 
@@ -328,6 +329,26 @@ const Messages = () => {
 
   const selectedUnit = allUnits.find(u => u.id === selectedUnitId);
 
+  const getMessageDisplayName = (message) => {
+    if (message.isMine) return 'You';
+    return chatMode === 'group' ? message.senderName : selectedContact?.name;
+  };
+
+  const getMessageAvatarUrl = (message) => {
+    if (message.isMine) return currentUser?.avatarUrl || null;
+    return chatMode === 'group' ? message.senderAvatarUrl : selectedContact?.avatarUrl;
+  };
+
+  const renderAvatar = (name, avatarUrl, className = 'msg-message-avatar') => (
+    <div className={className}>
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name || 'Profile'} />
+      ) : (
+        getAvatarLetter(name || 'User', 'U')
+      )}
+    </div>
+  );
+
   if (unitsLoading) {
     return (
       <div className="uc-dashboard-container">
@@ -401,12 +422,18 @@ const Messages = () => {
                 <div className="msg-thread">
                   {thread.map(m => (
                     <div key={m.id} className={`msg-bubble-row ${m.isMine ? 'mine' : 'theirs'}`}>
-                      <div className="msg-bubble-meta">
-                        {m.isMine ? 'You' : (chatMode === 'group' ? m.senderName : selectedContact?.name)} - {formatTime(m.sentAt)}
-                      </div>
-                      <div className="msg-bubble">
-                        {m.content && <div className="msg-bubble-text">{m.content}</div>}
-                        {renderAttachment(m)}
+                      {renderAvatar(
+                        m.isMine ? getDisplayName(currentUser, 'You') : getMessageDisplayName(m),
+                        getMessageAvatarUrl(m)
+                      )}
+                      <div className="msg-bubble-stack">
+                        <div className="msg-bubble-meta">
+                          {getMessageDisplayName(m)} - {formatTime(m.sentAt)}
+                        </div>
+                        <div className="msg-bubble">
+                          {m.content && <div className="msg-bubble-text">{m.content}</div>}
+                          {renderAttachment(m)}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -461,7 +488,7 @@ const Messages = () => {
           {showProfile && chatMode === 'direct' && selectedContact && (
             <div className="msg-profile-col">
               <button className="msg-profile-close" onClick={() => setShowProfile(false)}>&times;</button>
-              <div className="msg-profile-avatar">{selectedContact.name.charAt(0).toUpperCase()}</div>
+              {renderAvatar(selectedContact.name, selectedContact.avatarUrl, 'msg-profile-avatar')}
               <div className="msg-profile-name">{selectedContact.name}</div>
               <div className="msg-profile-role">Tutor</div>
 

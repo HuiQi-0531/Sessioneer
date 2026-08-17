@@ -126,18 +126,56 @@
 
 .msg-bubble-row {
   display: flex;
-  flex-direction: column;
-  max-width: 60%;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 72%;
 }
 
 .msg-bubble-row.mine {
   align-self: flex-end;
-  align-items: flex-end;
+  flex-direction: row-reverse;
 }
 
 .msg-bubble-row.theirs {
   align-self: flex-start;
+  flex-direction: row;
+}
+
+.msg-bubble-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.msg-bubble-row.mine .msg-bubble-stack {
+  align-items: flex-end;
+}
+
+.msg-bubble-row.theirs .msg-bubble-stack {
   align-items: flex-start;
+}
+
+.msg-message-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 50%;
+  background-color: #ede9fe;
+  color: #6d28d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.msg-message-avatar img,
+.msg-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .msg-bubble-meta {
@@ -380,6 +418,7 @@
   font-weight: 700;
   font-size: 24px;
   margin: 0 auto 12px auto;
+  overflow: hidden;
 }
 
 .msg-profile-name {
