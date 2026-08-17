@@ -318,12 +318,10 @@ const TutorAvailability = () => {
         <div className="content-area">
           <div className="availability-card">
             <div className="unit-info">
-              My availability applies to all my units
-              {tutorUnits.length > 0 && (
-                <span className="unit-info-subtitle">
-                  {tutorUnits.map(unit => unit.unitCode).join(', ')}
-                </span>
-              )}
+              My Availability
+              <span className="unit-info-subtitle">
+                Applies to all tutor units
+              </span>
             </div>
 
             <div className="legend">
