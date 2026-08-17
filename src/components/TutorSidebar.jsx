@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback} from 'react';
+import React, { useState, useRef, useEffect, useCallback} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
@@ -10,12 +10,16 @@ const TutorSidebar = ({ activePage }) => {
   const {
     activeUnit,
     allUnits,
+    setActiveUnitId,
+    isLoading,
     activeViewRole,
     activeUnitRoles,
     canSwitchRole,
     setActiveViewRole
   } = useActiveUnit();
   const navigate = useNavigate();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
 
   const readCurrentUser = () => {
     const savedUser = localStorage.getItem('currentUser');
@@ -73,6 +77,25 @@ useEffect(() => {
 
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
+  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor'));
+  const displayActiveUnit = activeUnit?.roles?.includes('tutor')
+    ? activeUnit
+    : tutorUnits[0] || null;
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectUnit = (unitId) => {
+    setActiveUnitId(unitId);
+    setShowDropdown(false);
+  };
 
   const handleRoleSwitch = (role) => {
     setActiveViewRole(role);
@@ -112,6 +135,42 @@ useEffect(() => {
         <h2 className="uc-brand-name">Sessioneer</h2>
       </Link>
 
+      <div className="ucs-active-unit-wrapper" ref={dropdownRef}>
+        <button
+          className="ucs-active-unit-btn"
+          onClick={() => setShowDropdown(!showDropdown)}
+          disabled={isLoading || tutorUnits.length === 0}
+          type="button"
+        >
+          <div className="ucs-active-unit-text">
+            <p className="uc-active-label">Active Unit</p>
+            <p className="uc-unit-code">
+              {isLoading ? 'Loading...' : (displayActiveUnit ? displayActiveUnit.unitCode : 'No tutor unit yet')}
+            </p>
+            {displayActiveUnit && (
+              <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
+            )}
+          </div>
+          {tutorUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
+        </button>
+
+        {showDropdown && (
+          <div className="ucs-dropdown">
+            {tutorUnits.map(unit => (
+              <button
+                key={unit.id}
+                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                onClick={() => handleSelectUnit(unit.id)}
+                type="button"
+              >
+                <span className="ucs-dropdown-code">{unit.unitCode}</span>
+                <span className="ucs-dropdown-meta">{unit.semester}, {unit.year}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {canSwitchRole && (
         <div className="ucs-role-switcher" aria-label="Viewing role">
           {activeUnitRoles.map(role => (
@@ -129,9 +188,9 @@ useEffect(() => {
 
       <nav className="uc-navigation">
         {navItem('Dashboard', '/tutor-dashboard', 'dashboard')}
-        {navItem('Sessions', activeUnit ? '/tutor-sessions' : '#sessions', 'sessions')}
+        {navItem('Sessions', displayActiveUnit ? '/tutor-sessions' : '#sessions', 'sessions')}
         {navItem('Availability', '/availability', 'availability')}
-        {navItem('Schedule', activeUnit ? '/tutor-schedule' : '#schedule', 'schedule')}
+        {navItem('Schedule', displayActiveUnit ? '/tutor-schedule' : '#schedule', 'schedule')}
         {navItem('Requests', '/requests', 'requests')}
         {navItem('Messages', '/tutor-messages', 'messages', hasUnreadMessages)}
       </nav>

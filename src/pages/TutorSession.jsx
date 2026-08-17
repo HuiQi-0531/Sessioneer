@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -73,7 +73,6 @@ const computeOverlapPlacements = (sessions) => {
 
 const TutorSession = () => {
   const { unitId: unitIdFromUrl } = useParams();
-  const navigate = useNavigate();
   const { activeUnit, activeUnitId, allUnits, setActiveUnitId, isLoading: unitLoading } = useActiveUnit();
 
   const [fullscreen, setFullscreen] = useState(false);
@@ -157,16 +156,6 @@ const TutorSession = () => {
 }, [gridSessions]);
 
   const hiddenFromGridCount = rawSessions.length - gridSessions.length;
-  const activeUnitIndex = tutorUnits.findIndex(unit => unit.id === activeUnit?.id);
-  const hasMultipleUnits = tutorUnits.length > 1 && activeUnitIndex !== -1;
-
-  const handleUnitStep = (direction) => {
-    if (!hasMultipleUnits) return;
-    const nextIndex = (activeUnitIndex + direction + tutorUnits.length) % tutorUnits.length;
-    const nextUnit = tutorUnits[nextIndex];
-    setActiveUnitId(nextUnit.id);
-    navigate('/tutor-sessions');
-  };
 
   if (unitLoading) {
     return (
@@ -218,29 +207,6 @@ const TutorSession = () => {
                 <h3 className="sessions-title">{activeUnit.unitCode} - Session Schedule</h3>
                 <p className="sessions-subtitle">View all classes and tutoring sessions in this unit</p>
               </div>
-              {hasMultipleUnits && (
-                <div className="sessions-unit-switcher" aria-label="Switch unit sessions">
-                  <button
-                    type="button"
-                    className="sessions-unit-arrow"
-                    onClick={() => handleUnitStep(-1)}
-                    aria-label="Previous unit"
-                  >
-                    &lsaquo;
-                  </button>
-                  <span className="sessions-unit-position">
-                    {activeUnitIndex + 1} / {tutorUnits.length}
-                  </span>
-                  <button
-                    type="button"
-                    className="sessions-unit-arrow"
-                    onClick={() => handleUnitStep(1)}
-                    aria-label="Next unit"
-                  >
-                    &rsaquo;
-                  </button>
-                </div>
-              )}
             </div>
 
             {isLoadingSessions ? (

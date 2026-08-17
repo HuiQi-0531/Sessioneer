@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -25,8 +24,7 @@ const getStatus = (session) => {
 };
 
 const TutorSchedule = () => {
-  const { unitId: unitIdFromUrl } = useParams();
-  const { activeUnit, activeUnitId, setActiveUnitId, isLoading: unitLoading } = useActiveUnit();
+  const { allUnits, isLoading: unitLoading } = useActiveUnit();
 
   const [sessions, setSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -37,27 +35,46 @@ const TutorSchedule = () => {
   const [declineError, setDeclineError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (unitIdFromUrl && unitIdFromUrl !== activeUnitId) {
-      setActiveUnitId(unitIdFromUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const tutorUnits = useMemo(
+    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    [allUnits]
+  );
 
   useEffect(() => {
-    if (!activeUnit) {
+    if (unitLoading) return;
+
+    if (tutorUnits.length === 0) {
       setIsLoadingSessions(false);
+      setSessions([]);
       return;
     }
-    loadSessions(activeUnit.id);
+    loadSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeUnit]);
+  }, [unitLoading, tutorUnits]);
 
-  const loadSessions = async (unitId) => {
+  const loadSessions = async () => {
     setIsLoadingSessions(true);
     try {
-      const data = await sessionsAPI.getMyAssigned(unitId);
-      setSessions(data);
+      const results = await Promise.all(
+        tutorUnits.map(async (unit) => {
+          const data = await sessionsAPI.getMyAssigned(unit.id);
+          return data.map(session => ({
+            ...session,
+            unitId: unit.id,
+            unitCode: unit.unitCode
+          }));
+        })
+      );
+      const merged = results
+        .flat()
+        .sort((a, b) => {
+          const unitCompare = String(a.unitCode || '').localeCompare(String(b.unitCode || ''));
+          if (unitCompare !== 0) return unitCompare;
+          const dayCompare = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
+          if (dayCompare !== 0) return dayCompare;
+          return String(a.startTime || '').localeCompare(String(b.startTime || ''));
+        });
+      setSessions(merged);
     } catch (err) {
       console.error('Error loading assigned sessions:', err);
     } finally {
@@ -67,8 +84,8 @@ const TutorSchedule = () => {
 
   const handleConfirm = async (session) => {
     try {
-      await sessionsAPI.confirmSession(activeUnit.id, session.id, true, null);
-      await loadSessions(activeUnit.id);
+      await sessionsAPI.confirmSession(session.unitId, session.id, true, null);
+      await loadSessions();
     } catch (err) {
       alert(err.message || 'Failed to confirm session.');
     }
@@ -88,9 +105,9 @@ const TutorSchedule = () => {
     setIsSubmitting(true);
     setDeclineError('');
     try {
-      await sessionsAPI.confirmSession(activeUnit.id, declineTarget.id, false, declineReason.trim());
+      await sessionsAPI.confirmSession(declineTarget.unitId, declineTarget.id, false, declineReason.trim());
       setDeclineTarget(null);
-      await loadSessions(activeUnit.id);
+      await loadSessions();
     } catch (err) {
       setDeclineError(err.message || 'Failed to decline session.');
     } finally {
@@ -101,12 +118,13 @@ const TutorSchedule = () => {
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
 
   const handleExportCsv = () => {
-  const headers = ['Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
+  const headers = ['Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
 
   const rows = sessions.map(session => {
     const status = getStatus(session);
 
     return [
+      session.unitCode || '',
       session.day,
       session.startTime.slice(0, 5),
       session.endTime.slice(0, 5),
@@ -136,7 +154,7 @@ const TutorSchedule = () => {
   link.href = url;
   link.setAttribute(
     'download',
-    `${activeUnit?.unitCode || 'Schedule'}_Schedule.csv`
+    'Tutor_Schedule.csv'
   );
 
   document.body.appendChild(link);
@@ -182,7 +200,7 @@ const TutorSchedule = () => {
               style={{ gridColumn: dayIndex + 2, gridRow: `${rowStart} / ${rowEnd}` }}
             >
               <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-              <div className="ts-grid-block-type">{session.sessionType || 'Session'}</div>
+              <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
               <div className="ts-grid-block-status">{status === 'pending' ? 'Awaiting your response' : status}</div>
             </div>
           );
@@ -209,14 +227,14 @@ const TutorSchedule = () => {
     );
   }
 
-  if (!activeUnit) {
+  if (tutorUnits.length === 0) {
     return (
       <div className="uc-dashboard-container">
         <TutorSidebar activePage="schedule" />
         <main className="uc-main-content">
           <UCPageHeader title="Schedule" />
           <div className="ts-content">
-            <div className="ts-empty-state">No unit selected yet. Once you're linked to a unit, it'll show up here.</div>
+            <div className="ts-empty-state">Once you're linked to a tutor unit, your schedule will show up here.</div>
           </div>
         </main>
       </div>
@@ -258,7 +276,7 @@ const TutorSchedule = () => {
           {isLoadingSessions ? (
             <div className="ts-empty-state">Loading your schedule...</div>
           ) : sessions.length === 0 ? (
-            <div className="ts-empty-state">You haven't been assigned to any sessions in this unit yet.</div>
+            <div className="ts-empty-state">You haven't been assigned to any sessions yet.</div>
           ) : view === 'grid' ? (
             <>
               <div className="ts-grid-legend">
@@ -272,14 +290,16 @@ const TutorSchedule = () => {
             <table className="ts-table">
               <colgroup>
                 <col style={{ width: '10%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '16%' }} />
                 <col style={{ width: '18%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '15%' }} />
-                <col style={{ width: '17%' }} />
-                <col style={{ width: '20%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '18%' }} />
               </colgroup>
               <thead>
                 <tr>
+                  <th>Unit</th>
                   <th>Day</th>
                   <th>Time</th>
                   <th>Location</th>
@@ -293,6 +313,7 @@ const TutorSchedule = () => {
                   const status = getStatus(session);
                   return (
                     <tr key={session.id}>
+                      <td>{session.unitCode || '-'}</td>
                       <td>{session.day}</td>
                       <td>{formatTimeRange(session.startTime, session.endTime)}</td>
                       <td>{session.location || '-'}</td>

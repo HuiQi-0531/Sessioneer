@@ -189,6 +189,13 @@
   font-weight: 500;
   margin-bottom: 24px;
 }
+
+.unit-info-subtitle {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
  
 /* Legend */
 .legend {

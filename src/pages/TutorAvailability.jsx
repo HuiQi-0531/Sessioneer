@@ -15,7 +15,7 @@ const DAY_CODE_TO_NAME = {
 };
 
 const TutorAvailability = () => {
-  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+  const { allUnits, isLoading: unitLoading } = useActiveUnit();
 
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -96,12 +96,24 @@ const TutorAvailability = () => {
     '6:00pm', '7:00pm', '8:00pm', '9:00pm'
   ];
 
+  const tutorUnits = useMemo(
+    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    [allUnits]
+  );
+
   // The window is closed if a coordinator locked it manually, or the
   // deadline (if any) has passed.
-  const isWindowClosed = activeUnit && (
-    activeUnit.availabilityLocked ||
-    (activeUnit.availabilityDeadline && new Date() > new Date(activeUnit.availabilityDeadline))
+  const isUnitWindowClosed = useCallback((unit) => (
+    unit.availabilityLocked ||
+    (unit.availabilityDeadline && new Date() > new Date(unit.availabilityDeadline))
+  ), []);
+
+  const openTutorUnits = useMemo(
+    () => tutorUnits.filter(unit => !isUnitWindowClosed(unit)),
+    [tutorUnits, isUnitWindowClosed]
   );
+
+  const isWindowClosed = tutorUnits.length > 0 && openTutorUnits.length === 0;
 
   const hydrateTutorAvailability = useCallback((data) => {
     const tutorId = currentUser?.id;
@@ -121,14 +133,14 @@ const TutorAvailability = () => {
     return next;
   }, [currentUser?.id]);
 
-  // The saved-availability cache is scoped per tutor and unit, so switching
-  // accounts in the same browser does not show another tutor's selections.
-  const storageKey = activeUnit && currentUser?.id
-    ? `availabilityData_${currentUser.id}_${activeUnit.id}`
+  // Availability is tutor-wide. The same submitted grid is saved into every
+  // tutor unit so each UC still sees the tutor's availability in their unit.
+  const storageKey = currentUser?.id
+    ? `availabilityData_${currentUser.id}_shared`
     : null;
 
   useEffect(() => {
-    if (!storageKey) return;
+    if (!storageKey || tutorUnits.length === 0) return;
 
     const loadSavedAvailability = async () => {
       setSubmitError('');
@@ -145,15 +157,17 @@ const TutorAvailability = () => {
 
       setIsLoadingLatest(true);
       try {
-        const data = await availabilityAPI.get(activeUnit.unitCode);
-        const backendAvailability = hydrateTutorAvailability(data);
-        const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
+        for (const unit of tutorUnits) {
+          const data = await availabilityAPI.get(unit.unitCode);
+          const backendAvailability = hydrateTutorAvailability(data);
+          const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
 
-        if (hasSubmittedAvailability) {
-          setAvailabilityData(backendAvailability);
-          localStorage.setItem(storageKey, JSON.stringify(backendAvailability));
-          setIsEditable(false);
-          return;
+          if (hasSubmittedAvailability) {
+            setAvailabilityData(backendAvailability);
+            localStorage.setItem(storageKey, JSON.stringify(backendAvailability));
+            setIsEditable(false);
+            return;
+          }
         }
       } catch (error) {
         console.error('Could not load saved availability:', error);
@@ -164,7 +178,7 @@ const TutorAvailability = () => {
     };
 
     loadSavedAvailability();
-  }, [activeUnit, storageKey, isWindowClosed, hydrateTutorAvailability]);
+  }, [tutorUnits, storageKey, isWindowClosed, hydrateTutorAvailability]);
 
   // Single tap applies whichever status is currently selected as the
   // "paint color". Tapping a cell that already has that exact status
@@ -236,11 +250,13 @@ const TutorAvailability = () => {
   };
 
   const handleSubmit = async () => {
-    if (!activeUnit || isWindowClosed) return;
+    if (openTutorUnits.length === 0 || isWindowClosed) return;
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      await availabilityAPI.submit(activeUnit.unitCode, availabilityData);
+      await Promise.all(
+        openTutorUnits.map(unit => availabilityAPI.submit(unit.unitCode, availabilityData))
+      );
       localStorage.setItem(storageKey, JSON.stringify(availabilityData));
 
       setIsEditable(false);
@@ -278,14 +294,14 @@ const TutorAvailability = () => {
     );
   }
 
-  if (!activeUnit) {
+  if (tutorUnits.length === 0) {
     return (
       <div className="dashboard-container">
         <TutorSidebar activePage="availability" />
         <main className="main-content">
           <UCPageHeader title="My availability" />
           <div className="content-area">
-            <p>No unit selected. Once you're linked to a unit, it'll show up here.</p>
+            <p>Once you're linked to a tutor unit, your availability will show up here.</p>
           </div>
         </main>
       </div>
@@ -301,7 +317,14 @@ const TutorAvailability = () => {
 
         <div className="content-area">
           <div className="availability-card">
-            <div className="unit-info">My Unit: {activeUnit.unitCode}</div>
+            <div className="unit-info">
+              My availability applies to all my units
+              {tutorUnits.length > 0 && (
+                <span className="unit-info-subtitle">
+                  {tutorUnits.map(unit => unit.unitCode).join(', ')}
+                </span>
+              )}
+            </div>
 
             <div className="legend">
     <div className="legend-item">
@@ -376,9 +399,7 @@ const TutorAvailability = () => {
                 <span className="warning-icon" style={{ color: '#ef4444' }}>!</span>
                 <span>
                   Submissions are closed for this unit
-                  {activeUnit.availabilityDeadline
-                    ? ` (deadline was ${new Date(activeUnit.availabilityDeadline).toLocaleDateString()})`
-                    : ''}. Contact your unit coordinator if you need to make changes.
+                  . Contact your unit coordinator if you need to make changes.
                 </span>
               </div>
             ) : isEditable ? (
@@ -386,8 +407,8 @@ const TutorAvailability = () => {
                 <span className="warning-icon">!</span>
                 <span>
                   Please select your preferred time before the due date!
-                  {activeUnit.availabilityDeadline &&
-                    ` Deadline: ${new Date(activeUnit.availabilityDeadline).toLocaleDateString()}`}
+                  {openTutorUnits.length < tutorUnits.length &&
+                    ` ${tutorUnits.length - openTutorUnits.length} unit${tutorUnits.length - openTutorUnits.length > 1 ? 's are' : ' is'} already closed and will keep the previous submission.`}
                 </span>
               </div>
             ) : (
