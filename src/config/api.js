@@ -787,6 +787,18 @@ export const scheduleAPI = {
     clearSessionsCache(unitId);
     return data;
   }
+,
+
+  unassignTutor: async (unitId, sessionId, tutorId) => {
+    const response = await fetch(`${API_URL}/units/${unitId}/sessions/${sessionId}/assign/${tutorId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to unassign tutor');
+    clearSessionsCache(unitId);
+    return data;
+  }
 };
 
 export const tutorsAPI = {

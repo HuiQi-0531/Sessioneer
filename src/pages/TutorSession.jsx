@@ -20,9 +20,16 @@ const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, 
 });
 
 const getBlockState = (session) => {
-  if (!session.isAssigned) return 'unassigned';
-  if (session.tutorConfirmed === true) return 'confirmed';
-  return 'pending';
+  const tutors = session.tutors || [];
+  if (tutors.length === 0) return 'unassigned';
+  const anyConfirmed = tutors.some(t => t.confirmed === true);
+  return anyConfirmed ? 'confirmed' : 'pending';
+};
+
+const getTutorDisplayLines = (session) => {
+  const tutors = session.tutors || [];
+  if (tutors.length === 0) return ['Unassigned'];
+  return tutors.map(t => t.confirmed === true ? t.tutorName : `${t.tutorName} (pending)`);
 };
 
 const timeToMinutes = (timeStr) => {
@@ -276,8 +283,9 @@ const TutorSession = () => {
                             {session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}
                           </div>
                           <div className="sb-grid-block-tutor">
-                            {state === 'unassigned' ? 'Unassigned' : `${session.assignedTutorName}${state === 'pending' ? ' (pending)' : ''}`}
-                          </div>
+                            {getTutorDisplayLines(session).map((line, i) => (
+                              <div key={i}>{line}</div>
+                            ))}                          </div>
                         </div>
                       );
                     })}

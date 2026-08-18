@@ -22,9 +22,16 @@ const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, 
 });
 
 const getSessionState = (session) => {
-  if (!session.isAssigned) return 'unassigned';
-  if (session.tutorConfirmed === true) return 'confirmed';
-  return 'pending';
+  const tutors = session.tutors || [];
+  if (tutors.length === 0) return 'unassigned';
+  const anyConfirmed = tutors.some(t => t.confirmed === true);
+  return anyConfirmed ? 'confirmed' : 'pending';
+};
+
+const getTutorDisplayLines = (session) => {
+  const tutors = session.tutors || [];
+  if (tutors.length === 0) return ['Unassigned'];
+  return tutors.map(t => t.confirmed === true ? t.tutorName : `${t.tutorName} (pending)`);
 };
 
 const ScheduleBuilder = () => {
@@ -115,12 +122,12 @@ const ScheduleBuilder = () => {
     }
   };
 
-  const handleUnassign = async () => {
+  const handleUnassign = async (tutorId) => {
     if (!modalSession) return;
     setIsAssigning(true);
     setModalError('');
     try {
-      await scheduleAPI.assignTutor(activeUnit.id, modalSession.id, null);
+      await scheduleAPI.unassignTutor(activeUnit.id, modalSession.id, tutorId);
       closeModal();
       await loadSessions(activeUnit.id);
     } catch (err) {
@@ -210,7 +217,9 @@ const ScheduleBuilder = () => {
                   <div className="sb-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
                   <div className="sb-grid-block-type">{session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}</div>
                   <div className="sb-grid-block-tutor">
-                    {state === 'unassigned' ? 'Unassigned' : `${session.assignedTutorName}${state === 'pending' ? ' (pending)' : ''}`}
+                    {getTutorDisplayLines(session).map((line, i) => (
+                      <div key={i}>{line}</div>
+                    ))}
                   </div>
                 </button>
               );
@@ -230,11 +239,14 @@ const ScheduleBuilder = () => {
     const header = ['Day', 'Start Time', 'End Time', 'Location', 'Campus', 'Type', 'Capacity', 'Status', 'Assigned Tutor', 'Confirmation'];
     const rows = sessions.map(s => {
       const state = getSessionState(s);
-      const confirmation = state === 'confirmed' ? 'Confirmed' : state === 'pending' ? 'Awaiting tutor confirmation' : 'Unassigned';
-      return [
+      const tutors = s.tutors || [];
+      const tutorNames = tutors.map(t => t.tutorName).join('; ');
+      const confirmation = tutors.length === 0
+        ? 'Unassigned'
+        : tutors.map(t => `${t.tutorName}: ${t.confirmed === true ? 'Confirmed' : 'Awaiting confirmation'}`).join('; ');      return [
         s.day, s.startTime.slice(0, 5), s.endTime.slice(0, 5),
         s.location || '', s.campus || '', s.sessionType || '',
-        s.capacity ?? '', s.status || '', s.assignedTutorName || '', confirmation
+        s.capacity ?? '', s.status || '', tutorNames, confirmation
       ];
     });
 
@@ -504,8 +516,11 @@ const ScheduleBuilder = () => {
                              )}
                            </td>
                            <td>
-                             <span className="sb-assigned-pill">{session.assignedTutorName}</span>
-                            </td>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                               {(session.tutors || []).map(t => (
+                                 <span key={t.tutorId} className="sb-assigned-pill">{t.tutorName}</span>
+                               ))}
+                             </div>                            </td>
                             <td>
                              {!isLocked && (
                                <button className="sb-change-link" onClick={() => openAssignModal(session)}>
@@ -607,11 +622,11 @@ const ScheduleBuilder = () => {
               <div className="sb-loading">Loading tutors...</div>
             ) : (
               candidates.map((candidate, index) => {
-                const isTopPick = index === 0 && !candidate.hardBlocked;
+                const isTopPick = index === 0 && !candidate.hardBlocked && !candidate.isAssignedToThisSession;
                 return (
                   <div
                     key={candidate.id}
-                    className={`sb-candidate-row ${candidate.hardBlocked ? 'blocked' : ''} ${isTopPick ? 'top-pick' : ''}`}
+                    className={`sb-candidate-row ${candidate.hardBlocked ? 'blocked' : ''} ${isTopPick ? 'top-pick' : ''} ${candidate.isAssignedToThisSession ? 'top-pick' : ''}`}
                   >
                     <div className="sb-candidate-info">
                       <div className="sb-candidate-name">
@@ -638,20 +653,33 @@ const ScheduleBuilder = () => {
                     </div>
                     <button
                       className="sb-candidate-btn"
-                      disabled={candidate.hardBlocked || isAssigning}
+                      disabled={candidate.hardBlocked || isAssigning || candidate.isAssignedToThisSession}
                       onClick={() => handleAssign(candidate.id)}
                     >
-                      {modalSession.assignedTutorId === candidate.id ? 'Assigned' : 'Assign'}
+                      {candidate.isAssignedToThisSession ? 'Assigned' : 'Assign'}
                     </button>
                   </div>
                 );
               })
             )}
 
-            {modalSession.isAssigned && (
-              <button className="sb-unassign-btn" onClick={handleUnassign} disabled={isAssigning}>
-                Remove current assignment
-              </button>
+              {modalSession.tutors && modalSession.tutors.length > 0 && (
+              <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+                <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>Currently assigned:</p>
+                {modalSession.tutors.map(t => (
+                  <div key={t.tutorId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span>{t.tutorName}</span>
+                    <button
+                      className="sb-unassign-btn"
+                      onClick={() => handleUnassign(t.tutorId)}
+                      disabled={isAssigning}
+                      style={{ fontSize: 13, padding: '4px 10px' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

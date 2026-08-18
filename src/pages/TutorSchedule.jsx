@@ -24,8 +24,33 @@ const getStatus = (session) => {
   return 'pending';
 };
 
+const getCurrentUserId = () => {
+  try {
+    const saved = localStorage.getItem('currentUser');
+    const user = saved ? JSON.parse(saved) : null;
+    return user?.id || null;
+  } catch {
+    return null;
+  }
+};
+
+const getMyTutorEntry = (session, myId) => {
+  const tutors = session.tutors || [];
+  return tutors.find(t => t.tutorId === myId) || null;
+};
+
+const getMyStatus = (session, myId) => {
+  const mine = getMyTutorEntry(session, myId);
+  if (!mine) return getStatus(session); // fallback to legacy behaviour if tutors[] is missing
+  if (mine.confirmed === true) return 'confirmed';
+  if (mine.confirmed === false) return 'declined';
+  return 'pending';
+};
+
 const TutorSchedule = () => {
   const { allUnits, isLoading: unitLoading } = useActiveUnit();
+
+  const myId = useMemo(() => getCurrentUserId(), []);
 
   const [sessions, setSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -124,7 +149,7 @@ const TutorSchedule = () => {
   const headers = ['Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
 
   const rows = sessions.map(session => {
-    const status = getStatus(session);
+    const status = getMyStatus(session, myId);
 
     return [
       session.unitCode || '',
@@ -197,24 +222,59 @@ const handleExportPng = async () => {
           <div key={label} className="ts-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
         ))}
 
-        {gridSessions.map(session => {
-          const dayIndex = DAYS.indexOf(session.day);
-          const startHour = hourFromTime(session.startTime);
-          const endHour = hourFromTime(session.endTime);
-          const rowStart = (startHour - GRID_START_HOUR) + 2;
-          const rowEnd = (endHour - GRID_START_HOUR) + 2;
-          const status = getStatus(session);
+        {DAYS.map(day => {
+          const dayIndex = DAYS.indexOf(day);
+          const dayGroups = [];
+          const daySessions = gridSessions
+            .filter(s => s.day === day)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-          return (
-            <div
-              key={session.id}
-              className={`ts-grid-block ${status}`}
-              style={{ gridColumn: dayIndex + 2, gridRow: `${rowStart} / ${rowEnd}` }}
-            >
-              <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-              <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
-              <div className="ts-grid-block-status">{status === 'pending' ? 'Awaiting your response' : status}</div>
-            </div>
+          daySessions.forEach(session => {
+            const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
+            const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
+            let placed = false;
+            for (const group of dayGroups) {
+              if (group.some(s => {
+                const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
+                const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
+                return startMin < sEnd && endMin > sStart;
+              })) {
+                group.push(session);
+                placed = true;
+                break;
+              }
+            }
+            if (!placed) dayGroups.push([session]);
+          });
+
+          return dayGroups.flatMap(group =>
+            group.map((session, colIdx) => {
+              const startHour = hourFromTime(session.startTime);
+              const endHour = hourFromTime(session.endTime);
+              const rowStart = (startHour - GRID_START_HOUR) + 2;
+              const rowEnd = (endHour - GRID_START_HOUR) + 2;
+              const status = getMyStatus(session, myId);
+              const colCount = group.length;
+              const widthPct = 100 / colCount;
+
+              return (
+                <div
+                  key={session.id}
+                  className={`ts-grid-block ${status}`}
+                  style={{
+                    gridColumn: dayIndex + 2,
+                    gridRow: `${rowStart} / ${rowEnd}`,
+                    justifySelf: 'start',
+                    width: `${widthPct}%`,
+                    marginLeft: `${widthPct * colIdx}%`
+                  }}
+                >
+                  <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                  <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
+                  <div className="ts-grid-block-status">{status === 'pending' ? 'Awaiting your response' : status}</div>
+                </div>
+              );
+            })
           );
         })}
       </div>
@@ -345,7 +405,7 @@ const handleExportPng = async () => {
               </thead>
               <tbody>
                 {sessions.map(session => {
-                  const status = getStatus(session);
+                  const status = getMyStatus(session, myId);
                   return (
                     <tr key={session.id}>
                       <td>{session.unitCode || '-'}</td>
@@ -358,8 +418,7 @@ const handleExportPng = async () => {
                           {status === 'pending' ? 'Awaiting response' : status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                         {status === 'declined' && session.tutorRejectReason && (
-                          <div className="ts-reject-reason">"{session.tutorRejectReason}"</div>
-                        )}
+                          <div className="ts-reject-reason">"{getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason}"</div>                        )}
                       </td>
                       <td>
                         {status === 'pending' && (
