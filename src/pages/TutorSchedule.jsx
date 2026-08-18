@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../config/api';
+import html2canvas from 'html2canvas';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -34,6 +35,8 @@ const TutorSchedule = () => {
   const [declineReason, setDeclineReason] = useState('');
   const [declineError, setDeclineError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const gridRef = React.useRef(null);
 
   const tutorUnits = useMemo(
     () => allUnits.filter(unit => unit.roles?.includes('tutor')),
@@ -164,6 +167,15 @@ const TutorSchedule = () => {
   window.URL.revokeObjectURL(url);
 };
 
+const handleExportPng = async () => {
+    if (!gridRef.current) return;
+    const canvas = await html2canvas(gridRef.current, { backgroundColor: '#ffffff', scale: 2 });
+    const link = document.createElement('a');
+    link.download = 'Tutor_Schedule.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    setShowExportMenu(false);
+  };
 
   const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
   const gridSessions = sessions.filter(s =>
@@ -174,7 +186,7 @@ const TutorSchedule = () => {
   const hiddenFromGridCount = sessions.length - gridSessions.length;
 
   const renderGrid = () => (
-    <div className="ts-grid-wrapper">
+    <div className="ts-grid-wrapper" ref={gridRef}>
       <div className="ts-grid" style={{ gridTemplateRows: `auto repeat(${HOUR_LABELS.length}, 44px)` }}>
         <div className="ts-grid-corner" />
         {DAYS.map(day => (
@@ -264,13 +276,36 @@ const TutorSchedule = () => {
     Grid View
   </button>
 
-  <button
-    className="ts-toggle-btn"
-    onClick={handleExportCsv}
-    disabled={sessions.length === 0}
-  >
-    Export CSV
-  </button>
+<div style={{ position: 'relative', display: 'inline-block' }}>
+    <button
+      className="ts-toggle-btn"
+      onClick={() => setShowExportMenu(prev => !prev)}
+      disabled={sessions.length === 0}
+    >
+      Export ▾
+    </button>
+    {showExportMenu && (
+      <div style={{
+        position: 'absolute', top: '100%', left: 0, marginTop: 4,
+        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', minWidth: 160, zIndex: 10
+      }}>
+        <button
+          onClick={() => { handleExportCsv(); setShowExportMenu(false); }}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', background: 'none', cursor: 'pointer' }}
+        >
+          Export as CSV
+        </button>
+        <button
+          onClick={handleExportPng}
+          disabled={view !== 'grid'}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', background: 'none', cursor: view !== 'grid' ? 'not-allowed' : 'pointer', opacity: view !== 'grid' ? 0.5 : 1 }}
+        >
+          Export as PNG {view !== 'grid' && '(switch to Grid View)'}
+        </button>
+      </div>
+    )}
+  </div>
 </div>
 
           {isLoadingSessions ? (
