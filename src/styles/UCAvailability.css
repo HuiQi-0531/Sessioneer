@@ -296,15 +296,6 @@
   overflow: auto;
 }
 
-.uca-card--status {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  max-height: 165px;
-  overflow: hidden;
-}
-
 /* ── Controls Row (Day tabs + Legend + Toolbar) ── */
 .uca-controls-row {
   display: flex;
@@ -497,12 +488,6 @@
   flex-direction: column;
 }
 
-/* When search has narrowed the columns, don't stretch the bordered
-   box's WIDTH to the card's full width — hug the compact table instead.
-   Height still grows to fill the card (flex:1, inherited), so there's
-   no blank gap below the box. */
-/* (no longer needed — filler column below handles this instead) */
-
 /* ── Grid scroller ── */
 .uca-grid-scroller {
   overflow: auto;
@@ -572,8 +557,8 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  min-width: 130px;
-  width: 130px;
+  min-width: 150px;
+  width: 150px;
 }
 
 .uca-grid__tutor-name {
@@ -645,102 +630,7 @@
   color: var(--uca-avoid-text);
 }
 
-/* ── Submission status ── */
-.uca-status__title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  margin: 0 0 10px;
-  text-align: left;
-  flex-shrink: 0;
-}
-
-.uca-status__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  padding-right: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-/* Scrollbar styling */
-.uca-status__list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.uca-status__list::-webkit-scrollbar-track {
-  background: var(--color-bg-subtle);
-  border-radius: 4px;
-}
-
-.uca-status__list::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
-  border-radius: 4px;
-}
-
-.uca-status__list::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-subtle);
-}
-
-.uca-status__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.uca-status__row:last-child {
-  border-bottom: none;
-}
-
-.uca-status__name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.uca-status__right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* Pill badges */
-.uca-status__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.uca-status__pill--submitted {
-  background: var(--uca-submitted-bg);
-  color: var(--uca-submitted-text);
-}
-
-.uca-status__pill--pending {
-  background: var(--uca-pending-bg);
-  color: var(--uca-pending-text);
-}
-
-/* Bell button */
+/* Bell button — base style (also used, smaller, in tutor header) */
 .uca-bell {
   display: inline-flex;
   align-items: center;
@@ -773,6 +663,19 @@
   border-color: #e2e8f0;
 }
 
+/* Bell button when placed inside the tutor column header — smaller so it
+   sits neatly next to the name without blowing out the header row height */
+.uca-bell--header {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.uca-bell--header svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* ── Empty states ── */
 .uca-empty {
   padding: 60px 24px;
@@ -781,16 +684,13 @@
   font-size: 15px;
 }
 
-.uca-empty--status {
-  padding: 40px 24px;
-}
-
 /* ── Tutor name + icon row ── */
 .uca-grid__tutor-namerow {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .uca-grid__tutor-icon {

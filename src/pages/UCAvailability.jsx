@@ -20,13 +20,7 @@ function FlagIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="#ef4444" stroke="#ef4444" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flexShrink:0}}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
 }
 function BellIcon({ isActive = true }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill={isActive?"#f59e0b":"#adb5bd"} stroke={isActive?"#f59e0b":"#adb5bd"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-}
-function CheckIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>;
-}
-function XIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+  return <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill={isActive?"#f59e0b":"#adb5bd"} stroke={isActive?"#f59e0b":"#adb5bd"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
 }
 function FullscreenIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>;
@@ -147,8 +141,14 @@ export default function UCAvailability({ onSendReminder }) {
     return val ? BADGE_MAP[val] : null;
   };
 
+  // Tutor IDs who HAVE submitted, derived from submissionStatus. Anyone not
+  // in this set (including tutors with no submissionStatus entry at all) is
+  // treated as "not yet submitted" and gets a reminder bell in their header.
+  const submittedIds = useMemo(() => {
+    return new Set(submissionStatus.filter(s => s.submitted).map(s => s.tutorId));
+  }, [submissionStatus]);
+
   // Filter tutors by search query (name match), used for the grid columns only.
-  // Submission status list intentionally still shows everyone.
   // Matches from the START of the full name or the start of any word in the
   // name (so typing "j" matches "Jayden Biden" / "John Wick", not "Charles
   // Oden" or anyone with a "j" buried mid-word).
@@ -284,14 +284,30 @@ export default function UCAvailability({ onSendReminder }) {
                     <thead>
                       <tr>
                         <th className="uca-grid__corner" />
-                        {filteredTutors.map(tutor => (
-                          <th key={tutor.id} className="uca-grid__tutor-header">
-                            <span className="uca-grid__tutor-namerow">
-                              <span className="uca-grid__tutor-name">{tutor.name}</span>
-                              {tutor.icon && <span className="uca-grid__tutor-icon"><TutorIcon type={tutor.icon} /></span>}
-                            </span>
-                          </th>
-                        ))}
+                        {filteredTutors.map(tutor => {
+                          const hasSubmitted  = submittedIds.has(tutor.id);
+                          const reminderSent  = remindersSent.has(tutor.id);
+                          return (
+                            <th key={tutor.id} className="uca-grid__tutor-header">
+                              <span className="uca-grid__tutor-namerow">
+                                <span className="uca-grid__tutor-name">{tutor.name}</span>
+                                {tutor.icon && <span className="uca-grid__tutor-icon"><TutorIcon type={tutor.icon} /></span>}
+                                {!hasSubmitted && (
+                                  <button
+                                    type="button"
+                                    className={`uca-bell uca-bell--header ${reminderSent ? "uca-bell--sent" : ""}`}
+                                    aria-label={reminderSent ? `Reminder sent to ${tutor.name}` : `Send reminder to ${tutor.name}`}
+                                    title={reminderSent ? "Reminder sent" : "Not yet submitted — send reminder"}
+                                    onClick={() => handleReminderClick(tutor.id)}
+                                    disabled={reminderSent}
+                                  >
+                                    <BellIcon isActive={!reminderSent} />
+                                  </button>
+                                )}
+                              </span>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
@@ -312,48 +328,6 @@ export default function UCAvailability({ onSendReminder }) {
                   </table>
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="uca-card uca-card--status">
-            <h3 className="uca-status__title">SUBMISSION STATUS</h3>
-            {isLoadingData ? (
-              <div className="uca-empty uca-empty--status">Loading submission status...</div>
-            ) : loadError ? (
-              <div className="uca-empty uca-empty--status">Submission status is unavailable until availability reloads.</div>
-            ) : submissionStatus.length === 0 ? (
-              <div className="uca-empty uca-empty--status">No submissions yet.</div>
-            ) : (
-              <ul className="uca-status__list">
-                {submissionStatus.map(s => {
-                  const tutor = tutors.find(t => t.id === s.tutorId);
-                  const name  = tutor?.name ?? s.tutorId;
-                  const reminderSent = remindersSent.has(s.tutorId);
-                  return (
-                    <li key={s.tutorId} className="uca-status__row">
-                      <span className="uca-status__name">{name}</span>
-                      <div className="uca-status__right">
-                        {s.submitted ? (
-                          <span className="uca-status__pill uca-status__pill--submitted"><CheckIcon /> Submitted</span>
-                        ) : (
-                          <>
-                            <span className="uca-status__pill uca-status__pill--pending"><XIcon /> Not yet submitted</span>
-                            <button
-                              className={`uca-bell ${reminderSent ? "uca-bell--sent" : ""}`}
-                              aria-label={`Send reminder to ${name}`}
-                              title={reminderSent ? "Reminder sent" : "Send reminder"}
-                              onClick={() => handleReminderClick(s.tutorId)}
-                              disabled={reminderSent}
-                            >
-                              <BellIcon isActive={!reminderSent} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
             )}
           </div>
         </div>
