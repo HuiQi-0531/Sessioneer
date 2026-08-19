@@ -149,10 +149,18 @@ export default function UCAvailability({ onSendReminder }) {
 
   // Filter tutors by search query (name match), used for the grid columns only.
   // Submission status list intentionally still shows everyone.
+  // Matches from the START of the full name or the start of any word in the
+  // name (so typing "j" matches "Jayden Biden" / "John Wick", not "Charles
+  // Oden" or anyone with a "j" buried mid-word).
   const filteredTutors = useMemo(() => {
     if (!searchQuery.trim()) return tutors;
     const q = searchQuery.trim().toLowerCase();
-    return tutors.filter(t => t.name.toLowerCase().includes(q));
+    return tutors.filter(t =>
+      t.name
+        .toLowerCase()
+        .split(/\s+/)
+        .some(word => word.startsWith(q))
+    );
   }, [tutors, searchQuery]);
 
   if (unitLoading) {
