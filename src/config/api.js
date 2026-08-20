@@ -1267,6 +1267,13 @@ export const profileAPI = {
 };
 
 export const tutorApplicationsAPI = {
+  getApplicationUnit: async (unitId) => {
+    const response = await fetch(`${API_URL}/tutor-applications/unit/${unitId}`);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch unit');
+    return result;
+  },
+
   submit: async (data) => {
     const response = await fetch(`${API_URL}/tutor-applications`, {
       method: 'POST',

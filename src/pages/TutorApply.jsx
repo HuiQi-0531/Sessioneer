@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { tutorApplicationsAPI } from '../config/api';
 import '../styles/TutorApply.css';
 
@@ -16,7 +16,8 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 const TutorApply = () => {
   const unitId = new URLSearchParams(window.location.search).get('unitId');
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phoneNumber: '',
     workExperience: '',
@@ -25,8 +26,19 @@ const TutorApply = () => {
   });
   const [resumeFile, setResumeFile] = useState(null);
   const [error, setError] = useState('');
+  const [unitInfo, setUnitInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!unitId) return;
+
+    tutorApplicationsAPI.getApplicationUnit(unitId)
+      .then(setUnitInfo)
+      .catch(() => {
+        setUnitInfo(null);
+      });
+  }, [unitId]);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -51,8 +63,8 @@ const TutorApply = () => {
     e.preventDefault();
     setError('');
 
-    if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Name and email are required.');
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim()) {
+      setError('First name, last name and email are required.');
       return;
     }
 
@@ -65,7 +77,8 @@ const TutorApply = () => {
 
       await tutorApplicationsAPI.submit({
         unitId,
-        name: formData.name.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
         email: formData.email.trim(),
         phoneNumber: formData.phoneNumber.trim(),
         workExperience: formData.workExperience.trim(),
@@ -112,12 +125,27 @@ const TutorApply = () => {
         </div>
 
         <h1>Tutor Application</h1>
-        <p>Interested in tutoring with us? Fill out the form below and we'll be in touch.</p>
+        {unitInfo ? (
+          <div className="ta-unit-banner">
+            <span>Applying for</span>
+            <strong>{unitInfo.unitCode}</strong>
+            <small>{unitInfo.unitName}</small>
+          </div>
+        ) : (
+          <p>Interested in tutoring with us? Fill out the form below and we'll be in touch.</p>
+        )}
 
         <form onSubmit={handleSubmit}>
-          <div className="ta-field">
-            <label>Full name *</label>
-            <input type="text" name="name" value={formData.name} onChange={handleChange} required />
+          <div className="ta-name-grid">
+            <div className="ta-field">
+              <label>First name *</label>
+              <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required />
+            </div>
+
+            <div className="ta-field">
+              <label>Last name *</label>
+              <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required />
+            </div>
           </div>
 
           <div className="ta-field">

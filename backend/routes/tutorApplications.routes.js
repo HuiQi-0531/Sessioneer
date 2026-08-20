@@ -18,6 +18,8 @@ const formatApplication = (a) => ({
   unitId: a.unit_id,
   unitCode: a.unit_code,
   name: a.name,
+  lastName: a.last_name,
+  fullName: [a.name, a.last_name].filter(Boolean).join(' '),
   email: a.email,
   phoneNumber: a.phone_number,
   workExperience: a.work_experience,
@@ -44,13 +46,42 @@ const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
  * The resume is sent as a base64 string in the JSON body rather than a
  * true multipart upload, so no new file-upload dependency is needed.
  */
+router.get('/unit/:unitId', async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const result = await pool.query(
+      'SELECT id, unit_code, unit_name, semester, year FROM units WHERE id = $1',
+      [unitId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    const unit = result.rows[0];
+    res.json({
+      id: unit.id,
+      unitCode: unit.unit_code,
+      unitName: unit.unit_name,
+      semester: unit.semester,
+      year: unit.year
+    });
+  } catch (error) {
+    console.error('Error fetching application unit:', error);
+    res.status(500).json({ error: 'Failed to fetch unit' });
+  }
+});
+
 router.post('/', async (req, res) => {
   try {
-    const { unitId, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const { unitId, firstName, lastName, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const cleanFirstName = (firstName || name || '').trim();
+    const cleanLastName = (lastName || '').trim();
 
-    if (!name || !email) {
-      return res.status(400).json({ error: 'Name and email are required' });
+    if (!cleanFirstName || !email) {
+      return res.status(400).json({ error: 'First name and email are required' });
     }
+
     if (!unitId) {
       return res.status(400).json({ error: 'Application link is missing a unit' });
     }
@@ -65,10 +96,10 @@ router.post('/', async (req, res) => {
     await pool.query(
       `
       INSERT INTO tutor_applications
-        (unit_id, name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+        (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
       `,
-      [unitId, name, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
+      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -204,7 +235,7 @@ router.get('/verify-invite/:token', async (req, res) => {
   try {
     const { token } = req.params;
     const result = await pool.query(
-      `SELECT name, email, status, invite_token_expires_at FROM tutor_applications WHERE invite_token = $1`,
+      `SELECT name, last_name, email, status, invite_token_expires_at FROM tutor_applications WHERE invite_token = $1`,
       [token]
     );
 
@@ -219,7 +250,7 @@ router.get('/verify-invite/:token', async (req, res) => {
       return res.status(410).json({ error: 'This invite link has expired' });
     }
 
-    res.json({ name: app.name, email: app.email });
+    res.json({ name: [app.name, app.last_name].filter(Boolean).join(' '), email: app.email });
   } catch (error) {
     console.error('Error verifying invite:', error);
     res.status(500).json({ error: 'Failed to verify invite' });
@@ -264,7 +295,9 @@ router.post('/accept-invite', async (req, res) => {
     await client.query('BEGIN');
 
     const passwordHash = hashPassword(password);
-    const { firstName, lastName } = splitDisplayName(application.name);
+    const splitName = splitDisplayName(application.name);
+    const firstName = application.name || splitName.firstName;
+    const lastName = application.last_name || splitName.lastName;
     const newUserResult = await client.query(
       `
       INSERT INTO users (name, last_name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)

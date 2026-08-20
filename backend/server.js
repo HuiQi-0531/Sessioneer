@@ -464,6 +464,7 @@ pool.query(`
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255),
     email VARCHAR(255) NOT NULL,
     phone_number VARCHAR(50),
     work_experience TEXT,
@@ -496,6 +497,22 @@ pool.query(`
   END $$;
 `).then(() => {
   console.log('tutor_applications unit link OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_applications' AND column_name = 'last_name'
+    ) THEN
+      ALTER TABLE tutor_applications ADD COLUMN last_name VARCHAR(255);
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('tutor_applications name columns OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });

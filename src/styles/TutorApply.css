@@ -54,6 +54,34 @@
   margin-bottom: 28px;
 }
 
+.ta-unit-banner {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+  padding: 12px 14px;
+  margin: 14px 0 26px;
+}
+
+.ta-unit-banner span,
+.ta-unit-banner small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.ta-unit-banner strong {
+  display: block;
+  color: var(--color-primary);
+  font-size: 18px;
+  margin: 3px 0;
+}
+
+.ta-name-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
 .ta-field {
   margin-bottom: 18px;
 }
@@ -155,4 +183,11 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto 16px auto;
+}
+
+@media (max-width: 560px) {
+  .ta-name-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }

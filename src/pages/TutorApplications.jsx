@@ -57,7 +57,7 @@ const TutorApplications = () => {
     setIsInviting(application.id);
     try {
       const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id);
-      setInviteLinkInfo({ name: result.name, url: buildInviteUrl(result.inviteToken) });
+      setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
       await loadApplications();
     } catch (err) {
       alert(err.message || 'Failed to generate invite link.');
@@ -85,7 +85,7 @@ const TutorApplications = () => {
       const result = await tutorApplicationsAPI.directInvite(directInviteForm.name.trim(), directInviteForm.email.trim(), activeUnit.id);
       setShowDirectInviteModal(false);
       setDirectInviteForm({ name: '', email: '' });
-      setInviteLinkInfo({ name: result.name, url: buildInviteUrl(result.inviteToken) });
+      setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
       await loadApplications();
     } catch (err) {
       setDirectInviteError(err.message || 'Failed to create invite.');
@@ -128,7 +128,7 @@ const TutorApplications = () => {
                 <div key={app.id} className="tap-card">
                   <div className="tap-card-top">
                     <div>
-                      <div className="tap-card-name">{app.name}</div>
+                      <div className="tap-card-name">{app.fullName || app.name}</div>
                       <div className="tap-card-email">{app.email}</div>
                     </div>
                     <span className={`tap-badge ${app.status}`}>{app.status}</span>
