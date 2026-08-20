@@ -14,14 +14,15 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 });
 
 const TutorApply = () => {
-const [formData, setFormData] = useState({
+  const unitId = new URLSearchParams(window.location.search).get('unitId');
+  const [formData, setFormData] = useState({
     name: '',
     email: '',
     phoneNumber: '',
     workExperience: '',
     maximumHours: '',
     contractType: ''
-});  
+  });
   const [resumeFile, setResumeFile] = useState(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +64,7 @@ const [formData, setFormData] = useState({
       }
 
       await tutorApplicationsAPI.submit({
+        unitId,
         name: formData.name.trim(),
         email: formData.email.trim(),
         phoneNumber: formData.phoneNumber.trim(),

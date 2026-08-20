@@ -85,10 +85,16 @@ const clearTutorsCache = (unitId) => {
 };
 
 const APPLICATIONS_CACHE_TTL_MS = 30000;
-let applicationsCache = null;
+const applicationsCache = new Map();
 
-const clearApplicationsCache = () => {
-  applicationsCache = null;
+const getApplicationsCacheKey = (unitId) => String(unitId || '');
+
+const clearApplicationsCache = (unitId) => {
+  if (unitId) {
+    applicationsCache.delete(getApplicationsCacheKey(unitId));
+    return;
+  }
+  applicationsCache.clear();
 };
 
 const MESSAGE_THREAD_CACHE_TTL_MS = 5000;
@@ -1273,42 +1279,46 @@ export const tutorApplicationsAPI = {
     return result;
   },
 
-  getAll: async () => {
+  getAll: async (unitId) => {
     const now = Date.now();
+    const cacheKey = getApplicationsCacheKey(unitId);
+    const cached = applicationsCache.get(cacheKey);
 
-    if (applicationsCache?.data && now - applicationsCache.updatedAt < APPLICATIONS_CACHE_TTL_MS) {
-      return applicationsCache.data;
+    if (cached?.data && now - cached.updatedAt < APPLICATIONS_CACHE_TTL_MS) {
+      return cached.data;
     }
 
-    if (applicationsCache?.promise) {
-      return applicationsCache.promise;
+    if (cached?.promise) {
+      return cached.promise;
     }
 
-    const promise = fetch(`${API_URL}/tutor-applications`, {
+    const params = new URLSearchParams({ unitId });
+    const promise = fetch(`${API_URL}/tutor-applications?${params.toString()}`, {
       headers: authHeader()
     })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to fetch applications');
-        applicationsCache = { data, updatedAt: Date.now() };
+        applicationsCache.set(cacheKey, { data, updatedAt: Date.now() });
         return data;
       })
       .catch((error) => {
-        clearApplicationsCache();
+        clearApplicationsCache(unitId);
         throw error;
       });
 
-    applicationsCache = { promise, updatedAt: now };
+    applicationsCache.set(cacheKey, { promise, updatedAt: now });
     return promise;
   },
 
-  getFresh: async () => {
-    clearApplicationsCache();
-    return tutorApplicationsAPI.getAll();
+  getFresh: async (unitId) => {
+    clearApplicationsCache(unitId);
+    return tutorApplicationsAPI.getAll(unitId);
   },
 
-  prefetch: async () => {
-    return tutorApplicationsAPI.getAll();
+  prefetch: async (unitId) => {
+    if (!unitId) return null;
+    return tutorApplicationsAPI.getAll(unitId);
   },
 
   downloadResume: async (applicationId, filename) => {
@@ -1333,26 +1343,27 @@ export const tutorApplicationsAPI = {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   },
 
-  invite: async (applicationId) => {
+  invite: async (applicationId, unitId) => {
     const response = await fetch(`${API_URL}/tutor-applications/${applicationId}/invite`, {
       method: 'PATCH',
-      headers: authHeader()
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ unitId })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
-    clearApplicationsCache();
+    clearApplicationsCache(unitId);
     return result;
   },
 
-  directInvite: async (name, email) => {
+  directInvite: async (name, email, unitId) => {
     const response = await fetch(`${API_URL}/tutor-applications/direct-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name, email })
+      body: JSON.stringify({ name, email, unitId })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create invite');
-    clearApplicationsCache();
+    clearApplicationsCache(unitId);
     return result;
   },
 

@@ -118,7 +118,7 @@ export const ActiveUnitProvider = ({ children }) => {
     tutorsAPI.prefetch(activeUnit.id).catch(() => {
       // Tutors page will show its own error/loading state if the real page load fails.
     });
-    tutorApplicationsAPI.prefetch().catch(() => {
+    tutorApplicationsAPI.prefetch(activeUnit.id).catch(() => {
       // Tutor Applications page will show its own error/loading state if the real page load fails.
     });
     ucAPI.prefetchRequests().catch(() => {

@@ -15,6 +15,8 @@ const hashPassword = (password) => {
 
 const formatApplication = (a) => ({
   id: a.id,
+  unitId: a.unit_id,
+  unitCode: a.unit_code,
   name: a.name,
   email: a.email,
   phoneNumber: a.phone_number,
@@ -28,6 +30,14 @@ const formatApplication = (a) => ({
   invitedAt: a.invited_at
 });
 
+const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
+  const result = await clientOrPool.query(
+    'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
+    [unitId, coordinatorId]
+  );
+  return result.rows[0]?.id || null;
+};
+
 /**
  * POST /tutor-applications (public, no login required)
  * Body: { name, email, phoneNumber, workExperience, resumeBase64, resumeFilename, resumeMimeType }
@@ -36,10 +46,18 @@ const formatApplication = (a) => ({
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const { unitId, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and email are required' });
+    }
+    if (!unitId) {
+      return res.status(400).json({ error: 'Application link is missing a unit' });
+    }
+
+    const unitResult = await pool.query('SELECT id FROM units WHERE id = $1', [unitId]);
+    if (unitResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
     }
 
     const resumeBuffer = resumeBase64 ? Buffer.from(resumeBase64, 'base64') : null;
@@ -47,10 +65,10 @@ router.post('/', async (req, res) => {
     await pool.query(
       `
       INSERT INTO tutor_applications
-        (name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+        (unit_id, name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
       `,
-      [name, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
+      [unitId, name, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -60,13 +78,25 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /tutor-applications (coordinator only) - list all applications
+// GET /tutor-applications?unitId=... (coordinator only) - list applications for a coordinator-owned unit
 router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
+    const { unitId } = req.query;
+    if (!unitId) {
+      return res.status(400).json({ error: 'Unit is required' });
+    }
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
     const result = await pool.query(
-      `SELECT * FROM tutor_applications ORDER BY
+      `SELECT ta.*, u.unit_code
+       FROM tutor_applications ta
+       LEFT JOIN units u ON u.id = ta.unit_id
+       WHERE ta.unit_id = $1
+       ORDER BY
         CASE status WHEN 'pending' THEN 0 WHEN 'invited' THEN 1 ELSE 2 END,
-        applied_at DESC`
+        applied_at DESC`,
+      [unitId]
     );
     res.json(result.rows.map(formatApplication));
   } catch (error) {
@@ -100,6 +130,13 @@ router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, r
 router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const { unitId } = req.body;
+    if (!unitId) {
+      return res.status(400).json({ error: 'Unit is required' });
+    }
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -108,10 +145,10 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
       UPDATE tutor_applications
       SET status = 'invited', invited_by_id = $1, invited_at = NOW(),
           invite_token = $2, invite_token_expires_at = $3
-      WHERE id = $4
+      WHERE id = $4 AND unit_id = $5
       RETURNING *
       `,
-      [req.user.id, token, expiresAt, id]
+      [req.user.id, token, expiresAt, id, unitId]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
@@ -130,10 +167,15 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
  */
 router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { unitId, name, email } = req.body;
     if (!name || !email) {
       return res.status(400).json({ error: 'Name and email are required' });
     }
+    if (!unitId) {
+      return res.status(400).json({ error: 'Unit is required' });
+    }
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     // TODO: Later, if this email already belongs to an existing user, add a
     // tutor unit membership instead of creating a duplicate invite/account.
@@ -143,11 +185,11 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
     const result = await pool.query(
       `
       INSERT INTO tutor_applications
-        (name, email, status, invited_by_id, invited_at, invite_token, invite_token_expires_at)
-      VALUES ($1, $2, 'invited', $3, NOW(), $4, $5)
+        (unit_id, name, email, status, invited_by_id, invited_at, invite_token, invite_token_expires_at)
+      VALUES ($1, $2, $3, 'invited', $4, NOW(), $5, $6)
       RETURNING *
       `,
-      [name, email, req.user.id, token, expiresAt]
+      [unitId, name, email, req.user.id, token, expiresAt]
     );
 
     res.status(201).json({ ...formatApplication(result.rows[0]), inviteToken: token });
@@ -237,6 +279,17 @@ router.post('/accept-invite', async (req, res) => {
       ]
     );
     const newUserId = newUserResult.rows[0].id;
+
+    if (application.unit_id) {
+      await client.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        VALUES ($1, $2, 'tutor')
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [application.unit_id, newUserId]
+      );
+    }
 
     await client.query(
       `

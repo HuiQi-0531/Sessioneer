@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { tutorApplicationsAPI } from '../config/api';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/UCRequests.css';
 import '../styles/TutorApplications.css';
 
 const TutorApplications = () => {
+  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,26 +20,34 @@ const TutorApplications = () => {
   const [isDirectInviting, setIsDirectInviting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  useEffect(() => {
-    loadApplications();
-  }, []);
+  const loadApplications = useCallback(async () => {
+    if (!activeUnit?.id) {
+      setApplications([]);
+      setIsLoading(false);
+      return;
+    }
 
-  const loadApplications = async () => {
     setIsLoading(true);
     try {
-      const data = await tutorApplicationsAPI.getAll();
+      const data = await tutorApplicationsAPI.getAll(activeUnit.id);
       setApplications(data);
     } catch (err) {
       console.error('Error loading applications:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeUnit?.id]);
+
+  useEffect(() => {
+    if (unitLoading) return;
+    loadApplications();
+  }, [unitLoading, loadApplications]);
 
   const buildInviteUrl = (token) => `${window.location.origin}/activate/${token}`;
 
   const handleCopyApplyLink = () => {
-    const applyUrl = `${window.location.origin}/apply`;
+    if (!activeUnit?.id) return;
+    const applyUrl = `${window.location.origin}/apply?unitId=${encodeURIComponent(activeUnit.id)}`;
     navigator.clipboard.writeText(applyUrl);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
@@ -46,7 +56,7 @@ const TutorApplications = () => {
   const handleInvite = async (application) => {
     setIsInviting(application.id);
     try {
-      const result = await tutorApplicationsAPI.invite(application.id);
+      const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id);
       setInviteLinkInfo({ name: result.name, url: buildInviteUrl(result.inviteToken) });
       await loadApplications();
     } catch (err) {
@@ -72,7 +82,7 @@ const TutorApplications = () => {
     }
     setIsDirectInviting(true);
     try {
-      const result = await tutorApplicationsAPI.directInvite(directInviteForm.name.trim(), directInviteForm.email.trim());
+      const result = await tutorApplicationsAPI.directInvite(directInviteForm.name.trim(), directInviteForm.email.trim(), activeUnit.id);
       setShowDirectInviteModal(false);
       setDirectInviteForm({ name: '', email: '' });
       setInviteLinkInfo({ name: result.name, url: buildInviteUrl(result.inviteToken) });
