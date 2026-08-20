@@ -238,7 +238,6 @@ const ScheduleBuilder = () => {
   const handleExportCsv = () => {
     const header = ['Day', 'Start Time', 'End Time', 'Location', 'Campus', 'Type', 'Capacity', 'Status', 'Assigned Tutor', 'Confirmation'];
     const rows = sessions.map(s => {
-      const state = getSessionState(s);
       const tutors = s.tutors || [];
       const tutorNames = tutors.map(t => t.tutorName).join('; ');
       const confirmation = tutors.length === 0
