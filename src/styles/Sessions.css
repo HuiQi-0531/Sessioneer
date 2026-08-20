@@ -4,9 +4,15 @@
 
 .ss-top-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.ss-top-actions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
 }
 
 .ss-btn {
@@ -230,7 +236,6 @@
   background-color: var(--color-surface);
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
-  margin-right: auto;
 }
 
 .ss-btn-cover:hover {
@@ -241,117 +246,6 @@
   color: var(--color-success);
   font-size: 13px;
   margin-bottom: 16px;
-}
-
-.ss-capacity-card {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-}
-
-.ss-capacity-card.warning {
-  border-color: #f6d58f;
-  background-color: #fffaf0;
-}
-
-.ss-capacity-card.ok {
-  border-color: #bbf7d0;
-  background-color: #f7fef9;
-}
-
-.ss-capacity-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.ss-capacity-header h2 {
-  font-size: 18px;
-  margin: 0 0 4px 0;
-  color: var(--color-text);
-}
-
-.ss-capacity-header p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.ss-capacity-overall,
-.ss-capacity-status {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ss-capacity-overall {
-  padding: 6px 10px;
-}
-
-.ss-capacity-overall.ok,
-.ss-capacity-status.ok {
-  background-color: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.ss-capacity-overall.warning,
-.ss-capacity-status.warning {
-  background-color: var(--color-warning-bg);
-  color: var(--color-warning-hover);
-}
-
-.ss-capacity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.ss-capacity-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background-color: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.ss-capacity-type {
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.ss-capacity-meta {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.ss-capacity-numbers {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-
-.ss-capacity-numbers strong {
-  color: var(--color-text);
-  font-size: 18px;
-}
-
-.ss-capacity-status {
-  padding: 3px 8px;
 }
 
 .ss-unassigned {
