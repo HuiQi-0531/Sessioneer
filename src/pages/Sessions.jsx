@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -177,6 +177,33 @@ const Sessions = () => {
 
   const tutorSessions = sessions.filter(s => s.assignedTutorId === coverTutorId);
   const coverSelectedSessions = tutorSessions.filter(s => coverSelectedIds.has(s.id));
+  const enrolmentSize = Number(activeUnit?.enrolmentSize || 0);
+
+  const capacitySummary = useMemo(() => {
+    if (!enrolmentSize || sessions.length === 0) return [];
+
+    const byType = new Map();
+    sessions
+      .filter(session => (session.status || '').toLowerCase() !== 'cancelled')
+      .forEach(session => {
+        const type = session.sessionType || 'Unspecified';
+        const capacity = Number(session.capacity || 0);
+        const current = byType.get(type) || { type, capacity: 0, sessionCount: 0 };
+        current.capacity += Number.isFinite(capacity) ? capacity : 0;
+        current.sessionCount += 1;
+        byType.set(type, current);
+      });
+
+    return Array.from(byType.values())
+      .map(item => ({
+        ...item,
+        shortage: Math.max(enrolmentSize - item.capacity, 0),
+        isEnough: item.capacity >= enrolmentSize
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+  }, [enrolmentSize, sessions]);
+
+  const hasCapacityShortage = capacitySummary.some(item => !item.isEnough);
 
   const openCoverModal = () => {
     setCoverTutorId('');
@@ -276,6 +303,41 @@ const Sessions = () => {
 
           {coverSuccess && !showCoverModal && (
             <p className="ss-cover-success">{coverSuccess}</p>
+          )}
+
+          {!isLoadingSessions && enrolmentSize > 0 && capacitySummary.length > 0 && (
+            <section className={`ss-capacity-card ${hasCapacityShortage ? 'warning' : 'ok'}`}>
+              <div className="ss-capacity-header">
+                <div>
+                  <h2>Capacity Check</h2>
+                  <p>
+                    Enrolment size: {enrolmentSize}. Session capacity is checked separately for each teaching type in this unit.
+                  </p>
+                </div>
+                <span className={`ss-capacity-overall ${hasCapacityShortage ? 'warning' : 'ok'}`}>
+                  {hasCapacityShortage ? 'Needs review' : 'All good'}
+                </span>
+              </div>
+
+              <div className="ss-capacity-grid">
+                {capacitySummary.map(item => (
+                  <div key={item.type} className="ss-capacity-item">
+                    <div>
+                      <div className="ss-capacity-type">{item.type}</div>
+                      <div className="ss-capacity-meta">
+                        {item.sessionCount} session{item.sessionCount !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <div className="ss-capacity-numbers">
+                      <strong>{item.capacity}</strong> / {enrolmentSize}
+                      <span className={`ss-capacity-status ${item.isEnough ? 'ok' : 'warning'}`}>
+                        {item.isEnough ? 'OK' : `Need ${item.shortage} more`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {showForm && (
