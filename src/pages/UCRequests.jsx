@@ -12,6 +12,21 @@ const labelFromValue = (value) => {
   return parts[1].replace(/\|/g, ' | ');
 };
 
+const normaliseLabel = (value) => {
+  return labelFromValue(value)
+    .replace(/\s*\|\s*/g, '|')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+};
+
+const getSessionComparableLabel = (session) => {
+  const start = session.startTime ? session.startTime.slice(0, 5) : 'TBC';
+  const end = session.endTime ? session.endTime.slice(0, 5) : 'TBC';
+  const room = session.location || 'TBA';
+  return normaliseLabel(`${session.day || 'TBC'} ${start}-${end}|${room}`);
+};
+
 const APPEAL_MARKER = '--- Appeal ---';
 // Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
 // Split that back apart so the UI can show "Reason" and "Appeal" as separate labeled sections.
@@ -88,7 +103,8 @@ const UCRequests = () => {
       day: session.day || 'TBC',
       time: time || 'Time TBC',
       room,
-      value: `${session.day || 'TBC'} ${time || 'Time TBC'} ${room}`
+      value: `${session.day || 'TBC'} ${time || 'Time TBC'} ${room}`,
+      availabilityLabel: session.availabilityLabel || 'Available'
     };
   };
 
@@ -120,8 +136,54 @@ const UCRequests = () => {
 
     setIsLoadingSessions(true);
     try {
-      const sessions = await sessionsAPI.getAll(requestUnitId);
-      setAvailableSessions(sessions.map(formatSessionSuggestion));
+      const [sessions, latestRequests] = await Promise.all([
+        sessionsAPI.getFresh(requestUnitId),
+        ucAPI.getFreshRequests()
+      ]);
+
+      const formattedRequests = latestRequests.map(formatRequest);
+      setPendingRequests(formattedRequests.filter(r => r.status === 'Pending'));
+      setProcessedRequests(formattedRequests.filter(r => r.status !== 'Pending'));
+
+      const currentRequestLabel = normaliseLabel(request.currentSession);
+      const swapOpenSessionLabels = new Set(
+        formattedRequests
+          .filter(r => r.id !== request.id && (r.status || '').toLowerCase() === 'pending')
+          .filter(r => getRequestUnitId(r) === requestUnitId)
+          .map(r => normaliseLabel(r.currentSession))
+          .filter(Boolean)
+      );
+
+      const filteredSessions = sessions
+        .map(session => {
+          const comparableLabel = getSessionComparableLabel(session);
+          const assignedCount = Array.isArray(session.tutors)
+            ? session.tutors.length
+            : (session.assignedTutorId ? 1 : 0);
+          const requiredTutors = Number(session.requiredTutors || 1);
+          const hasSpace = assignedCount < requiredTutors;
+          const isSwapOpen = swapOpenSessionLabels.has(comparableLabel);
+
+          return {
+            ...session,
+            comparableLabel,
+            availabilityLabel: isSwapOpen
+              ? 'Swap/change requested'
+              : hasSpace && assignedCount === 0
+                ? 'Unassigned'
+                : 'Space available'
+          };
+        })
+        .filter(session => session.comparableLabel && session.comparableLabel !== currentRequestLabel)
+        .filter(session => {
+          const assignedCount = Array.isArray(session.tutors)
+            ? session.tutors.length
+            : (session.assignedTutorId ? 1 : 0);
+          const requiredTutors = Number(session.requiredTutors || 1);
+          return assignedCount < requiredTutors || swapOpenSessionLabels.has(session.comparableLabel);
+        });
+
+      setAvailableSessions(filteredSessions.map(formatSessionSuggestion));
     } catch (error) {
       console.error('Error loading unit sessions for suggestion:', error);
       setSessionLoadError('Could not load sessions for this unit.');
@@ -350,7 +412,7 @@ const UCRequests = () => {
           <div className="uc-modal-content" onClick={e => e.stopPropagation()}>
             <button className="uc-modal-close" onClick={() => setShowSuggestModal(false)}>×</button>
             <h2>Suggest Alternative Sessions</h2>
-            <p className="uc-modal-subtitle">Select an available session to suggest to the tutor.</p>
+            <p className="uc-modal-subtitle">Select an unassigned session, a session with space, or a session another tutor has opened for swap/change.</p>
             {isLoadingSessions ? (
               <div className="uc-no-sessions">
                 <h3>Loading sessions...</h3>
@@ -364,7 +426,7 @@ const UCRequests = () => {
             ) : availableSessions.length === 0 ? (
               <div className="uc-no-sessions">
                 <h3>No sessions found</h3>
-                <p>There are no sessions in {selectedRequest?.unitCode || 'this unit'} to suggest.</p>
+                <p>No unassigned, partially available, or swap/change-open sessions were found in {selectedRequest?.unitCode || 'this unit'}.</p>
               </div>
             ) : (
               <div className="uc-sessions-list">
@@ -378,6 +440,7 @@ const UCRequests = () => {
                         <span className="uc-day-badge">{session.day}</span>
                         <span className="uc-time-text">{session.time}</span>
                         <span className="uc-room-text">{session.room}</span>
+                        <span className="uc-session-availability">{session.availabilityLabel}</span>
                       </div>
                       <button className="uc-suggest-btn">Suggest</button>
                     </div>

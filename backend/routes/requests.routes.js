@@ -380,6 +380,7 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
         cr.current_session as "currentSession",
         cr.preferred_swap_to as "preferredSwapTo",
         cr.priority,
+        cr.unit_id as "unitId",
         TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as "tutorName",
         un.unit_code as "unitCode"
       FROM change_requests cr

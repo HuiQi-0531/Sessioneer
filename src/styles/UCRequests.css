@@ -460,6 +460,14 @@
 
 .uc-time-text { font-size: 14px; color: var(--color-text); }
 .uc-room-text { font-size: 14px; color: var(--color-text-muted); }
+.uc-session-availability {
+  background-color: #e8f5e9;
+  color: #166534;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
 
 .uc-suggest-btn {
   padding: 8px 16px;
