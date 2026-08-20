@@ -38,6 +38,34 @@ const ensureUnitMembership = async (clientOrPool, unitId, userId, role) => {
   );
 };
 
+const normaliseUnitCode = (unitCode) => String(unitCode || '').trim().toUpperCase();
+
+const findDuplicateUnit = async ({ coordinatorId, unitCode, semester, year, excludeUnitId = null }) => {
+  const params = [coordinatorId, normaliseUnitCode(unitCode), semester, year];
+  let excludeClause = '';
+
+  if (excludeUnitId) {
+    params.push(excludeUnitId);
+    excludeClause = 'AND id != $5';
+  }
+
+  const result = await pool.query(
+    `
+    SELECT id
+    FROM units
+    WHERE unit_coordinator_id = $1
+      AND UPPER(TRIM(unit_code)) = $2
+      AND semester = $3
+      AND year = $4
+      ${excludeClause}
+    LIMIT 1
+    `,
+    params
+  );
+
+  return result.rows[0] || null;
+};
+
 /**
  * GET /units/my-units (tutor only)
  * Every unit this tutor is connected to (submitted availability for,
@@ -179,6 +207,20 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       });
     }
 
+    const normalizedUnitCode = normaliseUnitCode(unitCode);
+    const duplicateUnit = await findDuplicateUnit({
+      coordinatorId: req.user.id,
+      unitCode: normalizedUnitCode,
+      semester,
+      year
+    });
+
+    if (duplicateUnit) {
+      return res.status(409).json({
+        error: `${normalizedUnitCode} already exists for ${semester}, ${year}. Please use a different unit code or semester.`
+      });
+    }
+
     const result = await pool.query(
       `
       INSERT INTO units
@@ -190,7 +232,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [
-        req.user.id, unitCode, unitName, semester, year,
+        req.user.id, normalizedUnitCode, unitName, semester, year,
         campus || null, deliveryMode, enrolmentSize || null,
         availabilityDeadline || null
       ]
@@ -214,6 +256,33 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
       campus, deliveryMode, enrolmentSize, availabilityDeadline
     } = req.body;
 
+    const existingResult = await pool.query(
+      'SELECT unit_code, semester, year FROM units WHERE id = $1 AND unit_coordinator_id = $2',
+      [id, req.user.id]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    const existingUnit = existingResult.rows[0];
+    const nextUnitCode = unitCode ? normaliseUnitCode(unitCode) : existingUnit.unit_code;
+    const nextSemester = semester || existingUnit.semester;
+    const nextYear = year || existingUnit.year;
+    const duplicateUnit = await findDuplicateUnit({
+      coordinatorId: req.user.id,
+      unitCode: nextUnitCode,
+      semester: nextSemester,
+      year: nextYear,
+      excludeUnitId: id
+    });
+
+    if (duplicateUnit) {
+      return res.status(409).json({
+        error: `${nextUnitCode} already exists for ${nextSemester}, ${nextYear}. Please use a different unit code or semester.`
+      });
+    }
+
     const result = await pool.query(
       `
       UPDATE units
@@ -232,15 +301,11 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [
-        unitCode, unitName, semester, year, campus,
+        nextUnitCode, unitName, semester, year, campus,
         deliveryMode, enrolmentSize, availabilityDeadline,
         id, req.user.id
       ]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Unit not found' });
-    }
 
     res.json(formatUnit(result.rows[0]));
   } catch (error) {
