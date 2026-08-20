@@ -28,11 +28,10 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
         u.maximum_hours, u.contract_type,
         m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
+      JOIN unit_memberships um
+        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
       LEFT JOIN tutor_unit_markers m
         ON m.tutor_id = u.id AND m.unit_id = $1
-      LEFT JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
-      WHERE u.role = 'tutor' OR um.id IS NOT NULL
       ORDER BY name
       `,
       [unitId]

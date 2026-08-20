@@ -384,10 +384,9 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       `
       SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
       FROM users u
-      LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
-      LEFT JOIN unit_memberships um
+      JOIN unit_memberships um
         ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
-      WHERE u.role = 'tutor' OR um.id IS NOT NULL
+      LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name
       `,
       [unitId]
