@@ -75,27 +75,58 @@ router.get('/', verifyToken, async (req, res) => {
     const tutorParams = isCoordinatorOwner ? [unit_id] : [req.user.id, unit_id];
     const tutorWhere = isCoordinatorOwner ? '' : 'AND u.id = $1';
     const membershipUnitParam = isCoordinatorOwner ? '$1' : '$2';
-    const availabilityParams = isCoordinatorOwner ? [unit_id] : [unit_id, req.user.id];
-    const availabilityTutorWhere = isCoordinatorOwner ? '' : 'AND tutor_id = $2';
+    const availabilityScope = isCoordinatorOwner
+      ? `tutor_id IN (
+          SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role = 'tutor'
+        )`
+      : 'tutor_id = $1';
+    const availabilityParams = isCoordinatorOwner ? [unit_id] : [req.user.id];
 
     const [tutorResult, submittedResult, availResult] = await Promise.all([
       pool.query(
         `
         SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name
         FROM users u
-        LEFT JOIN unit_memberships um
+        JOIN unit_memberships um
           ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
-        WHERE (u.role = 'tutor' OR um.id IS NOT NULL) ${tutorWhere}
+        WHERE 1 = 1 ${tutorWhere}
         ORDER BY name
         `,
         tutorParams
       ),
       pool.query(
-        `SELECT DISTINCT tutor_id FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+        `
+        SELECT DISTINCT tutor_id
+        FROM availability
+        WHERE is_submitted = TRUE AND ${availabilityScope}
+        `,
         availabilityParams
       ),
       pool.query(
-        `SELECT tutor_id, day, start_time, preference FROM availability WHERE unit_id = $1 AND is_submitted = TRUE ${availabilityTutorWhere}`,
+        `
+        WITH latest_submission AS (
+          SELECT tutor_id, submitted_at
+          FROM (
+            SELECT
+              tutor_id,
+              submitted_at,
+              DENSE_RANK() OVER (
+                PARTITION BY tutor_id
+                ORDER BY submitted_at DESC NULLS LAST
+              ) AS submission_rank
+            FROM availability
+            WHERE is_submitted = TRUE AND ${availabilityScope}
+          ) ranked
+          WHERE submission_rank = 1
+        )
+        SELECT a.tutor_id, a.day, a.start_time, a.preference
+        FROM availability a
+        JOIN latest_submission latest
+          ON latest.tutor_id = a.tutor_id
+         AND latest.submitted_at IS NOT DISTINCT FROM a.submitted_at
+        WHERE a.is_submitted = TRUE
+        ORDER BY a.tutor_id, a.day, a.start_time
+        `,
         availabilityParams
       ),
     ]);
