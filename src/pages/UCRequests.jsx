@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ucAPI } from '../config/api';
+import { sessionsAPI, ucAPI } from '../config/api';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
@@ -32,15 +32,12 @@ const UCRequests = () => {
 
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedSession, setSelectedSession] = useState('');
+  const [availableSessions, setAvailableSessions] = useState([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [sessionLoadError, setSessionLoadError] = useState('');
 
   const [pendingRequests, setPendingRequests] = useState([]);
   const [processedRequests, setProcessedRequests] = useState([]);
-
-  const availableSessions = [
-    { day: 'TUE', time: '12:00pm - 2:00pm', room: 'S303' },
-    { day: 'THU', time: '3:00pm - 5:00pm', room: 'S302' },
-    { day: 'FRI', time: '2:00pm - 4:00pm', room: 'P413' }
-  ];
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRequests(); }, []);
@@ -80,7 +77,42 @@ const UCRequests = () => {
 
   const handleApprove = (request) => { setSelectedRequest(request); setShowApproveModal(true); };
   const handleReject  = (request) => { setSelectedRequest(request); setShowRejectModal(true); };
-  const handleSuggest = (request) => { setSelectedRequest(request); setShowSuggestModal(true); };
+
+  const formatSessionSuggestion = (session) => {
+    const time = [session.startTime, session.endTime].filter(Boolean).join(' - ');
+    const room = session.location || session.campus || 'Location TBC';
+    return {
+      id: session.id,
+      day: session.day || 'TBC',
+      time: time || 'Time TBC',
+      room,
+      value: `${session.day || 'TBC'} ${time || 'Time TBC'} ${room}`
+    };
+  };
+
+  const handleSuggest = async (request) => {
+    setSelectedRequest(request);
+    setSelectedSession('');
+    setAvailableSessions([]);
+    setSessionLoadError('');
+    setShowSuggestModal(true);
+
+    if (!request.unitId) {
+      setSessionLoadError('This request is missing unit information.');
+      return;
+    }
+
+    setIsLoadingSessions(true);
+    try {
+      const sessions = await sessionsAPI.getAll(request.unitId);
+      setAvailableSessions(sessions.map(formatSessionSuggestion));
+    } catch (error) {
+      console.error('Error loading unit sessions for suggestion:', error);
+      setSessionLoadError('Could not load sessions for this unit.');
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
 
   const confirmApprove = async () => {
     if (!selectedRequest) return;
@@ -116,6 +148,7 @@ const UCRequests = () => {
       setShowSuggestConfirmModal(false);
       setSelectedRequest(null);
       setSelectedSession('');
+      setAvailableSessions([]);
     } catch (error) { console.error('Error suggesting session:', error); }
   };
 
@@ -302,17 +335,27 @@ const UCRequests = () => {
             <button className="uc-modal-close" onClick={() => setShowSuggestModal(false)}>×</button>
             <h2>Suggest Alternative Sessions</h2>
             <p className="uc-modal-subtitle">Select an available session to suggest to the tutor.</p>
-            {availableSessions.length === 0 ? (
+            {isLoadingSessions ? (
               <div className="uc-no-sessions">
-                <h3>All sessions have been assigned</h3>
-                <p>There are no available sessions to suggest at this time.</p>
+                <h3>Loading sessions...</h3>
+                <p>Finding sessions for {selectedRequest?.unitCode || 'this unit'}.</p>
+              </div>
+            ) : sessionLoadError ? (
+              <div className="uc-no-sessions">
+                <h3>Could not load sessions</h3>
+                <p>{sessionLoadError}</p>
+              </div>
+            ) : availableSessions.length === 0 ? (
+              <div className="uc-no-sessions">
+                <h3>No sessions found</h3>
+                <p>There are no sessions in {selectedRequest?.unitCode || 'this unit'} to suggest.</p>
               </div>
             ) : (
               <div className="uc-sessions-list">
                 {availableSessions.map((session, index) => {
-                  const sessionValue = `${session.day} ${session.time} ${session.room}`;
+                  const sessionValue = session.value;
                   return (
-                    <div key={index}
+                    <div key={session.id || index}
                       className={`uc-session-option ${selectedSession === sessionValue ? 'selected' : ''}`}
                       onClick={() => setSelectedSession(sessionValue)}>
                       <div className="uc-session-info-row">
