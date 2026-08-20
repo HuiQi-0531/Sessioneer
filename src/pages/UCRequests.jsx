@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { sessionsAPI, ucAPI } from '../config/api';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/UCRequests.css';
 
 const labelFromValue = (value) => {
@@ -25,6 +26,7 @@ const splitReasonAndAppeal = (reasonText) => {
 };
 
 const UCRequests = () => {
+  const { allUnits } = useActiveUnit();
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
@@ -90,6 +92,19 @@ const UCRequests = () => {
     };
   };
 
+  const getRequestUnitId = (request) => {
+    if (request.unitId) return request.unitId;
+
+    const requestUnitCode = String(request.unitCode || '').trim().toUpperCase();
+    if (!requestUnitCode) return null;
+
+    const matchedUnit = allUnits.find((unit) => {
+      return String(unit.unitCode || '').trim().toUpperCase() === requestUnitCode;
+    });
+
+    return matchedUnit?.id || null;
+  };
+
   const handleSuggest = async (request) => {
     setSelectedRequest(request);
     setSelectedSession('');
@@ -97,14 +112,15 @@ const UCRequests = () => {
     setSessionLoadError('');
     setShowSuggestModal(true);
 
-    if (!request.unitId) {
+    const requestUnitId = getRequestUnitId(request);
+    if (!requestUnitId) {
       setSessionLoadError('This request is missing unit information.');
       return;
     }
 
     setIsLoadingSessions(true);
     try {
-      const sessions = await sessionsAPI.getAll(request.unitId);
+      const sessions = await sessionsAPI.getAll(requestUnitId);
       setAvailableSessions(sessions.map(formatSessionSuggestion));
     } catch (error) {
       console.error('Error loading unit sessions for suggestion:', error);
