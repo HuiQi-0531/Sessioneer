@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -34,6 +34,10 @@ const Sessions = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [tutorSortDirection, setTutorSortDirection] = useState(null);
+  const [showTutorSortMenu, setShowTutorSortMenu] = useState(false);
+  const [tutorSortMenuPos, setTutorSortMenuPos] = useState({ top: 0, left: 0 });
+  const tutorSortButtonRef = useRef(null);  
 
   // Cover-request broadcast: instead of ticking rows in the main table, the
   // UC opens a small modal, picks WHICH tutor can't make it, then ticks
@@ -63,6 +67,20 @@ const Sessions = () => {
     loadSessions(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
+
+  const tutorSortMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showTutorSortMenu) return;
+
+    const handleClickOutside = (event) => {
+      if (tutorSortMenuRef.current && !tutorSortMenuRef.current.contains(event.target)) {
+        setShowTutorSortMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showTutorSortMenu]);
 
   const loadSessions = async (unitId) => {
     setIsLoadingSessions(true);
@@ -184,6 +202,28 @@ const Sessions = () => {
     const shorten = (t) => t.slice(0, 5);
     return `${shorten(start)} - ${shorten(end)}`;
   };
+
+  const applyTutorSort = (direction) => {
+    setTutorSortDirection(direction);
+    setShowTutorSortMenu(false);
+  };
+
+const displayedSessions = React.useMemo(() => {
+  if (!tutorSortDirection) return sessions;
+
+  return [...sessions].sort((a, b) => {
+    const nameA = a.assignedTutorName || '';
+    const nameB = b.assignedTutorName || '';
+
+    if (!nameA && !nameB) return 0;
+    if (!nameA) return 1;
+    if (!nameB) return -1;
+
+    return tutorSortDirection === 'asc'
+      ? nameA.localeCompare(nameB)
+      : nameB.localeCompare(nameA);
+  });
+}, [sessions, tutorSortDirection]);
 
   // Every tutor who currently has at least one session, for the "who's out" dropdown.
   const tutorsWithSessions = Array.from(
@@ -416,13 +456,118 @@ const Sessions = () => {
                   <th>Campus</th>
                   <th>Type</th>
                   <th>Capacity</th>
-                  <th>Tutor</th>
+                  <th ref={tutorSortMenuRef} style={{ position: 'relative' }}>
+                    <span>Tutor</span>
+                    <button
+                      type="button"
+                      ref={tutorSortButtonRef}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!showTutorSortMenu && tutorSortButtonRef.current) {
+                          const rect = tutorSortButtonRef.current.getBoundingClientRect();
+                          setTutorSortMenuPos({ top: rect.bottom + 4, left: rect.left });
+                        }
+                        setShowTutorSortMenu(prev => !prev);
+                      }}
+                      style={{
+                        marginLeft: 6,
+                        border: '1px solid #ccc',
+                        borderRadius: 4,
+                        background: '#fff',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        padding: '2px 6px',
+                        color: tutorSortDirection ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                        verticalAlign: 'middle',
+                      }}
+                      aria-label="Sort by tutor"
+                    >
+                      ▾
+                    </button>
+
+                    {showTutorSortMenu && (
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: tutorSortMenuPos.top,
+                        left: tutorSortMenuPos.left,
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: 6,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        padding: 6,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        zIndex: 9999,
+                        minWidth: 130,
+                        textAlign: 'left',
+                      }}
+                    >
+                      >
+                        <button
+                          type="button"
+                          onClick={() => applyTutorSort('asc')}
+                          style={{
+                            border: 'none',
+                            background: tutorSortDirection === 'asc' ? '#f0edff' : 'none',
+                            textAlign: 'left',
+                            padding: '6px 10px',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            textTransform: 'none',
+                            color: '#333',
+                          }}
+                        >
+                          Ascending (A-Z)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTutorSort('desc')}
+                          style={{
+                            border: 'none',
+                            background: tutorSortDirection === 'desc' ? '#f0edff' : 'none',
+                            textAlign: 'left',
+                            padding: '6px 10px',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            textTransform: 'none',
+                            color: '#333',
+                          }}
+                        >
+                          Descending (Z-A)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTutorSort(null)}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            textAlign: 'left',
+                            padding: '6px 10px',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            textTransform: 'none',
+                            color: '#333',
+                          }}
+                        >
+                          Clear sort
+                        </button>
+                      </div>
+                    )}
+                  </th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {sessions.map(session => (
+                {displayedSessions.map(session => (
                   <tr key={session.id}>
                     <td>{session.day}</td>
                     <td>{formatTimeRange(session.startTime, session.endTime)}</td>
