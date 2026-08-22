@@ -11,6 +11,8 @@ const SetPassword = () => {
   const [isVerifying, setIsVerifying] = useState(true);
   const [verifyError, setVerifyError] = useState('');
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -35,6 +37,10 @@ const SetPassword = () => {
     e.preventDefault();
     setSubmitError('');
 
+    if (invitee.requiresName && (!firstName.trim() || !lastName.trim())) {
+      setSubmitError('First name and last name are required.');
+      return;
+    }
     if (password.length < 6) {
       setSubmitError('Password must be at least 6 characters.');
       return;
@@ -46,7 +52,10 @@ const SetPassword = () => {
 
     setIsSubmitting(true);
     try {
-      await tutorApplicationsAPI.acceptInvite(token, password);
+      await tutorApplicationsAPI.acceptInvite(token, password, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim()
+      });
       setIsDone(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err) {
@@ -109,10 +118,33 @@ const SetPassword = () => {
           <div className="ta-logo-text">Sessioneer</div>
         </div>
 
-        <h1>Welcome, {invitee.name}!</h1>
+        <h1>{invitee.name ? `Welcome, ${invitee.name}!` : 'Welcome to Sessioneer!'}</h1>
         <p>Set a password to activate your tutor account for {invitee.email}.</p>
 
         <form onSubmit={handleSubmit}>
+          {invitee.requiresName && (
+            <div className="ta-name-grid">
+              <div className="ta-field">
+                <label>First name</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="ta-field">
+                <label>Last name</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          )}
+
           <div className="ta-field">
             <label>New password</label>
             <input
