@@ -47,6 +47,11 @@
   cursor: pointer;
 }
 
+.us-unit-row > div:first-child {
+  flex: 1;
+  text-align: center;
+}
+
 .us-unit-row:hover {
   border-color: #c7d2fe;
 }
