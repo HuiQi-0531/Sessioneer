@@ -87,9 +87,10 @@ const TutorDashboard = () => {
             <>
               <div className="td-stats-grid">
                 <Link to="/availability" className="td-stat-card">
-                  <div className="td-stat-number">{summary.availabilitySubmittedCount}</div>
-                  <div className="td-stat-label">Availability Submitted</div>
-                  <div className="td-stat-sublabel">of {summary.totalUnits} unit{summary.totalUnits !== 1 ? 's' : ''}</div>
+                  <div className="td-stat-number">
+                    {summary.availabilitySubmittedCount > 0 ? 'Submitted' : 'Not yet submitted'}
+                  </div>
+                  <div className="td-stat-label">Availability</div>
                 </Link>
 
                 <Link to="/requests" className="td-stat-card">
