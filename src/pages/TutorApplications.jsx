@@ -15,10 +15,11 @@ const TutorApplications = () => {
   const [isInviting, setIsInviting] = useState(null);
 
   const [showDirectInviteModal, setShowDirectInviteModal] = useState(false);
-  const [directInviteForm, setDirectInviteForm] = useState({ name: '', email: '' });
+  const [directInviteForm, setDirectInviteForm] = useState({ email: '' });
   const [directInviteError, setDirectInviteError] = useState('');
   const [isDirectInviting, setIsDirectInviting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [directInviteSuccess, setDirectInviteSuccess] = useState(null);
 
   const loadApplications = useCallback(async () => {
     if (!activeUnit?.id) {
@@ -76,16 +77,23 @@ const TutorApplications = () => {
 
   const handleDirectInviteSubmit = async () => {
     setDirectInviteError('');
-    if (!directInviteForm.name.trim() || !directInviteForm.email.trim()) {
-      setDirectInviteError('Name and email are required.');
+    if (!directInviteForm.email.trim()) {
+      setDirectInviteError('Tutor email is required.');
       return;
     }
     setIsDirectInviting(true);
     try {
-      const result = await tutorApplicationsAPI.directInvite(directInviteForm.name.trim(), directInviteForm.email.trim(), activeUnit.id);
+      const result = await tutorApplicationsAPI.directInvite(directInviteForm.email.trim(), activeUnit.id);
       setShowDirectInviteModal(false);
-      setDirectInviteForm({ name: '', email: '' });
-      setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
+      setDirectInviteForm({ email: '' });
+      if (result.addedExistingUser) {
+        setDirectInviteSuccess({
+          title: 'Tutor added',
+          message: `${result.fullName || result.email} has been added to ${activeUnit.unitCode}.`
+        });
+      } else {
+        setInviteLinkInfo({ name: result.fullName || result.name || result.email, url: buildInviteUrl(result.inviteToken) });
+      }
       await loadApplications();
     } catch (err) {
       setDirectInviteError(err.message || 'Failed to create invite.');
@@ -128,7 +136,7 @@ const TutorApplications = () => {
                 <div key={app.id} className="tap-card">
                   <div className="tap-card-top">
                     <div>
-                      <div className="tap-card-name">{app.fullName || app.name}</div>
+                      <div className="tap-card-name">{app.fullName || app.name || 'Pending profile'}</div>
                       <div className="tap-card-email">{app.email}</div>
                     </div>
                     <span className={`tap-badge ${app.status}`}>{app.status}</span>
@@ -189,18 +197,10 @@ const TutorApplications = () => {
         <div className="tap-modal-overlay" onClick={() => setShowDirectInviteModal(false)}>
           <div className="tap-modal-content" onClick={e => e.stopPropagation()}>
             <h2>Invite a known tutor</h2>
-            <p>For returning tutors you already know — this skips the application step and generates an invite link right away.</p>
+            <p>Enter the tutor's email. Existing users are added to this unit; new users receive an activation link to complete their own profile.</p>
 
             <div className="tap-form-field">
-              <label>Name</label>
-              <input
-                type="text"
-                value={directInviteForm.name}
-                onChange={(e) => setDirectInviteForm(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-            <div className="tap-form-field">
-              <label>Email</label>
+              <label>Tutor email</label>
               <input
                 type="email"
                 value={directInviteForm.email}
@@ -211,7 +211,7 @@ const TutorApplications = () => {
             {directInviteError && <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{directInviteError}</p>}
 
             <button className="tap-btn tap-btn-invite" style={{ width: '100%' }} onClick={handleDirectInviteSubmit} disabled={isDirectInviting}>
-              {isDirectInviting ? 'Generating...' : 'Generate Invite Link'}
+              {isDirectInviting ? 'Creating...' : 'Create Invite Link'}
             </button>
           </div>
         </div>
@@ -229,6 +229,16 @@ const TutorApplications = () => {
             </div>
 
             <button className="tap-modal-close-btn" onClick={() => setInviteLinkInfo(null)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {directInviteSuccess && (
+        <div className="tap-modal-overlay" onClick={() => setDirectInviteSuccess(null)}>
+          <div className="tap-modal-content" onClick={e => e.stopPropagation()}>
+            <h2>{directInviteSuccess.title}</h2>
+            <p>{directInviteSuccess.message}</p>
+            <button className="tap-modal-close-btn" onClick={() => setDirectInviteSuccess(null)}>Done</button>
           </div>
         </div>
       )}

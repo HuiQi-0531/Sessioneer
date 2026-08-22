@@ -1362,11 +1362,11 @@ export const tutorApplicationsAPI = {
     return result;
   },
 
-  directInvite: async (name, email, unitId) => {
+  directInvite: async (email, unitId) => {
     const response = await fetch(`${API_URL}/tutor-applications/direct-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name, email, unitId })
+      body: JSON.stringify({ email, unitId })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create invite');
@@ -1381,11 +1381,11 @@ export const tutorApplicationsAPI = {
     return result;
   },
 
-  acceptInvite: async (token, password) => {
+  acceptInvite: async (token, password, profile = {}) => {
     const response = await fetch(`${API_URL}/tutor-applications/accept-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password })
+      body: JSON.stringify({ token, password, ...profile })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create account');

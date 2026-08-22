@@ -193,14 +193,15 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
 
 /**
  * POST /tutor-applications/direct-invite (coordinator only)
- * For tutors the coordinator already knows personally (returning tutors) -
- * skips the application/resume step and generates an invite link straight away.
+ * For tutors the coordinator already knows. Existing users are added to the unit;
+ * new users get an activation link and fill their own profile details.
  */
 router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
-    const { unitId, name, email } = req.body;
-    if (!name || !email) {
-      return res.status(400).json({ error: 'Name and email are required' });
+    const { unitId, email } = req.body;
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ error: 'Tutor email is required' });
     }
     if (!unitId) {
       return res.status(400).json({ error: 'Unit is required' });
@@ -208,8 +209,30 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    // TODO: Later, if this email already belongs to an existing user, add a
-    // tutor unit membership instead of creating a duplicate invite/account.
+    const existingUser = await pool.query(
+      'SELECT id, name, last_name, email FROM users WHERE LOWER(email) = $1',
+      [cleanEmail]
+    );
+
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+      await pool.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        VALUES ($1, $2, 'tutor')
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [unitId, user.id]
+      );
+
+      return res.json({
+        addedExistingUser: true,
+        userId: user.id,
+        email: user.email,
+        fullName: [user.name, user.last_name].filter(Boolean).join(' ')
+      });
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -220,7 +243,7 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
       VALUES ($1, $2, $3, 'invited', $4, NOW(), $5, $6)
       RETURNING *
       `,
-      [unitId, name, email, req.user.id, token, expiresAt]
+      [unitId, '', cleanEmail, req.user.id, token, expiresAt]
     );
 
     res.status(201).json({ ...formatApplication(result.rows[0]), inviteToken: token });
@@ -250,7 +273,8 @@ router.get('/verify-invite/:token', async (req, res) => {
       return res.status(410).json({ error: 'This invite link has expired' });
     }
 
-    res.json({ name: [app.name, app.last_name].filter(Boolean).join(' '), email: app.email });
+    const displayName = [app.name, app.last_name].filter(Boolean).join(' ');
+    res.json({ name: displayName, email: app.email, requiresName: !displayName });
   } catch (error) {
     console.error('Error verifying invite:', error);
     res.status(500).json({ error: 'Failed to verify invite' });
@@ -259,14 +283,14 @@ router.get('/verify-invite/:token', async (req, res) => {
 
 /**
  * POST /tutor-applications/accept-invite (public)
- * Body: { token, password }
+ * Body: { token, password, firstName, lastName }
  * Creates the real tutor account, carries the resume across if one exists,
  * and marks the application as accepted.
  */
 router.post('/accept-invite', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { token, password } = req.body;
+    const { token, password, firstName, lastName } = req.body;
     if (!token || !password) {
       return res.status(400).json({ error: 'Token and password are required' });
     }
@@ -287,17 +311,23 @@ router.post('/accept-invite', async (req, res) => {
       return res.status(410).json({ error: 'This invite link has expired' });
     }
 
-    const existingUser = await client.query('SELECT id FROM users WHERE email = $1', [application.email]);
+    const existingUser = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [application.email]);
     if (existingUser.rows.length > 0) {
       return res.status(409).json({ error: 'An account with this email already exists. Please log in instead.' });
+    }
+
+    const inviteFirstName = (firstName || '').trim();
+    const inviteLastName = (lastName || '').trim();
+    if (!application.name && (!inviteFirstName || !inviteLastName)) {
+      return res.status(400).json({ error: 'First name and last name are required' });
     }
 
     await client.query('BEGIN');
 
     const passwordHash = hashPassword(password);
     const splitName = splitDisplayName(application.name);
-    const firstName = application.name || splitName.firstName;
-    const lastName = application.last_name || splitName.lastName;
+    const resolvedFirstName = application.name || splitName.firstName || inviteFirstName;
+    const resolvedLastName = application.last_name || splitName.lastName || inviteLastName;
     const newUserResult = await client.query(
       `
       INSERT INTO users (name, last_name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)
@@ -305,7 +335,7 @@ router.post('/accept-invite', async (req, res) => {
       RETURNING id
       `,
       [
-        firstName || application.name, lastName || null, application.email, passwordHash,
+        resolvedFirstName, resolvedLastName || null, application.email, passwordHash,
         application.phone_number, application.work_experience, 
         application.maximum_hours, application.contract_type,
         application.resume_filename, application.resume_mime_type, application.resume_data
@@ -327,10 +357,11 @@ router.post('/accept-invite', async (req, res) => {
     await client.query(
       `
       UPDATE tutor_applications
-      SET status = 'accepted', created_user_id = $1, invite_token = NULL
-      WHERE id = $2
+      SET status = 'accepted', created_user_id = $1, invite_token = NULL,
+          name = $2, last_name = $3
+      WHERE id = $4
       `,
-      [newUserId, application.id]
+      [newUserId, resolvedFirstName, resolvedLastName || null, application.id]
     );
 
     await client.query('COMMIT');
