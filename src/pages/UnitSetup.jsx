@@ -11,30 +11,34 @@ const UnitSetup = () => {
   const navigate = useNavigate();
   const { allUnits, activeUnit, activeUnitId, setActiveUnitId, refreshUnits, isLoading } = useActiveUnit();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
+  const selectedUnit = activeUnit?.roles?.includes('coordinator')
+    ? activeUnit
+    : coordinatorUnits.find(unit => unit.id === activeUnitId) || null;
 
   const handleSelectUnit = (unit) => {
     setActiveUnitId(unit.id === activeUnitId ? null : unit.id);
   };
 
   const handleEdit = () => {
-    if (!activeUnit) return;
-    navigate(`/unit-setup/edit/${activeUnit.id}`);
+    if (!selectedUnit) return;
+    navigate(`/unit-setup/edit/${selectedUnit.id}`);
   };
 
   const handleViewSessions = () => {
-    if (!activeUnit) return;
+    if (!selectedUnit) return;
     navigate('/sessions');
   };
 
   const handleDeleteClick = () => {
-    if (!activeUnit) return;
+    if (!selectedUnit) return;
     setShowDeleteModal(true);
   };
 
   const confirmDelete = async () => {
-    if (!activeUnit) return;
+    if (!selectedUnit) return;
     try {
-      await unitsAPI.delete(activeUnit.id);
+      await unitsAPI.delete(selectedUnit.id);
       setShowDeleteModal(false);
       await refreshUnits();
     } catch (error) {
@@ -59,17 +63,17 @@ const UnitSetup = () => {
 
           {isLoading ? (
             <div className="us-empty-state"><p>Loading units...</p></div>
-          ) : allUnits.length === 0 ? (
+          ) : coordinatorUnits.length === 0 ? (
             <div className="us-empty-state">
               <p>No units yet. Click "Create Unit" to add your first one.</p>
             </div>
           ) : (
             <>
               <div className="us-list">
-                {allUnits.map(unit => (
+                {coordinatorUnits.map(unit => (
                   <div
                     key={unit.id}
-                    className={`us-unit-row ${activeUnitId === unit.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                    className={`us-unit-row ${selectedUnit?.id === unit.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
                     onClick={() => handleSelectUnit(unit)}
                   >
                     <div>
@@ -82,13 +86,13 @@ const UnitSetup = () => {
               </div>
 
               <div className="us-actions-row">
-                <button className="us-action-btn edit" onClick={handleViewSessions} disabled={!activeUnit}>
+                <button className="us-action-btn edit" onClick={handleViewSessions} disabled={!selectedUnit}>
                   Sessions
                 </button>
-                <button className="us-action-btn edit" onClick={handleEdit} disabled={!activeUnit}>
+                <button className="us-action-btn edit" onClick={handleEdit} disabled={!selectedUnit}>
                   Edit
                 </button>
-                <button className="us-action-btn delete" onClick={handleDeleteClick} disabled={!activeUnit}>
+                <button className="us-action-btn delete" onClick={handleDeleteClick} disabled={!selectedUnit}>
                   Delete
                 </button>
               </div>
@@ -100,7 +104,7 @@ const UnitSetup = () => {
       {showDeleteModal && (
         <div className="us-modal-overlay" onClick={() => setShowDeleteModal(false)}>
           <div className="us-modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Delete {activeUnit?.unitCode}?</h3>
+            <h3>Delete {selectedUnit?.unitCode}?</h3>
             <p>This will permanently remove the unit and cannot be undone.</p>
             <div className="us-modal-buttons">
               <button className="cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button>
