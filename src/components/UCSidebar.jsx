@@ -78,6 +78,9 @@ const UCSidebar = ({ activePage }) => {
   const avatarLetter = getAvatarLetter(currentUser);
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
   const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor'));
+  const displayActiveUnit = activeUnit?.roles?.includes('coordinator')
+    ? activeUnit
+    : coordinatorUnits[0] || null;
   const switcherRoles = currentUser?.role === 'coordinator' ? ['coordinator', 'tutor'] : activeUnitRoles;
   const showRoleSwitcher = currentUser?.role === 'coordinator' || switcherRoles.length > 1;
 
@@ -95,6 +98,17 @@ const UCSidebar = ({ activePage }) => {
     setActiveUnitId(unitId);
     setShowDropdown(false);
   };
+
+  useEffect(() => {
+    if (
+      activeViewRole === 'coordinator' &&
+      activeUnit &&
+      !activeUnit.roles?.includes('coordinator') &&
+      coordinatorUnits.length > 0
+    ) {
+      setActiveUnitId(coordinatorUnits[0].id);
+    }
+  }, [activeUnit, activeViewRole, coordinatorUnits, setActiveUnitId]);
 
   const handleRoleSwitch = (role) => {
     if (role === 'coordinator') {
@@ -152,26 +166,26 @@ const UCSidebar = ({ activePage }) => {
         <button
           className="ucs-active-unit-btn"
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || allUnits.length === 0}
+          disabled={isLoading || coordinatorUnits.length === 0}
         >
           <div className="ucs-active-unit-text">
             <p className="uc-active-label">Active Unit</p>
             <p className="uc-unit-code">
-              {isLoading ? 'Loading...' : (activeUnit ? activeUnit.unitCode : 'No unit yet')}
+              {isLoading ? 'Loading...' : (displayActiveUnit ? displayActiveUnit.unitCode : 'No unit yet')}
             </p>
-            {activeUnit && (
-              <p className="uc-unit-semester">{activeUnit.semester}, {activeUnit.year}</p>
+            {displayActiveUnit && (
+              <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
             )}
           </div>
-          {allUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
+          {coordinatorUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
         </button>
 
         {showDropdown && (
           <div className="ucs-dropdown">
-            {allUnits.map(unit => (
+            {coordinatorUnits.map(unit => (
               <button
                 key={unit.id}
-                className={`ucs-dropdown-item ${unit.id === activeUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
                 onClick={() => handleSelectUnit(unit.id)}
               >
                 <span className="ucs-dropdown-code">{unit.unitCode}</span>
@@ -203,11 +217,11 @@ const UCSidebar = ({ activePage }) => {
       <nav className="uc-navigation">
         {navItem('Dashboard', '/uc-dashboard', 'dashboard')}
         {navItem('Unit Setup', '/unit-setup', 'unit-setup')}
-        {navItem('Sessions', activeUnit ? '/sessions' : '/unit-setup', 'sessions')}
-        {navItem('Tutors', activeUnit ? '/tutors' : '/unit-setup', 'tutors')}
+        {navItem('Sessions', displayActiveUnit ? '/sessions' : '/unit-setup', 'sessions')}
+        {navItem('Tutors', displayActiveUnit ? '/tutors' : '/unit-setup', 'tutors')}
         {navItem('Applications', '/tutor-applications', 'applications')}
         {navItem('Availability', '/uc-availability', 'availability')}
-        {navItem('Schedule Builder', activeUnit ? '/schedule-builder' : '/unit-setup', 'schedule-builder')}
+        {navItem('Schedule Builder', displayActiveUnit ? '/schedule-builder' : '/unit-setup', 'schedule-builder')}
         {navItem('Requests', '/uc-requests', 'requests')}
         {navItem('Messages', '/messages', 'messages', hasUnreadMessages)}
       </nav>
