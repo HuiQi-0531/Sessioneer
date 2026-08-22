@@ -88,8 +88,10 @@ const TutorApplications = () => {
       setDirectInviteForm({ email: '' });
       if (result.addedExistingUser) {
         setDirectInviteSuccess({
-          title: 'Tutor added',
-          message: `${result.fullName || result.email} has been added to ${activeUnit.unitCode}.`
+          title: result.alreadyTutor ? 'Tutor already added' : 'Tutor added',
+          message: result.alreadyTutor
+            ? `${result.fullName || result.email} is already a tutor for ${activeUnit.unitCode}.`
+            : `${result.fullName || result.email} has been added to ${activeUnit.unitCode}.`
         });
       } else {
         setInviteLinkInfo({ name: result.fullName || result.name || result.email, url: buildInviteUrl(result.inviteToken) });

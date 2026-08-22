@@ -209,6 +209,12 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
+    const unitResult = await pool.query(
+      'SELECT unit_code, unit_name FROM units WHERE id = $1',
+      [ownedUnitId]
+    );
+    const unit = unitResult.rows[0] || {};
+
     const existingUser = await pool.query(
       'SELECT id, name, last_name, email FROM users WHERE LOWER(email) = $1',
       [cleanEmail]
@@ -216,17 +222,37 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
-      await pool.query(
+      const membershipResult = await pool.query(
         `
         INSERT INTO unit_memberships (unit_id, user_id, role)
         VALUES ($1, $2, 'tutor')
         ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        RETURNING id
         `,
         [ownedUnitId, user.id]
       );
 
+      if (membershipResult.rows.length > 0) {
+        await pool.query(
+          `
+          INSERT INTO notifications
+            (user_id, notification_type, title, content, related_unit_id, action_url)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          `,
+          [
+            user.id,
+            'tutor_unit_invite',
+            'Added to a new tutor unit',
+            `You have been added as a tutor for ${unit.unit_code || 'a unit'}.`,
+            ownedUnitId,
+            '/tutor-dashboard'
+          ]
+        );
+      }
+
       return res.json({
         addedExistingUser: true,
+        alreadyTutor: membershipResult.rows.length === 0,
         userId: user.id,
         email: user.email,
         fullName: [user.name, user.last_name].filter(Boolean).join(' ')
