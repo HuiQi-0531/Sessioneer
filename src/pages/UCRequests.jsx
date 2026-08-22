@@ -257,6 +257,7 @@ const UCRequests = () => {
       <main className="uc-main-content">
         <UCPageHeader title="Request & Swap" />
 
+        <div className="uc-two-col-layout">
         {/* Pending Status */}
         <section className="uc-section">
           <div className="uc-section-header">
@@ -294,19 +295,21 @@ const UCRequests = () => {
                   </div>
 
                   <div className="uc-request-body">
+                    <div className="uc-session-row">
                     <div className="uc-session-box">
                       <div className="uc-session-label">Current Session</div>
                       <p className="uc-session-time">{request.currentSession}</p>
                     </div>
                     {request.preferredSwapTo && (
                       <>
-                        <div className="uc-swap-arrow">↓</div>
+                        <div className="uc-swap-arrow-horizontal">→</div>
                         <div className="uc-session-box">
                           <div className="uc-session-label">Preferred Swap To</div>
                           <p className="uc-session-time">{request.preferredSwapTo}</p>
                         </div>
-                      </>
+                      </>   
                     )}
+                  </div>
                     {renderReasonSections(request)}
                   </div>
 
@@ -352,19 +355,21 @@ const UCRequests = () => {
                   </div>
 
                   <div className="uc-request-body">
-                    <div className="uc-session-box">
-                      <div className="uc-session-label">Current Session</div>
-                      <p className="uc-session-time">{request.currentSession}</p>
+                    <div className="uc-session-row">
+                      <div className="uc-session-box">
+                        <div className="uc-session-label">Current Session</div>
+                        <p className="uc-session-time">{request.currentSession}</p>
+                      </div>
+                      {request.preferredSwapTo && (
+                        <>
+                          <div className="uc-swap-arrow-horizontal">→</div>
+                          <div className="uc-session-box">
+                            <div className="uc-session-label">Preferred Swap To</div>
+                            <p className="uc-session-time">{request.preferredSwapTo}</p>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    {request.preferredSwapTo && (
-                      <>
-                        <div className="uc-swap-arrow">↓</div>
-                        <div className="uc-session-box">
-                          <div className="uc-session-label">Preferred Swap To</div>
-                          <p className="uc-session-time">{request.preferredSwapTo}</p>
-                        </div>
-                      </>
-                    )}
                     {request.reviewNotes && (request.status || '').toLowerCase() === 'suggested' && (
                       <div className="uc-session-box suggested">
                         <div className="uc-session-label">Suggested Session</div>
@@ -378,7 +383,8 @@ const UCRequests = () => {
             </div>
           )}
         </section>
-      </main>
+      </div>
+    </main>
 
       {/* Approve Modal */}
       {showApproveModal && (

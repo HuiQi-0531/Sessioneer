@@ -138,12 +138,21 @@
 .uc-notification-btn:hover { background-color: var(--color-bg-subtle); }
 
 /* ===== SECTIONS ===== */
+.uc-two-col-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  align-items: stretch;
+}
+
 .uc-section {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  margin: 16px 40px;
+  margin: 16px 20px;
   padding: 16px 24px;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .uc-section-header { margin-bottom: 14px; }
@@ -195,7 +204,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 340px;
+  max-height: 640px;
   overflow-y: auto;
   padding-right: 6px;
 }
@@ -281,7 +290,23 @@
   text-align: left;
 }
 
-.uc-session-time { font-size: 15px; color: var(--color-text); font-weight: 500; text-align: left; margin: 0; }
+.uc-swap-arrow { text-align: left; font-size: 20px; color: var(--color-primary); margin: 0; padding-left: 18px; }
+
+.uc-session-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.uc-session-row .uc-session-box {
+  flex: 1;
+}
+
+.uc-swap-arrow-horizontal {
+  font-size: 20px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
 
 .uc-swap-arrow { text-align: left; font-size: 20px; color: var(--color-primary); margin: 0; padding-left: 18px; }
 
@@ -491,6 +516,7 @@
   .uc-action-buttons    { flex-direction: column; }
   .uc-section-title-row { flex-direction: column; align-items: flex-start; gap: 12px; }
   .uc-card-list    { max-height: none; }
+  .uc-two-col-layout { grid-template-columns: 1fr; }
 }
 .uc-user-footer-row {
   display: flex;

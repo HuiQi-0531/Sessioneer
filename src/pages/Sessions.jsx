@@ -504,7 +504,7 @@ const displayedSessions = React.useMemo(() => {
                         textAlign: 'left',
                       }}
                     >
-                      >
+                      
                         <button
                           type="button"
                           onClick={() => applyTutorSort('asc')}
