@@ -17,6 +17,7 @@ const getCurrentUser = () => {
 
 const getDefaultRole = (unit, preferredRole, fallbackRole) => {
   const roles = unit?.roles || [];
+  if (fallbackRole === 'coordinator' && preferredRole === 'tutor') return 'tutor';
   if (preferredRole && roles.includes(preferredRole)) return preferredRole;
   if (fallbackRole && roles.includes(fallbackRole)) return fallbackRole;
   return roles[0] || null;
@@ -49,16 +50,18 @@ export const ActiveUnitProvider = ({ children }) => {
       setAllUnits(units);
 
       setActiveUnitIdState(prevId => {
-        const stillExists = units.find(u => u.id === prevId);
-        if (stillExists) {
-          const nextRole = getDefaultRole(stillExists, activeViewRole, latestFallbackRole);
-          setActiveViewRoleState(nextRole);
-          return prevId;
-        }
-        // Fall back to the first unit in the list, or null if there are none
-        const firstUnit = units[0] || null;
-        setActiveViewRoleState(getDefaultRole(firstUnit, activeViewRole, latestFallbackRole));
-        return firstUnit ? firstUnit.id : null;
+        const preferredRole = activeViewRole || latestFallbackRole;
+        const previousUnit = units.find(u => u.id === prevId);
+        const previousUnitForRole = preferredRole
+          ? units.find(u => u.id === prevId && u.roles?.includes(preferredRole))
+          : null;
+        const firstUnitForRole = preferredRole
+          ? units.find(u => u.roles?.includes(preferredRole))
+          : null;
+        const nextUnit = previousUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
+
+        setActiveViewRoleState(getDefaultRole(nextUnit, preferredRole, latestFallbackRole));
+        return nextUnit ? nextUnit.id : null;
       });
     } catch (error) {
       console.error('Error loading units for ActiveUnitContext:', error);

@@ -222,7 +222,7 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
         VALUES ($1, $2, 'tutor')
         ON CONFLICT (unit_id, user_id, role) DO NOTHING
         `,
-        [unitId, user.id]
+        [ownedUnitId, user.id]
       );
 
       return res.json({
