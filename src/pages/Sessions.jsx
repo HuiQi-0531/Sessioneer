@@ -350,7 +350,7 @@ const displayedSessions = React.useMemo(() => {
               <form onSubmit={handleSubmit}>
                 <div className="ss-form-grid">
                   <div className="ss-field">
-                    <label>Day</label>
+                    <label>Day<span className="ss-required">*</span></label>
                     <select name="day" value={formData.day} onChange={handleChange}>
                       <option value="">-- Select day --</option>
                       <option value="Monday">Monday</option>
@@ -362,12 +362,12 @@ const displayedSessions = React.useMemo(() => {
                   </div>
 
                   <div className="ss-field">
-                    <label>Start Time</label>
+                    <label>Start Time<span className="ss-required">*</span></label>
                     <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} />
                   </div>
 
                   <div className="ss-field">
-                    <label>End Time</label>
+                    <label>End Time<span className="ss-required">*</span></label>
                     <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} />
                   </div>
 

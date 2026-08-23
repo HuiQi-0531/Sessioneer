@@ -68,6 +68,11 @@
   margin-bottom: 6px;
 }
 
+.ss-required {
+  color: var(--color-danger-text);
+  margin-left: 3px;
+}
+
 .ss-field input,
 .ss-field select {
   width: 100%;
