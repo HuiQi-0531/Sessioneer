@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { tutorsAPI, unitsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -32,6 +32,16 @@ const Tutors = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    priority: [],
+    contractType: [],
+    starredOnly: false,
+    flaggedOnly: false,
+    earlyAccessOnly: false,
+    maxHoursLimit: ''
+  });
+
   useEffect(() => {
     if (unitIdFromUrl && unitIdFromUrl !== activeUnitId) {
       setActiveUnitId(unitIdFromUrl);
@@ -47,6 +57,18 @@ const Tutors = () => {
     loadTutors(activeUnit.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
+
+  // Close the filter panel when clicking outside of it
+  useEffect(() => {
+    if (!showFilters) return;
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.tt-filter-wrap')) {
+        setShowFilters(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   const loadTutors = async (unitId) => {
     setIsLoadingTutors(true);
@@ -178,8 +200,53 @@ const Tutors = () => {
     }
   };
 
+  // Distinct contract types present in the current tutor list, used to build the filter chips
+  const contractTypeOptions = useMemo(
+    () => [...new Set(tutors.map(t => t.contractType).filter(Boolean))],
+    [tutors]
+  );
+
+  const togglePriorityFilter = (p) => {
+    setFilters(prev => ({
+      ...prev,
+      priority: prev.priority.includes(p) ? prev.priority.filter(x => x !== p) : [...prev.priority, p]
+    }));
+  };
+
+  const toggleContractTypeFilter = (c) => {
+    setFilters(prev => ({
+      ...prev,
+      contractType: prev.contractType.includes(c) ? prev.contractType.filter(x => x !== c) : [...prev.contractType, c]
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      priority: [],
+      contractType: [],
+      starredOnly: false,
+      flaggedOnly: false,
+      earlyAccessOnly: false,
+      maxHoursLimit: ''
+    });
+  };
+
+  const activeFilterCount =
+    filters.priority.length +
+    filters.contractType.length +
+    (filters.starredOnly ? 1 : 0) +
+    (filters.flaggedOnly ? 1 : 0) +
+    (filters.earlyAccessOnly ? 1 : 0) +
+    (filters.maxHoursLimit !== '' ? 1 : 0);
+
   const filteredTutors = tutors
     .filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(t => filters.priority.length === 0 || filters.priority.includes(t.priorityTag))
+    .filter(t => filters.contractType.length === 0 || filters.contractType.includes(t.contractType))
+    .filter(t => !filters.starredOnly || t.starred)
+    .filter(t => !filters.flaggedOnly || t.flagged)
+    .filter(t => !filters.earlyAccessOnly || t.earlyAccess)
+    .filter(t => filters.maxHoursLimit === '' || (t.maximumHours != null && t.maximumHours <= Number(filters.maxHoursLimit)))
     .sort((a, b) => (b.starred === a.starred ? 0 : b.starred ? 1 : -1));
 
   if (unitLoading) {
@@ -224,6 +291,98 @@ const Tutors = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+
+            <div className="tt-filter-wrap">
+              <button
+                type="button"
+                className={`tt-filter-btn ${activeFilterCount > 0 ? 'active' : ''}`}
+                onClick={() => setShowFilters(prev => !prev)}
+              >
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </button>
+
+              {showFilters && (
+                <div className="tt-filter-panel">
+                  <div className="tt-filter-group">
+                    <div className="tt-filter-group-title">Priority</div>
+                    <div className="tt-filter-chip-row">
+                      {PRIORITY_OPTIONS.map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`tt-filter-chip ${filters.priority.includes(p) ? 'selected' : ''}`}
+                          onClick={() => togglePriorityFilter(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {contractTypeOptions.length > 0 && (
+                    <div className="tt-filter-group">
+                      <div className="tt-filter-group-title">Contract Type</div>
+                      <div className="tt-filter-chip-row">
+                        {contractTypeOptions.map(c => (
+                          <button
+                            key={c}
+                            type="button"
+                            className={`tt-filter-chip ${filters.contractType.includes(c) ? 'selected' : ''}`}
+                            onClick={() => toggleContractTypeFilter(c)}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="tt-filter-group">
+                    <div className="tt-filter-group-title">Max Hours (up to)</div>
+                    <input
+                      type="number"
+                      min="0"
+                      className="tt-filter-number-input"
+                      placeholder="e.g. 10"
+                      value={filters.maxHoursLimit}
+                      onChange={(e) => setFilters(prev => ({ ...prev, maxHoursLimit: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="tt-filter-group">
+                    <label className="tt-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={filters.starredOnly}
+                        onChange={(e) => setFilters(prev => ({ ...prev, starredOnly: e.target.checked }))}
+                      />
+                      Starred only
+                    </label>
+                    <label className="tt-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={filters.flaggedOnly}
+                        onChange={(e) => setFilters(prev => ({ ...prev, flaggedOnly: e.target.checked }))}
+                      />
+                      Flagged only
+                    </label>
+                    <label className="tt-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={filters.earlyAccessOnly}
+                        onChange={(e) => setFilters(prev => ({ ...prev, earlyAccessOnly: e.target.checked }))}
+                      />
+                      Early schedule access only
+                    </label>
+                  </div>
+
+                  <button type="button" className="tt-filter-clear-btn" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                </div>
+              )}
+            </div>
+
             {canAddSelfAsTutor && (
               <button
                 className="tt-add-self-btn"
@@ -239,7 +398,9 @@ const Tutors = () => {
           {isLoadingTutors ? (
             <div className="tt-empty-state">Loading tutors...</div>
           ) : filteredTutors.length === 0 ? (
-            <div className="tt-empty-state">No tutors found.</div>
+            <div className="tt-empty-state">
+              {tutors.length === 0 ? 'No tutors found.' : 'No tutors match the selected filters.'}
+            </div>
           ) : (
             <div className="tt-card-list">
               {filteredTutors.map(tutor => (

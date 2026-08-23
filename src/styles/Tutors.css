@@ -46,6 +46,138 @@
   cursor: default;
 }
 
+/* Filter button + panel */
+.tt-filter-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tt-filter-btn {
+  min-height: 40px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 0 16px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tt-filter-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.tt-filter-btn.active {
+  background-color: #ede9fe;
+  border-color: #6d28d9;
+  color: #6d28d9;
+}
+
+.tt-filter-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: 40;
+  width: 300px;
+  max-width: calc(100vw - 40px);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.tt-filter-group {
+  margin-bottom: 14px;
+}
+
+.tt-filter-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.tt-filter-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.tt-filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tt-filter-chip {
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tt-filter-chip:hover {
+  border-color: #6d28d9;
+}
+
+.tt-filter-chip.selected {
+  background-color: #6d28d9;
+  border-color: #6d28d9;
+  color: var(--color-surface);
+}
+
+.tt-filter-number-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tt-filter-number-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.tt-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.tt-filter-checkbox:last-child {
+  margin-bottom: 0;
+}
+
+.tt-filter-clear-btn {
+  width: 100%;
+  margin-top: 14px;
+  border: none;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tt-filter-clear-btn:hover {
+  background-color: var(--color-border);
+}
+
 .tt-empty-state {
   text-align: center;
   padding: 60px 20px;
