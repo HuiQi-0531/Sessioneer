@@ -29,6 +29,11 @@
   margin-bottom: 6px;
 }
 
+.cu-required {
+  color: var(--color-danger-text);
+  margin-left: 3px;
+}
+
 .cu-field input,
 .cu-field select {
   width: 100%;

@@ -210,7 +210,7 @@ const CreateUnit = () => {
 
                 <form onSubmit={handleSubmit}>
                   <div className="cu-field">
-                    <label>Unit Code</label>
+                    <label>Unit Code<span className="cu-required">*</span></label>
                     <input
                       type="text"
                       name="unitCode"
@@ -221,7 +221,7 @@ const CreateUnit = () => {
                   </div>
 
                   <div className="cu-field">
-                    <label>Unit Name</label>
+                    <label>Unit Name<span className="cu-required">*</span></label>
                     <input
                       type="text"
                       name="unitName"
@@ -232,7 +232,7 @@ const CreateUnit = () => {
                   </div>
 
                   <div className="cu-field">
-                    <label>Semester</label>
+                    <label>Semester<span className="cu-required">*</span></label>
                     <select name="semesterYear" value={formData.semesterYear} onChange={handleChange}>
                       <option value="">-- Select a semester --</option>
                       {SEMESTER_OPTIONS.map(opt => (
@@ -251,7 +251,7 @@ const CreateUnit = () => {
                   </div>
 
                   <div className="cu-field">
-                    <label>Delivery Mode</label>
+                    <label>Delivery Mode<span className="cu-required">*</span></label>
                     <select name="deliveryMode" value={formData.deliveryMode} onChange={handleChange}>
                       <option value="">-- Select delivery mode --</option>
                       <option value="Online">Online</option>
