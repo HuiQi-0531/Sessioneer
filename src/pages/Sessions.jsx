@@ -162,8 +162,37 @@ const Sessions = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.day || !formData.startTime || !formData.endTime) {
-      setError('Day, start time, and end time are required.');
+    const requiredFields = [
+      { value: formData.day, label: 'Day' },
+      { value: formData.startTime, label: 'Start time' },
+      { value: formData.endTime, label: 'End time' },
+      { value: formData.location, label: 'Location' },
+      { value: formData.campus, label: 'Campus' },
+      { value: formData.sessionType, label: 'Type' },
+      { value: formData.capacity, label: 'Capacity' },
+      { value: formData.requiredTutors, label: 'Tutor' },
+      { value: formData.status, label: 'Status' }
+    ];
+
+    const missingFields = requiredFields
+      .filter(field => String(field.value ?? '').trim() === '')
+      .map(field => field.label);
+
+    if (missingFields.length > 0) {
+      setError(`Please fill in all fields before saving: ${missingFields.join(', ')}.`);
+      return;
+    }
+
+    const capacityNumber = parseInt(formData.capacity, 10);
+    const requiredTutorsNumber = parseInt(formData.requiredTutors, 10);
+
+    if (Number.isNaN(capacityNumber) || capacityNumber < 1) {
+      setError('Capacity must be at least 1.');
+      return;
+    }
+
+    if (Number.isNaN(requiredTutorsNumber) || requiredTutorsNumber < 1) {
+      setError('Tutor must be at least 1.');
       return;
     }
 
@@ -171,11 +200,11 @@ const Sessions = () => {
       day: formData.day,
       startTime: `${formData.startTime}:00`,
       endTime: `${formData.endTime}:00`,
-      location: formData.location || null,
-      campus: formData.campus || null,
-      sessionType: formData.sessionType || null,
-      capacity: formData.capacity ? parseInt(formData.capacity, 10) : null,
-      requiredTutors: formData.requiredTutors ? parseInt(formData.requiredTutors, 10) : 1,
+      location: formData.location.trim(),
+      campus: formData.campus,
+      sessionType: formData.sessionType,
+      capacity: capacityNumber,
+      requiredTutors: requiredTutorsNumber,
       status: formData.status
     };
 
@@ -381,7 +410,7 @@ const displayedSessions = React.useMemo(() => {
                 <div className="ss-form-grid">
                   <div className="ss-field">
                     <label>Day<span className="ss-required">*</span></label>
-                    <select name="day" value={formData.day} onChange={handleChange}>
+                    <select name="day" value={formData.day} onChange={handleChange} required>
                       <option value="">-- Select day --</option>
                       <option value="Monday">Monday</option>
                       <option value="Tuesday">Tuesday</option>
@@ -393,22 +422,22 @@ const displayedSessions = React.useMemo(() => {
 
                   <div className="ss-field">
                     <label>Start Time<span className="ss-required">*</span></label>
-                    <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} />
+                    <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} required />
                   </div>
 
                   <div className="ss-field">
                     <label>End Time<span className="ss-required">*</span></label>
-                    <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} />
+                    <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} required />
                   </div>
 
                   <div className="ss-field">
-                    <label>Location</label>
-                    <input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. GP-P-419" />
+                    <label>Location<span className="ss-required">*</span></label>
+                    <input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. GP-P-419" required />
                   </div>
 
                   <div className="ss-field">
-                    <label>Campus</label>
-                    <select name="campus" value={formData.campus} onChange={handleChange}>
+                    <label>Campus<span className="ss-required">*</span></label>
+                    <select name="campus" value={formData.campus} onChange={handleChange} required>
                       <option value="">-- Select --</option>
                       <option value="GP">Gardens Point (GP)</option>
                       <option value="KG">Kelvin Grove (KG)</option>
@@ -417,8 +446,8 @@ const displayedSessions = React.useMemo(() => {
                   </div>
 
                   <div className="ss-field">
-                    <label>Type</label>
-                    <select name="sessionType" value={formData.sessionType} onChange={handleChange}>
+                    <label>Type<span className="ss-required">*</span></label>
+                    <select name="sessionType" value={formData.sessionType} onChange={handleChange} required>
                       <option value="">-- Select --</option>
                       <option value="Lecture">Lecture</option>
                       <option value="Tutorial">Tutorial</option>
@@ -429,20 +458,21 @@ const displayedSessions = React.useMemo(() => {
                   </div>
 
                   <div className="ss-field">
-                    <label>Capacity</label>
-                    <input type="number" name="capacity" value={formData.capacity} onChange={handleChange} min="0" placeholder="e.g. 25" />
+                    <label>Capacity<span className="ss-required">*</span></label>
+                    <input type="number" name="capacity" value={formData.capacity} onChange={handleChange} min="1" placeholder="e.g. 25" required />
                   </div>
 
                   <div className="ss-field">
-                    <label>Tutor</label>
-                <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" />
+                    <label>Tutor<span className="ss-required">*</span></label>
+                    <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" required />
                     {!requiredTutorsTouched && formData.capacity && suggestedTutorCount(parseInt(formData.capacity, 10)) > 1 && (
-                      <p className="ss-field-hint">Auto-suggested from capacity — edit if needed</p>
-                    )}                  </div>
+                      <p className="ss-field-hint">Auto-suggested from capacity - edit if needed</p>
+                    )}
+                  </div>
 
                   <div className="ss-field">
-                    <label>Status</label>
-                    <select name="status" value={formData.status} onChange={handleChange}>
+                    <label>Status<span className="ss-required">*</span></label>
+                    <select name="status" value={formData.status} onChange={handleChange} required>
                       <option value="Confirmed">Confirmed</option>
                       <option value="Tentative">Tentative</option>
                       <option value="Draft">Draft</option>

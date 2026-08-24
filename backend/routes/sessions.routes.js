@@ -21,6 +21,26 @@ const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
 
+const isBlank = (value) => value === undefined || value === null || String(value).trim() === '';
+
+const getMissingSessionFields = (session) => {
+  const requiredFields = [
+    ['day', 'Day'],
+    ['startTime', 'Start time'],
+    ['endTime', 'End time'],
+    ['location', 'Location'],
+    ['campus', 'Campus'],
+    ['sessionType', 'Type'],
+    ['capacity', 'Capacity'],
+    ['requiredTutors', 'Tutor'],
+    ['status', 'Status']
+  ];
+
+  return requiredFields
+    .filter(([field]) => isBlank(session[field]))
+    .map(([, label]) => label);
+};
+
 // Confirms the given unit belongs to the logged-in coordinator.
 const getOwnedUnitId = async (unitId, coordinatorId) => {
   const result = await pool.query(
@@ -206,8 +226,20 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;
     const normalisedDay = normaliseDay(day) || day;
 
-    if (!normalisedDay || !startTime || !endTime) {
-      return res.status(400).json({ error: 'Day, start time, and end time are required' });
+    const missingFields = getMissingSessionFields({ day: normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status });
+    if (missingFields.length > 0) {
+      return res.status(400).json({ error: `Please fill in all fields before saving: ${missingFields.join(', ')}` });
+    }
+
+    const capacityNumber = parseInt(capacity, 10);
+    const requiredTutorsNumber = parseInt(requiredTutors, 10);
+
+    if (Number.isNaN(capacityNumber) || capacityNumber < 1) {
+      return res.status(400).json({ error: 'Capacity must be at least 1' });
+    }
+
+    if (Number.isNaN(requiredTutorsNumber) || requiredTutorsNumber < 1) {
+      return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
     const result = await pool.query(
@@ -219,8 +251,8 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       `,
       [
         unitId, normalisedDay, startTime, endTime,
-        location || null, campus || null, sessionType || null,
-        capacity || null, requiredTutors || suggestedTutorCount(capacity), status || 'Confirmed'
+        location.trim(), campus, sessionType,
+        capacityNumber, requiredTutorsNumber, status
       ]
     );
 
