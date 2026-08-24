@@ -118,8 +118,7 @@ const ImportSessions = () => {
         const capacity = capacityRaw ? parseInt(capacityRaw, 10) : null;
 
         const requiredTutorsRaw = resolveRowValue(block, mapping, row, 'requiredTutors');
-        const requiredTutors = requiredTutorsRaw ? parseInt(requiredTutorsRaw, 10) : 1;
-
+        const requiredTutors = requiredTutorsRaw ? parseInt(requiredTutorsRaw, 10) : null;
         sessions.push({
           day: resolveRowValue(block, mapping, row, 'day'),
           startTime: resolveRowValue(block, mapping, row, 'startTime'),
@@ -128,8 +127,7 @@ const ImportSessions = () => {
           campus: resolveRowValue(block, mapping, row, 'campus') || null,
           sessionType: resolveRowValue(block, mapping, row, 'sessionType') || fallbackType || null,
           capacity: Number.isNaN(capacity) ? null : capacity,
-          requiredTutors: Number.isNaN(requiredTutors) ? 1 : requiredTutors,
-          staffNote: resolveRowValue(block, mapping, row, 'staffNote') || null,
+          requiredTutors: (requiredTutors === null || Number.isNaN(requiredTutors)) ? null : requiredTutors,          staffNote: resolveRowValue(block, mapping, row, 'staffNote') || null,
           status: 'Confirmed'
         });
       });

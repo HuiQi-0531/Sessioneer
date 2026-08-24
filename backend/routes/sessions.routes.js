@@ -11,6 +11,13 @@ const {
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 
+// Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
+// students triggers one more suggested tutor. Used as a fallback whenever a
+// caller doesn't explicitly set required_tutors, instead of silently
+// defaulting to 1 regardless of capacity.
+const STUDENTS_PER_TUTOR = 30;
+const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
+
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
 
@@ -213,7 +220,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       [
         unitId, normalisedDay, startTime, endTime,
         location || null, campus || null, sessionType || null,
-        capacity || null, requiredTutors || 1, status || 'Confirmed'
+        capacity || null, requiredTutors || suggestedTutorCount(capacity), status || 'Confirmed'
       ]
     );
 
@@ -330,7 +337,7 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
         [
           unitId, normalisedDay, normalisedStart, normalisedEnd,
           row.location || null, row.campus || null, row.sessionType || null,
-          row.capacity || null, row.requiredTutors || 1, row.status || 'Confirmed', row.staffNote || null
+          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null
         ]
       );
       imported.push(result.rows[0].id);

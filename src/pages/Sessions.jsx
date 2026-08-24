@@ -7,6 +7,10 @@ import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/Sessions.css';
 
+// Same rule as ScheduleBuilder.jsx's suggestion badge — keep both in sync.
+const STUDENTS_PER_TUTOR = 30;
+const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
+
 const emptyForm = {
   day: '',
   startTime: '',
@@ -32,6 +36,12 @@ const Sessions = () => {
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Tracks whether the UC has manually typed into the "Tutor" field this
+  // time the form is open. While false, changing Capacity auto-fills a
+  // suggested tutor count; once the UC touches it directly, we stop
+  // overwriting their choice.
+  const [requiredTutorsTouched, setRequiredTutorsTouched] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [tutorSortDirection, setTutorSortDirection] = useState(null);
@@ -98,6 +108,7 @@ const Sessions = () => {
     setEditingSessionId(null);
     setFormData(emptyForm);
     setError('');
+    setRequiredTutorsTouched(false);
     setShowForm(true);
   };
 
@@ -115,6 +126,7 @@ const Sessions = () => {
       status: session.status || 'Confirmed'
     });
     setError('');
+    setRequiredTutorsTouched(false);
     setShowForm(true);
   };
 
@@ -123,11 +135,29 @@ const Sessions = () => {
     setEditingSessionId(null);
     setFormData(emptyForm);
     setError('');
+    setRequiredTutorsTouched(false);
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+    const { name, value } = e.target;
+
+    if (name === 'requiredTutors') {
+      setRequiredTutorsTouched(true);
+      setFormData({ ...formData, requiredTutors: value });
+      return;
+    }
+
+    if (name === 'capacity' && !requiredTutorsTouched) {
+      setFormData({
+        ...formData,
+        capacity: value,
+        requiredTutors: suggestedTutorCount(value ? parseInt(value, 10) : null)
+      });
+      return;
+    }
+
+    setFormData({ ...formData, [name]: value });
+   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -405,8 +435,10 @@ const displayedSessions = React.useMemo(() => {
 
                   <div className="ss-field">
                     <label>Tutor</label>
-                    <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" />
-                  </div>
+                <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" />
+                    {!requiredTutorsTouched && formData.capacity && suggestedTutorCount(parseInt(formData.capacity, 10)) > 1 && (
+                      <p className="ss-field-hint">Auto-suggested from capacity — edit if needed</p>
+                    )}                  </div>
 
                   <div className="ss-field">
                     <label>Status</label>

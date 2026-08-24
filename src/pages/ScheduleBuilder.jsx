@@ -12,9 +12,8 @@ const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 const DAY_LABELS = { MON: 'Monday', TUE: 'Tuesday', WED: 'Wednesday', THU: 'Thursday', FRI: 'Friday' };
 const GRID_START_HOUR = 8;
 const GRID_END_HOUR = 21;
-const STUDENTS_PER_TUTOR = 25;
-const suggestedTutorCount = (capacity) => (capacity ? Math.ceil(capacity / STUDENTS_PER_TUTOR) : 1);
-const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => {
+const STUDENTS_PER_TUTOR = 30;
+const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => {
   const hour = GRID_START_HOUR + i;
   if (hour === 12) return '12pm';
   if (hour > 12) return `${hour - 12}pm`;
