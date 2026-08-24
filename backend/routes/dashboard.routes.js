@@ -96,9 +96,13 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
         [unit.id]
       );
       const unassignedResult = await pool.query(
-        'SELECT COUNT(*) FROM sessions WHERE unit_id = $1 AND is_assigned = FALSE',
+        `SELECT COUNT(*) FROM sessions s
+        WHERE s.unit_id = $1
+          AND NOT EXISTS (SELECT 1 FROM session_tutors st WHERE st.session_id = s.id)
+        `,
         [unit.id]
       );
+  
       const submittedTutorsResult = await pool.query(
         'SELECT COUNT(DISTINCT tutor_id) FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
         [unit.id]
@@ -135,13 +139,24 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       totalSessions = parseInt(totalSessionsResult.rows[0].count, 10);
 
       const unassignedSessionsResult = await pool.query(
-        'SELECT COUNT(*) FROM sessions WHERE unit_id = ANY($1::uuid[]) AND is_assigned = FALSE',
+        `
+        SELECT COUNT(*) FROM sessions s
+        WHERE s.unit_id = ANY($1::uuid[])
+          AND NOT EXISTS (SELECT 1 FROM session_tutors st WHERE st.session_id = s.id)
+        `,
         [unitIds]
       );
       unassignedSessions = parseInt(unassignedSessionsResult.rows[0].count, 10);
 
       const pendingConfirmationsResult = await pool.query(
-        'SELECT COUNT(*) FROM sessions WHERE unit_id = ANY($1::uuid[]) AND is_assigned = TRUE AND tutor_confirmed IS NULL',
+        `
+        SELECT COUNT(*) FROM sessions s
+        WHERE s.unit_id = ANY($1::uuid[])
+          AND EXISTS (
+            SELECT 1 FROM session_tutors st
+            WHERE st.session_id = s.id AND st.tutor_confirmed IS NULL
+          )
+        `,
         [unitIds]
       );
       pendingConfirmations = parseInt(pendingConfirmationsResult.rows[0].count, 10);
