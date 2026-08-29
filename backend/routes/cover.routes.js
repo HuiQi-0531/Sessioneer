@@ -58,6 +58,43 @@ const sendCoverRequestEmail = async ({ tutorEmail, tutorName, unitCode, sessions
   });
 };
 
+const sendCoverClaimedEmail = async ({ coordinatorEmail, coordinatorName, claimerName, unitCode, session }) => {
+  if (!coordinatorEmail) return;
+
+  const requestsUrl = `${frontendUrl()}/uc-requests`;
+  const sessionLabel = formatCoverSession(session);
+  const subject = `${unitCode} cover request claimed`;
+
+  await sendEmail({
+    to: [{ email: coordinatorEmail, name: coordinatorName || undefined }],
+    subject,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+        <h2>${escapeHtml(subject)}</h2>
+        <p>${escapeHtml(claimerName)} has claimed a cover request in ${escapeHtml(unitCode)}.</p>
+        <table style="border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Tutor</td><td style="padding: 6px 0;">${escapeHtml(claimerName)}</td></tr>
+          <tr><td style="padding: 6px 12px 6px 0; font-weight: bold;">Session</td><td style="padding: 6px 0;">${escapeHtml(sessionLabel)}</td></tr>
+        </table>
+        <p>
+          <a href="${requestsUrl}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+            View request
+          </a>
+        </p>
+      </div>
+    `,
+    textContent: [
+      subject,
+      '',
+      `${claimerName} has claimed a cover request in ${unitCode}.`,
+      `Tutor: ${claimerName}`,
+      `Session: ${sessionLabel}`,
+      '',
+      `View request: ${requestsUrl}`
+    ].join('\n')
+  });
+};
+
 // ---------------------------------------------------------------------------
 // UC: broadcast a set of sessions as "needs cover" to every other tutor on
 // the unit. Sessions can be a single day or a whole week - the UC just
@@ -320,17 +357,36 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     await client.query('COMMIT');
 
     const claimerName = await getUserDisplayName(req.user.id);
-    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [claimed.unit_id]);
-    const unitCode = unitResult.rows[0]?.unit_code || 'the unit';
+    const sessionResult = await pool.query(
+      `
+      SELECT s.day, s.start_time, s.end_time, s.location, un.unit_code
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = $1
+      `,
+      [claimed.session_id]
+    );
+    const claimedSession = sessionResult.rows[0] || {};
+    const unitCode = claimedSession.unit_code || 'the unit';
     const coordinatorsResult = await pool.query(
       `
-      SELECT unit_coordinator_id as user_id
+      SELECT DISTINCT
+        u.id as user_id,
+        u.email,
+        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as name
       FROM units
-      WHERE id = $1
-      UNION
-      SELECT user_id
-      FROM unit_memberships
-      WHERE unit_id = $1 AND role = 'coordinator'
+      JOIN users u ON (
+        u.id = units.unit_coordinator_id
+        OR EXISTS (
+          SELECT 1
+          FROM unit_memberships um
+          WHERE um.unit_id = units.id
+            AND um.user_id = u.id
+            AND um.role = 'coordinator'
+        )
+      )
+      WHERE units.id = $1
+        AND u.role = 'coordinator'
       `,
       [claimed.unit_id]
     );
@@ -356,6 +412,20 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
         sessionId: claimed.session_id,
         actionUrl: '/uc-requests'
       })));
+
+      await Promise.all(coordinatorsResult.rows.map(async (coordinator) => {
+        try {
+          await sendCoverClaimedEmail({
+            coordinatorEmail: coordinator.email,
+            coordinatorName: coordinator.name,
+            claimerName,
+            unitCode,
+            session: claimedSession
+          });
+        } catch (emailError) {
+          console.error('Error sending cover claimed email:', emailError);
+        }
+      }));
     }
 
     console.log('Cover request claimed:', id, 'by', req.user.id);
