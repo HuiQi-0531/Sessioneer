@@ -3,10 +3,60 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { escapeHtml, sendEmail } = require('../utils/email');
 
 const router = express.Router();
 
 const formatTimeRange = (start, end) => `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`;
+const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+const formatCoverSession = (session) => {
+  const time = formatTimeRange(session.start_time || session.startTime, session.end_time || session.endTime);
+  const location = session.location ? ` at ${session.location}` : '';
+  return `${session.day} ${time}${location}`;
+};
+
+const sendCoverRequestEmail = async ({ tutorEmail, tutorName, unitCode, sessions, reason }) => {
+  if (!tutorEmail) return;
+
+  const requestsUrl = `${frontendUrl()}/requests`;
+  const subject = `${unitCode} cover request available`;
+  const sessionLines = sessions.map(formatCoverSession);
+  const sessionListHtml = sessionLines
+    .map(session => `<li>${escapeHtml(session)}</li>`)
+    .join('');
+
+  await sendEmail({
+    to: [{ email: tutorEmail, name: tutorName || undefined }],
+    subject,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #202124;">
+        <h2>${escapeHtml(subject)}</h2>
+        <p>A cover request has been created for ${escapeHtml(unitCode)}.</p>
+        <p><strong>Session${sessions.length === 1 ? '' : 's'} needing cover:</strong></p>
+        <ul>${sessionListHtml}</ul>
+        <p><strong>Reason:</strong> ${escapeHtml(reason || 'No reason provided')}</p>
+        <p>
+          <a href="${requestsUrl}" style="display: inline-block; background: #5b4fc0; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none;">
+            View cover request
+          </a>
+        </p>
+      </div>
+    `,
+    textContent: [
+      subject,
+      '',
+      `A cover request has been created for ${unitCode}.`,
+      '',
+      `Session${sessions.length === 1 ? '' : 's'} needing cover:`,
+      ...sessionLines.map(session => `- ${session}`),
+      '',
+      `Reason: ${reason || 'No reason provided'}`,
+      '',
+      `View cover request: ${requestsUrl}`
+    ].join('\n')
+  });
+};
 
 // ---------------------------------------------------------------------------
 // UC: broadcast a set of sessions as "needs cover" to every other tutor on
@@ -79,12 +129,21 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     // to these sessions - they're the one who can't make it.
     const excludedTutorIds = new Set(sessionsResult.rows.map(s => s.assigned_tutor_id).filter(Boolean));
     const tutorsResult = await pool.query(
-      `SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role = 'tutor'`,
+      `
+      SELECT DISTINCT
+        u.id,
+        u.email,
+        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name
+      FROM unit_memberships um
+      JOIN users u ON u.id = um.user_id
+      WHERE um.unit_id = $1
+        AND um.role = 'tutor'
+        AND u.email IS NOT NULL
+      `,
       [unitId]
     );
-    const recipientIds = tutorsResult.rows
-      .map(r => r.user_id)
-      .filter(id => id && !excludedTutorIds.has(id));
+    const recipients = tutorsResult.rows.filter(tutor => tutor.id && !excludedTutorIds.has(tutor.id));
+    const recipientIds = recipients.map(tutor => tutor.id);
 
     const sessionSummary = sessionsResult.rows.length === 1
       ? `${sessionsResult.rows[0].day} ${formatTimeRange(sessionsResult.rows[0].start_time, sessionsResult.rows[0].end_time)}`
@@ -98,6 +157,20 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
       unitId,
       actionUrl: '/requests'
     })));
+
+    await Promise.all(recipients.map(async (tutor) => {
+      try {
+        await sendCoverRequestEmail({
+          tutorEmail: tutor.email,
+          tutorName: tutor.name,
+          unitCode,
+          sessions: sessionsResult.rows,
+          reason
+        });
+      } catch (emailError) {
+        console.error('Error sending cover request email:', emailError);
+      }
+    }));
 
     console.log('Cover broadcast created:', batchId, 'sessions:', created.length, 'notified:', recipientIds.length);
     res.status(201).json({ batchId, requests: created, notifiedCount: recipientIds.length });
