@@ -25,8 +25,6 @@ const emptyForm = {
   unitCode: '',
   unitName: '',
   semesterYear: '',
-  campus: '',
-  deliveryMode: '',
   enrolmentSize: '',
   availabilityDeadline: ''
 };
@@ -60,8 +58,6 @@ const CreateUnit = () => {
           unitCode: unit.unitCode || '',
           unitName: unit.unitName || '',
           semesterYear: unit.semester && unit.year ? `${unit.semester}|${unit.year}` : '',
-          campus: unit.campus || '',
-          deliveryMode: unit.deliveryMode || '',
           enrolmentSize: unit.enrolmentSize || '',
           availabilityDeadline: unit.availabilityDeadline
             ? unit.availabilityDeadline.slice(0, 10)
@@ -83,8 +79,8 @@ const CreateUnit = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.unitCode || !formData.unitName || !formData.semesterYear || !formData.deliveryMode) {
-      setError('Please fill in Unit Code, Unit Name, Semester, and Delivery Mode.');
+    if (!formData.unitCode || !formData.unitName || !formData.semesterYear) {
+      setError('Please fill in Unit Code, Unit Name, and Semester.');
       return;
     }
 
@@ -95,8 +91,6 @@ const CreateUnit = () => {
       unitName: formData.unitName,
       semester,
       year: parseInt(yearStr, 10),
-      campus: formData.campus || null,
-      deliveryMode: formData.deliveryMode,
       enrolmentSize: formData.enrolmentSize ? parseInt(formData.enrolmentSize, 10) : null,
       availabilityDeadline: formData.availabilityDeadline || null
     };
@@ -190,10 +184,6 @@ const CreateUnit = () => {
                     <span className="cu-summary-value">{createdUnit?.semester}, {createdUnit?.year}</span>
                   </div>
                   <div className="cu-summary-row">
-                    <span className="cu-summary-label">Campus</span>
-                    <span className="cu-summary-value">{createdUnit?.campus || '-'}</span>
-                  </div>
-                  <div className="cu-summary-row">
                     <span className="cu-summary-label">Enrolment Size</span>
                     <span className="cu-summary-value">{createdUnit?.enrolmentSize || '-'}</span>
                   </div>
@@ -238,24 +228,6 @@ const CreateUnit = () => {
                       {SEMESTER_OPTIONS.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
-                    </select>
-                  </div>
-
-                  <div className="cu-field">
-                    <label>Campus</label>
-                    <select name="campus" value={formData.campus} onChange={handleChange}>
-                      <option value="">-- Select campus --</option>
-                      <option value="GP">Gardens Point (GP)</option>
-                      <option value="KG">Kelvin Grove (KG)</option>
-                    </select>
-                  </div>
-
-                  <div className="cu-field">
-                    <label>Delivery Mode<span className="cu-required">*</span></label>
-                    <select name="deliveryMode" value={formData.deliveryMode} onChange={handleChange}>
-                      <option value="">-- Select delivery mode --</option>
-                      <option value="Online">Online</option>
-                      <option value="Physical">Physical</option>
                     </select>
                   </div>
 

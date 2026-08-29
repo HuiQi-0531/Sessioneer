@@ -198,12 +198,12 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const {
       unitCode, unitName, semester, year,
-      campus, deliveryMode, enrolmentSize, availabilityDeadline
+      enrolmentSize, availabilityDeadline
     } = req.body;
 
-    if (!unitCode || !unitName || !semester || !year || !deliveryMode) {
+    if (!unitCode || !unitName || !semester || !year) {
       return res.status(400).json({
-        error: 'Unit code, unit name, semester, year, and delivery mode are required'
+        error: 'Unit code, unit name, semester, and year are required'
       });
     }
 
@@ -233,7 +233,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       `,
       [
         req.user.id, normalizedUnitCode, unitName, semester, year,
-        campus || null, deliveryMode, enrolmentSize || null,
+        null, null, enrolmentSize || null,
         availabilityDeadline || null
       ]
     );
@@ -253,7 +253,7 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
     const { id } = req.params;
     const {
       unitCode, unitName, semester, year,
-      campus, deliveryMode, enrolmentSize, availabilityDeadline
+      enrolmentSize, availabilityDeadline
     } = req.body;
 
     const existingResult = await pool.query(
@@ -291,18 +291,16 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
         unit_name = COALESCE($2, unit_name),
         semester = COALESCE($3, semester),
         year = COALESCE($4, year),
-        campus = COALESCE($5, campus),
-        delivery_mode = COALESCE($6, delivery_mode),
-        enrolment_size = COALESCE($7, enrolment_size),
-        availability_deadline = COALESCE($8, availability_deadline)
-      WHERE id = $9 AND unit_coordinator_id = $10
+        enrolment_size = COALESCE($5, enrolment_size),
+        availability_deadline = COALESCE($6, availability_deadline)
+      WHERE id = $7 AND unit_coordinator_id = $8
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
       [
-        nextUnitCode, unitName, semester, year, campus,
-        deliveryMode, enrolmentSize, availabilityDeadline,
+        nextUnitCode, unitName, semester, year,
+        enrolmentSize, availabilityDeadline,
         id, req.user.id
       ]
     );
