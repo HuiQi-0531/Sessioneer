@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS session_tutors (
     tutor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     tutor_confirmed BOOLEAN DEFAULT NULL,
     tutor_reject_reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
     assigned_at TIMESTAMP DEFAULT NOW(),
     reminder_sent_at TIMESTAMP,
     UNIQUE(session_id, tutor_id)

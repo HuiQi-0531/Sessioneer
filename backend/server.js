@@ -466,13 +466,21 @@ pool.query(`
     tutor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     tutor_confirmed BOOLEAN DEFAULT NULL,
     tutor_reject_reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
     assigned_at TIMESTAMP DEFAULT NOW(),
     reminder_sent_at TIMESTAMP,
     UNIQUE(session_id, tutor_id)
   );
 
   ALTER TABLE session_tutors
+    ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP DEFAULT NOW();
+
+  ALTER TABLE session_tutors
     ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
+
+  UPDATE session_tutors
+  SET assigned_at = COALESCE(created_at, NOW())
+  WHERE assigned_at IS NULL;
 
   CREATE INDEX IF NOT EXISTS idx_session_tutors_pending_reminders
     ON session_tutors(assigned_at)
