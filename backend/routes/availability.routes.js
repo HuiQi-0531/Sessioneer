@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ const isAvailabilityLocked = (unit) => {
 
 const getUnitForAvailability = async (unitCode) => {
   const result = await pool.query(
-    'SELECT id, unit_coordinator_id FROM units WHERE unit_code = $1 LIMIT 1',
+    'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
     [unitCode || 'FIT3077']
   );
   return result.rows[0] || null;
@@ -65,22 +66,23 @@ router.get('/', verifyToken, async (req, res) => {
     if (!unit) return res.status(404).json({ error: 'Unit not found' });
     const unit_id = unit.id;
 
-    const isCoordinatorOwner = req.user.role === 'coordinator' && unit.unit_coordinator_id === req.user.id;
+    const hasCoordinatorAccess = req.user.role === 'coordinator'
+      && !!(await getCoordinatorUnitId(unit_id, req.user.id));
     const isLinkedTutor = await isTutorLinkedToUnit(req.user.id, unit_id);
 
-    if (!isCoordinatorOwner && !isLinkedTutor) {
+    if (!hasCoordinatorAccess && !isLinkedTutor) {
       return res.status(403).json({ error: 'You do not have access to this unit availability' });
     }
 
-    const tutorParams = isCoordinatorOwner ? [unit_id] : [req.user.id, unit_id];
-    const tutorWhere = isCoordinatorOwner ? '' : 'AND u.id = $1';
-    const membershipUnitParam = isCoordinatorOwner ? '$1' : '$2';
-    const availabilityScope = isCoordinatorOwner
+    const tutorParams = hasCoordinatorAccess ? [unit_id] : [req.user.id, unit_id];
+    const tutorWhere = hasCoordinatorAccess ? '' : 'AND u.id = $1';
+    const membershipUnitParam = hasCoordinatorAccess ? '$1' : '$2';
+    const availabilityScope = hasCoordinatorAccess
       ? `tutor_id IN (
           SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role = 'tutor'
         )`
       : 'tutor_id = $1';
-    const availabilityParams = isCoordinatorOwner ? [unit_id] : [req.user.id];
+    const availabilityParams = hasCoordinatorAccess ? [unit_id] : [req.user.id];
 
     const [tutorResult, submittedResult, availResult] = await Promise.all([
       pool.query(

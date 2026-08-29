@@ -1,22 +1,21 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
 
 const getOwnedUnitId = async (unitId, coordinatorId) => {
-  const result = await pool.query(
-    'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-    [unitId, coordinatorId]
-  );
-  return result.rows[0]?.id || null;
+  return getCoordinatorUnitId(unitId, coordinatorId);
 };
 
 const isTutorLinkedToUnit = async (tutorId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
       SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
@@ -95,16 +94,26 @@ router.get('/contacts', verifyToken, async (req, res) => {
       const linked = await isTutorLinkedToUnit(req.user.id, unitId);
       if (!linked) return res.status(403).json({ error: 'You are not linked to this unit' });
 
-      const unitResult = await pool.query(
+      const coordinatorsResult = await pool.query(
         `
-        SELECT c.id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) AS name, c.email, c.avatar_url
-        FROM units u
-        JOIN users c ON c.id = u.unit_coordinator_id
-        WHERE u.id = $1
+        SELECT DISTINCT c.id, TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) AS name, c.email, c.avatar_url
+        FROM units unit
+        JOIN users c ON (
+          c.id = unit.unit_coordinator_id
+          OR EXISTS (
+            SELECT 1
+            FROM unit_memberships cm
+            WHERE cm.unit_id = unit.id
+              AND cm.user_id = c.id
+              AND cm.role = 'coordinator'
+          )
+        )
+        WHERE unit.id = $1
+          AND c.role = 'coordinator'
+        ORDER BY name
         `,
         [unitId]
       );
-      const coordinator = unitResult.rows[0];
 
       const peerTutorsResult = await pool.query(
   `
@@ -123,7 +132,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
       );
 
       const contacts = [];
-      if (coordinator) {
+      for (const coordinator of coordinatorsResult.rows) {
         contacts.push(await buildContact(req.user.id, coordinator.id, coordinator.name, coordinator.email, coordinator.avatar_url || null));
       }
       for (const t of peerTutorsResult.rows) {

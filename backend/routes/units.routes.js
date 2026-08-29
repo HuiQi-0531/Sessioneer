@@ -2,6 +2,8 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { isUnitActive } = require('../utils/normalise');
+const { createNotification } = require('../utils/notify');
+const { ensureUnitMembership, getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -27,18 +29,44 @@ const formatUnitAccess = (u) => ({
   roles: u.roles || []
 });
 
-const ensureUnitMembership = async (clientOrPool, unitId, userId, role) => {
-  await clientOrPool.query(
-    `
-    INSERT INTO unit_memberships (unit_id, user_id, role)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (unit_id, user_id, role) DO NOTHING
-    `,
-    [unitId, userId, role]
-  );
+const normaliseUnitCode = (unitCode) => String(unitCode || '').trim().toUpperCase();
+
+const normaliseEmails = (emails) => {
+  if (!Array.isArray(emails)) return [];
+
+  return [...new Set(
+    emails
+      .map(email => String(email || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
 };
 
-const normaliseUnitCode = (unitCode) => String(unitCode || '').trim().toUpperCase();
+const loadCoordinatorUsersByEmail = async (emails, currentUserEmail = null, clientOrPool = pool) => {
+  const cleanEmails = normaliseEmails(emails)
+    .filter(email => email !== String(currentUserEmail || '').trim().toLowerCase());
+
+  if (cleanEmails.length === 0) {
+    return { users: [], missingEmails: [], nonCoordinatorEmails: [] };
+  }
+
+  const result = await clientOrPool.query(
+    `
+    SELECT id, name, last_name, email, role
+    FROM users
+    WHERE LOWER(email) = ANY($1::text[])
+    `,
+    [cleanEmails]
+  );
+
+  const foundByEmail = new Map(result.rows.map(user => [user.email.toLowerCase(), user]));
+  const missingEmails = cleanEmails.filter(email => !foundByEmail.has(email));
+  const nonCoordinatorEmails = result.rows
+    .filter(user => user.role !== 'coordinator')
+    .map(user => user.email);
+  const users = result.rows.filter(user => user.role === 'coordinator');
+
+  return { users, missingEmails, nonCoordinatorEmails };
+};
 
 const findDuplicateUnit = async ({ coordinatorId, unitCode, semester, year, excludeUnitId = null }) => {
   const params = [coordinatorId, normaliseUnitCode(unitCode), semester, year];
@@ -53,7 +81,16 @@ const findDuplicateUnit = async ({ coordinatorId, unitCode, semester, year, excl
     `
     SELECT id
     FROM units
-    WHERE unit_coordinator_id = $1
+    WHERE (
+      unit_coordinator_id = $1
+      OR EXISTS (
+        SELECT 1
+        FROM unit_memberships um
+        WHERE um.unit_id = units.id
+          AND um.user_id = $1
+          AND um.role = 'coordinator'
+      )
+    )
       AND UPPER(TRIM(unit_code)) = $2
       AND semester = $3
       AND year = $4
@@ -67,12 +104,12 @@ const findDuplicateUnit = async ({ coordinatorId, unitCode, semester, year, excl
 };
 
 /**
- * GET /units/my-units (tutor only)
+ * GET /units/my-units (tutor view)
  * Every unit this tutor is connected to (submitted availability for,
  * or been assigned a session in), with the same isActive flag the
  * coordinator's unit list uses.
  */
-router.get('/my-units', verifyToken, requireRole('tutor'), async (req, res) => {
+router.get('/my-units', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const result = await pool.query(
       `
@@ -81,6 +118,8 @@ router.get('/my-units', verifyToken, requireRole('tutor'), async (req, res) => {
              u.schedule_locked, u.schedule_locked_at, u.draft_released
       FROM units u
       WHERE u.id IN (
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
         SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
@@ -105,10 +144,17 @@ router.get('/my-access', verifyToken, async (req, res) => {
       SELECT u.id, u.unit_code, u.unit_name, u.semester, u.year,
              u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
              u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released,
-             ARRAY_AGG(DISTINCT um.role ORDER BY um.role) as roles
+             ARRAY_AGG(DISTINCT access_roles.role ORDER BY access_roles.role) as roles
       FROM units u
-      JOIN unit_memberships um ON um.unit_id = u.id
-      WHERE um.user_id = $1
+      JOIN (
+        SELECT unit_id, role
+        FROM unit_memberships
+        WHERE user_id = $1
+        UNION
+        SELECT id as unit_id, 'coordinator' as role
+        FROM units
+        WHERE unit_coordinator_id = $1
+      ) access_roles ON access_roles.unit_id = u.id
       GROUP BY u.id, u.unit_code, u.unit_name, u.semester, u.year,
                u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
                u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released
@@ -124,7 +170,7 @@ router.get('/my-access', verifyToken, async (req, res) => {
   }
 });
 
-// Get all units belonging to the logged-in coordinator
+// Get all units coordinated by the logged-in coordinator
 router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const result = await pool.query(
@@ -134,6 +180,13 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
              availability_locked, schedule_locked, schedule_locked_at, created_at
       FROM units
       WHERE unit_coordinator_id = $1
+         OR EXISTS (
+           SELECT 1
+           FROM unit_memberships um
+           WHERE um.unit_id = units.id
+             AND um.user_id = $1
+             AND um.role = 'coordinator'
+         )
       ORDER BY year DESC, semester DESC, created_at DESC
       `,
       [req.user.id]
@@ -146,7 +199,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   }
 });
 
-// Get a single unit (must belong to the logged-in coordinator)
+// Get a single unit (must be coordinated by the logged-in coordinator)
 router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -156,7 +209,17 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
              delivery_mode, enrolment_size, availability_deadline,
              availability_locked, schedule_locked, schedule_locked_at, created_at
       FROM units
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
+        AND (
+          unit_coordinator_id = $2
+          OR EXISTS (
+            SELECT 1
+            FROM unit_memberships um
+            WHERE um.unit_id = units.id
+              AND um.user_id = $2
+              AND um.role = 'coordinator'
+          )
+        )
       `,
       [id, req.user.id]
     );
@@ -176,12 +239,9 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
 router.post('/:id/self-tutor-role', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const ownedResult = await pool.query(
-      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-      [id, req.user.id]
-    );
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
 
-    if (ownedResult.rows.length === 0) {
+    if (!coordinatorUnitId) {
       return res.status(404).json({ error: 'Unit not found' });
     }
 
@@ -198,7 +258,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const {
       unitCode, unitName, semester, year,
-      enrolmentSize, availabilityDeadline
+      enrolmentSize, availabilityDeadline, coordinatorEmails
     } = req.body;
 
     if (!unitCode || !unitName || !semester || !year) {
@@ -221,26 +281,82 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      `
-      INSERT INTO units
-        (unit_coordinator_id, unit_code, unit_name, semester, year,
-         campus, delivery_mode, enrolment_size, availability_deadline)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, unit_code, unit_name, semester, year, campus,
-                delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at, draft_released
-      `,
-      [
-        req.user.id, normalizedUnitCode, unitName, semester, year,
-        null, null, enrolmentSize || null,
-        availabilityDeadline || null
-      ]
+    const { users: coordinatorUsers, missingEmails, nonCoordinatorEmails } = await loadCoordinatorUsersByEmail(
+      coordinatorEmails,
+      req.user.email
     );
 
-    await ensureUnitMembership(pool, result.rows[0].id, req.user.id, 'coordinator');
+    if (missingEmails.length > 0) {
+      return res.status(400).json({ error: `No account found for: ${missingEmails.join(', ')}` });
+    }
 
-    res.status(201).json(formatUnit(result.rows[0]));
+    if (nonCoordinatorEmails.length > 0) {
+      return res.status(400).json({ error: `These accounts are not Unit Coordinator accounts: ${nonCoordinatorEmails.join(', ')}` });
+    }
+
+    for (const coordinator of coordinatorUsers) {
+      const coordinatorDuplicate = await findDuplicateUnit({
+        coordinatorId: coordinator.id,
+        unitCode: normalizedUnitCode,
+        semester,
+        year
+      });
+
+      if (coordinatorDuplicate) {
+        return res.status(409).json({
+          error: `${coordinator.email} already has access to ${normalizedUnitCode} for ${semester}, ${year}.`
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query(
+        `
+        INSERT INTO units
+          (unit_coordinator_id, unit_code, unit_name, semester, year,
+           campus, delivery_mode, enrolment_size, availability_deadline)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, unit_code, unit_name, semester, year, campus,
+                  delivery_mode, enrolment_size, availability_deadline,
+                  availability_locked, schedule_locked, schedule_locked_at, draft_released
+        `,
+        [
+          req.user.id, normalizedUnitCode, unitName, semester, year,
+          null, null, enrolmentSize || null,
+          availabilityDeadline || null
+        ]
+      );
+
+      const unitId = result.rows[0].id;
+      await ensureUnitMembership(client, unitId, req.user.id, 'coordinator');
+
+      for (const coordinator of coordinatorUsers) {
+        await ensureUnitMembership(client, unitId, coordinator.id, 'coordinator');
+      }
+
+      await client.query('COMMIT');
+
+      for (const coordinator of coordinatorUsers) {
+        await createNotification({
+          userId: coordinator.id,
+          type: 'unit_coordinator_added',
+          title: 'Added to a unit',
+          content: `You have been added as a coordinator for ${normalizedUnitCode}.`,
+          unitId,
+          actionUrl: '/uc-dashboard'
+        });
+      }
+
+      res.status(201).json(formatUnit(result.rows[0]));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Error creating unit:', error);
     res.status(500).json({ error: 'Failed to create unit' });
@@ -256,9 +372,14 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
       enrolmentSize, availabilityDeadline
     } = req.body;
 
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
     const existingResult = await pool.query(
-      'SELECT unit_code, semester, year FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-      [id, req.user.id]
+      'SELECT unit_code, semester, year FROM units WHERE id = $1',
+      [id]
     );
 
     if (existingResult.rows.length === 0) {
@@ -293,7 +414,7 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
         year = COALESCE($4, year),
         enrolment_size = COALESCE($5, enrolment_size),
         availability_deadline = COALESCE($6, availability_deadline)
-      WHERE id = $7 AND unit_coordinator_id = $8
+      WHERE id = $7
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
@@ -301,7 +422,7 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
       [
         nextUnitCode, unitName, semester, year,
         enrolmentSize, availabilityDeadline,
-        id, req.user.id
+        id
       ]
     );
 
@@ -309,6 +430,135 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
   } catch (error) {
     console.error('Error updating unit:', error);
     res.status(500).json({ error: 'Failed to update unit' });
+  }
+});
+
+// Get coordinators linked to a unit.
+router.get('/:id/coordinators', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const result = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.name,
+        u.last_name,
+        u.email,
+        units.unit_coordinator_id = u.id AS is_main
+      FROM units
+      JOIN users u ON (
+        u.id = units.unit_coordinator_id
+        OR EXISTS (
+          SELECT 1
+          FROM unit_memberships um
+          WHERE um.unit_id = units.id
+            AND um.user_id = u.id
+            AND um.role = 'coordinator'
+        )
+      )
+      WHERE units.id = $1
+      ORDER BY is_main DESC, u.name ASC, u.last_name ASC, u.email ASC
+      `,
+      [id]
+    );
+
+    res.json(result.rows.map(user => ({
+      id: user.id,
+      name: user.name,
+      lastName: user.last_name,
+      fullName: [user.name, user.last_name].filter(Boolean).join(' '),
+      email: user.email,
+      isMain: user.is_main
+    })));
+  } catch (error) {
+    console.error('Error fetching unit coordinators:', error);
+    res.status(500).json({ error: 'Failed to fetch unit coordinators' });
+  }
+});
+
+// Add an existing Unit Coordinator account to a unit.
+router.post('/:id/coordinators', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanEmail = String(req.body.email || '').trim().toLowerCase();
+
+    if (!cleanEmail) {
+      return res.status(400).json({ error: 'Coordinator email is required' });
+    }
+
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const { users, missingEmails, nonCoordinatorEmails } = await loadCoordinatorUsersByEmail([cleanEmail], req.user.email);
+    if (missingEmails.length > 0) {
+      return res.status(400).json({ error: `No account found for ${cleanEmail}` });
+    }
+    if (nonCoordinatorEmails.length > 0) {
+      return res.status(400).json({ error: `${cleanEmail} is not a Unit Coordinator account` });
+    }
+
+    const coordinator = users[0];
+    const unitResult = await pool.query(
+      'SELECT unit_code, semester, year FROM units WHERE id = $1',
+      [id]
+    );
+    const unit = unitResult.rows[0];
+
+    const coordinatorDuplicate = await findDuplicateUnit({
+      coordinatorId: coordinator.id,
+      unitCode: unit.unit_code,
+      semester: unit.semester,
+      year: unit.year,
+      excludeUnitId: id
+    });
+
+    if (coordinatorDuplicate) {
+      return res.status(409).json({
+        error: `${coordinator.email} already has access to ${unit.unit_code} for ${unit.semester}, ${unit.year}.`
+      });
+    }
+
+    const membershipResult = await pool.query(
+      `
+      INSERT INTO unit_memberships (unit_id, user_id, role)
+      VALUES ($1, $2, 'coordinator')
+      ON CONFLICT (unit_id, user_id, role) DO NOTHING
+      RETURNING id
+      `,
+      [id, coordinator.id]
+    );
+
+    const unitCode = unit?.unit_code || 'this unit';
+
+    if (membershipResult.rows.length > 0) {
+      await createNotification({
+        userId: coordinator.id,
+        type: 'unit_coordinator_added',
+        title: 'Added to a unit',
+        content: `You have been added as a coordinator for ${unitCode}.`,
+        unitId: id,
+        actionUrl: '/uc-dashboard'
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      alreadyCoordinator: membershipResult.rows.length === 0,
+      coordinator: {
+        id: coordinator.id,
+        name: coordinator.name,
+        lastName: coordinator.last_name,
+        fullName: [coordinator.name, coordinator.last_name].filter(Boolean).join(' '),
+        email: coordinator.email,
+        isMain: false
+      }
+    });
+  } catch (error) {
+    console.error('Error adding unit coordinator:', error);
+    res.status(500).json({ error: 'Failed to add unit coordinator' });
   }
 });
 
@@ -343,11 +593,8 @@ router.patch('/:id/lock-schedule', verifyToken, requireRole('coordinator'), asyn
     const { id } = req.params;
     const { force } = req.body;
 
-    const ownedResult = await pool.query(
-      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-      [id, req.user.id]
-    );
-    if (ownedResult.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const unassignedResult = await pool.query(
       'SELECT COUNT(*) FROM sessions WHERE unit_id = $1 AND is_assigned = FALSE',
@@ -392,17 +639,19 @@ router.patch('/:id/lock-schedule', verifyToken, requireRole('coordinator'), asyn
 router.patch('/:id/release-draft', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const result = await pool.query(
       `
       UPDATE units
       SET draft_released = TRUE
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
-      [id, req.user.id]
+      [id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
@@ -418,17 +667,19 @@ router.patch('/:id/release-draft', verifyToken, requireRole('coordinator'), asyn
 router.patch('/:id/unrelease-draft', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const result = await pool.query(
       `
       UPDATE units
       SET draft_released = FALSE
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
-      [id, req.user.id]
+      [id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
@@ -444,17 +695,19 @@ router.patch('/:id/unrelease-draft', verifyToken, requireRole('coordinator'), as
 router.patch('/:id/unlock-schedule', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const result = await pool.query(
       `
       UPDATE units
       SET schedule_locked = FALSE, schedule_locked_at = NULL
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
-      [id, req.user.id]
+      [id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
@@ -470,17 +723,19 @@ router.patch('/:id/unlock-schedule', verifyToken, requireRole('coordinator'), as
 router.patch('/:id/lock-availability', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const result = await pool.query(
       `
       UPDATE units
       SET availability_locked = TRUE
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
-      [id, req.user.id]
+      [id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });
@@ -496,17 +751,19 @@ router.patch('/:id/lock-availability', verifyToken, requireRole('coordinator'), 
 router.patch('/:id/unlock-availability', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const result = await pool.query(
       `
       UPDATE units
       SET availability_locked = FALSE
-      WHERE id = $1 AND unit_coordinator_id = $2
+      WHERE id = $1
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
                 availability_locked, schedule_locked, schedule_locked_at, draft_released
       `,
-      [id, req.user.id]
+      [id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Unit not found' });

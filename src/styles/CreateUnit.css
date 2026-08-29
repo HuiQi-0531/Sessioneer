@@ -55,6 +55,135 @@
   margin-bottom: 16px;
 }
 
+.cu-coordinator-section {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 8px;
+  background-color: var(--color-bg-subtle);
+}
+
+.cu-coordinator-section h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+  color: var(--color-text);
+}
+
+.cu-coordinator-section p {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cu-coordinator-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cu-coordinator-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.cu-coordinator-item strong,
+.cu-coordinator-item span {
+  display: block;
+}
+
+.cu-coordinator-item strong {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.cu-coordinator-item span {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.cu-coordinator-item em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.cu-email-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cu-email-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 8px 6px 10px;
+  border-radius: 999px;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cu-email-chip button {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.cu-add-coordinator-row {
+  display: flex;
+  gap: 8px;
+}
+
+.cu-add-coordinator-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.cu-add-coordinator-row button {
+  border: none;
+  border-radius: 8px;
+  padding: 0 16px;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cu-add-coordinator-row button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cu-coordinator-error {
+  margin: 10px 0 0;
+}
+
 .cu-buttons-row {
   display: flex;
   gap: 12px;

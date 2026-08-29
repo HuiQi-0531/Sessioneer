@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -176,17 +177,15 @@ const uploadAttachment = async (file, senderId, req) => {
 
 const canAccessUnit = async (user, unitId) => {
   if (user.role === 'coordinator') {
-    const result = await pool.query(
-      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-      [unitId, user.id]
-    );
-    return result.rows.length > 0;
+    return !!(await getCoordinatorUnitId(unitId, user.id));
   }
 
   if (user.role === 'tutor') {
     const result = await pool.query(
       `
       SELECT 1 WHERE EXISTS (
+        SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+        UNION
         SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
         UNION
         SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
@@ -309,21 +308,33 @@ router.patch('/thread/:otherUserId/read', verifyToken, async (req, res) => {
  * every unit they have submitted availability for or been assigned a
  * session in, along with a last-message preview and unread count.
  */
-router.get('/my-contacts', verifyToken, requireRole('tutor'), async (req, res) => {
+router.get('/my-contacts', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const unitsResult = await pool.query(
       `
-      SELECT DISTINCT u.id as unit_id, u.unit_code, u.unit_name, u.unit_coordinator_id,
+      SELECT DISTINCT u.id as unit_id, u.unit_code, u.unit_name,
              c.id as coordinator_id,
              TRIM(CONCAT(c.name, ' ', COALESCE(c.last_name, ''))) as coordinator_name,
              c.avatar_url as coordinator_avatar_url
       FROM units u
-      JOIN users c ON c.id = u.unit_coordinator_id
+      JOIN users c ON (
+        c.id = u.unit_coordinator_id
+        OR EXISTS (
+          SELECT 1
+          FROM unit_memberships cm
+          WHERE cm.unit_id = u.id
+            AND cm.user_id = c.id
+            AND cm.role = 'coordinator'
+        )
+      )
       WHERE u.id IN (
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
         SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
       )
+        AND c.role = 'coordinator'
       `,
       [req.user.id]
     );

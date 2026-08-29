@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { splitDisplayName } = require('../utils/userNames');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -33,11 +34,7 @@ const formatApplication = (a) => ({
 });
 
 const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
-  const result = await clientOrPool.query(
-    'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-    [unitId, coordinatorId]
-  );
-  return result.rows[0]?.id || null;
+  return getCoordinatorUnitId(unitId, coordinatorId, clientOrPool);
 };
 
 /**

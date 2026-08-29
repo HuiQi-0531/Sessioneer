@@ -8,6 +8,33 @@ const router = express.Router();
 
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 
+const getUnitCoordinators = async (unitId) => {
+  const result = await pool.query(
+    `
+    SELECT DISTINCT
+      u.id,
+      u.email,
+      TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as name
+    FROM units
+    JOIN users u ON (
+      u.id = units.unit_coordinator_id
+      OR EXISTS (
+        SELECT 1
+        FROM unit_memberships um
+        WHERE um.unit_id = units.id
+          AND um.user_id = u.id
+          AND um.role = 'coordinator'
+      )
+    )
+    WHERE units.id = $1
+      AND u.role = 'coordinator'
+    `,
+    [unitId]
+  );
+
+  return result.rows;
+};
+
 const labelFromSessionValue = (value) => {
   if (!value) return 'Not specified';
   const parts = String(value).split('::');
@@ -173,11 +200,8 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
         un.id,
         un.unit_code,
         un.unit_name,
-        un.unit_coordinator_id,
-        TRIM(CONCAT(uc.name, ' ', COALESCE(uc.last_name, ''))) as coordinator_name,
-        uc.email as coordinator_email
+        un.unit_coordinator_id
       FROM units un
-      LEFT JOIN users uc ON uc.id = un.unit_coordinator_id
       WHERE un.unit_code = $1
       LIMIT 1
       `,
@@ -185,7 +209,7 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     );
     const unit = unitResult.rows[0];
     const unit_id = unit?.id;
-    const coordinatorId = unit?.unit_coordinator_id;
+    const coordinators = unit_id ? await getUnitCoordinators(unit_id) : [];
 
     const priorityValue = priority || 'Normal';
 
@@ -219,21 +243,22 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     const tutorDisplayName = await getUserDisplayName(req.user.id);
 
-    if (coordinatorId) {
-      await createNotification({
-        userId: coordinatorId,
+    if (coordinators.length > 0) {
+      await Promise.all(coordinators.map(coordinator => createNotification({
+        userId: coordinator.id,
         type: 'request_submitted',
         title: 'New swap/change request',
         content: `${tutorDisplayName} submitted a ${requestType || 'session'} request in ${unitCode}.`,
         unitId: unit_id,
         actionUrl: '/uc-requests'
-      });
+      })));
 
       if ((priorityValue || '').toLowerCase() === 'urgent') {
-        try {
+        await Promise.all(coordinators.map(async (coordinator) => {
+          try {
           await sendUrgentRequestEmail({
-            coordinatorEmail: unit.coordinator_email,
-            coordinatorName: unit.coordinator_name,
+            coordinatorEmail: coordinator.email,
+            coordinatorName: coordinator.name,
             tutorName: tutorDisplayName,
             tutorEmail: req.user.email,
             unitCode: unit.unit_code || unitCode,
@@ -243,9 +268,10 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
             preferredSwapTo,
             reason
           });
-        } catch (emailError) {
-          console.error('Error sending urgent request email:', emailError);
-        }
+          } catch (emailError) {
+            console.error('Error sending urgent request email:', emailError);
+          }
+        }));
       }
     }
 
@@ -298,22 +324,22 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
     // unit coordinator know it needs another look.
     if ((status || '').toLowerCase() === 'pending' && updated.unit_id) {
       const unitResult = await pool.query(
-        'SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1',
+        'SELECT unit_code FROM units WHERE id = $1',
         [updated.unit_id]
       );
       const unitCode = unitResult.rows[0]?.unit_code || 'your unit';
-      const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
+      const coordinators = await getUnitCoordinators(updated.unit_id);
 
-      if (coordinatorId) {
+      if (coordinators.length > 0) {
         const tutorDisplayName = await getUserDisplayName(req.user.id);
-        await createNotification({
-          userId: coordinatorId,
+        await Promise.all(coordinators.map(coordinator => createNotification({
+          userId: coordinator.id,
           type: 'request_appealed',
           title: 'Rejected request appealed',
           content: `${tutorDisplayName} appealed a rejected request in ${unitCode}.`,
           unitId: updated.unit_id,
           actionUrl: '/uc-requests'
-        });
+        })));
       }
     }
 
@@ -386,7 +412,14 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       JOIN units un ON cr.unit_id = un.id
-      WHERE un.unit_coordinator_id = $1
+      WHERE EXISTS (
+        SELECT 1
+        FROM unit_memberships um
+        WHERE um.unit_id = un.id
+          AND um.user_id = $1
+          AND um.role = 'coordinator'
+      )
+         OR un.unit_coordinator_id = $1
       ORDER BY 
         CASE WHEN cr.status = 'Pending' THEN 0 ELSE 1 END,
         CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
@@ -416,7 +449,16 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
       FROM units un
       WHERE change_requests.id = $4
         AND change_requests.unit_id = un.id
-        AND un.unit_coordinator_id = $5
+        AND (
+          un.unit_coordinator_id = $5
+          OR EXISTS (
+            SELECT 1
+            FROM unit_memberships um
+            WHERE um.unit_id = un.id
+              AND um.user_id = $5
+              AND um.role = 'coordinator'
+          )
+        )
       RETURNING 
         change_requests.id,
         change_requests.request_type as "requestType",

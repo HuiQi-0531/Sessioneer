@@ -1,16 +1,13 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
 
 const getOwnedUnitId = async (unitId, coordinatorId) => {
-  const result = await pool.query(
-    'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-    [unitId, coordinatorId]
-  );
-  return result.rows[0]?.id || null;
+  return getCoordinatorUnitId(unitId, coordinatorId);
 };
 
 // Get all tutors, with their priority marker/notes/tags for this unit if set.

@@ -39,6 +39,11 @@ const CreateUnit = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdUnit, setCreatedUnit] = useState(null);
+  const [coordinatorEmailInput, setCoordinatorEmailInput] = useState('');
+  const [coordinatorEmails, setCoordinatorEmails] = useState([]);
+  const [coordinators, setCoordinators] = useState([]);
+  const [coordinatorError, setCoordinatorError] = useState('');
+  const [isAddingCoordinator, setIsAddingCoordinator] = useState(false);
 
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -53,7 +58,10 @@ const CreateUnit = () => {
 
     const loadUnit = async () => {
       try {
-        const unit = await unitsAPI.getOne(id);
+        const [unit, unitCoordinators] = await Promise.all([
+          unitsAPI.getOne(id),
+          unitsAPI.getCoordinators(id)
+        ]);
         setFormData({
           unitCode: unit.unitCode || '',
           unitName: unit.unitName || '',
@@ -63,6 +71,7 @@ const CreateUnit = () => {
             ? unit.availabilityDeadline.slice(0, 10)
             : ''
         });
+        setCoordinators(unitCoordinators);
       } catch (err) {
         console.error('Error loading unit:', err);
         setError('Could not load this unit.');
@@ -74,6 +83,69 @@ const CreateUnit = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const addCoordinatorEmailToDraft = () => {
+    const email = coordinatorEmailInput.trim().toLowerCase();
+    setCoordinatorError('');
+
+    if (!email) {
+      setCoordinatorError('Enter a coordinator email first.');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setCoordinatorError('Enter a valid email address.');
+      return;
+    }
+
+    if (currentUser?.email && email === currentUser.email.toLowerCase()) {
+      setCoordinatorError('You are already added automatically.');
+      return;
+    }
+
+    if (coordinatorEmails.includes(email)) {
+      setCoordinatorError('This coordinator is already in the list.');
+      return;
+    }
+
+    setCoordinatorEmails([...coordinatorEmails, email]);
+    setCoordinatorEmailInput('');
+  };
+
+  const removeCoordinatorEmail = (email) => {
+    setCoordinatorEmails(coordinatorEmails.filter(item => item !== email));
+  };
+
+  const handleAddCoordinator = async () => {
+    const email = coordinatorEmailInput.trim().toLowerCase();
+    setCoordinatorError('');
+
+    if (!email) {
+      setCoordinatorError('Enter a coordinator email first.');
+      return;
+    }
+
+    if (coordinators.some(coordinator => coordinator.email.toLowerCase() === email)) {
+      setCoordinatorError('This coordinator is already linked to the unit.');
+      return;
+    }
+
+    setIsAddingCoordinator(true);
+    try {
+      const result = await unitsAPI.addCoordinator(id, email);
+      setCoordinators(prev => {
+        if (prev.some(coordinator => coordinator.id === result.coordinator.id)) {
+          return prev;
+        }
+        return [...prev, result.coordinator];
+      });
+      setCoordinatorEmailInput('');
+    } catch (err) {
+      setCoordinatorError(err.message || 'Could not add coordinator.');
+    } finally {
+      setIsAddingCoordinator(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -92,7 +164,8 @@ const CreateUnit = () => {
       semester,
       year: parseInt(yearStr, 10),
       enrolmentSize: formData.enrolmentSize ? parseInt(formData.enrolmentSize, 10) : null,
-      availabilityDeadline: formData.availabilityDeadline || null
+      availabilityDeadline: formData.availabilityDeadline || null,
+      coordinatorEmails
     };
 
     setError('');
@@ -251,6 +324,60 @@ const CreateUnit = () => {
                       value={formData.availabilityDeadline}
                       onChange={handleChange}
                     />
+                  </div>
+
+                  <div className="cu-coordinator-section">
+                    <div>
+                      <h3>Unit Coordinators</h3>
+                      <p>
+                        Add existing Unit Coordinator accounts that should manage this unit too.
+                      </p>
+                    </div>
+
+                    {isEditMode && coordinators.length > 0 && (
+                      <div className="cu-coordinator-list">
+                        {coordinators.map(coordinator => (
+                          <div className="cu-coordinator-item" key={coordinator.id}>
+                            <div>
+                              <strong>{coordinator.fullName || coordinator.email}</strong>
+                              <span>{coordinator.email}</span>
+                            </div>
+                            {coordinator.isMain && <em>Main</em>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!isEditMode && coordinatorEmails.length > 0 && (
+                      <div className="cu-email-chip-list">
+                        {coordinatorEmails.map(email => (
+                          <span className="cu-email-chip" key={email}>
+                            {email}
+                            <button type="button" onClick={() => removeCoordinatorEmail(email)} aria-label={`Remove ${email}`}>
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="cu-add-coordinator-row">
+                      <input
+                        type="email"
+                        value={coordinatorEmailInput}
+                        onChange={(e) => setCoordinatorEmailInput(e.target.value)}
+                        placeholder="coordinator@example.com"
+                      />
+                      <button
+                        type="button"
+                        onClick={isEditMode ? handleAddCoordinator : addCoordinatorEmailToDraft}
+                        disabled={isEditMode && isAddingCoordinator}
+                      >
+                        {isEditMode && isAddingCoordinator ? 'Adding...' : 'Add'}
+                      </button>
+                    </div>
+
+                    {coordinatorError && <p className="cu-error cu-coordinator-error">{coordinatorError}</p>}
                   </div>
 
                   <div className="cu-buttons-row">

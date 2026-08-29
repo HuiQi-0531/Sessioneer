@@ -86,7 +86,16 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
     const coordinatorId = req.user.id;
 
     const unitsResult = await pool.query(
-      'SELECT id, unit_code, semester, year FROM units WHERE unit_coordinator_id = $1 ORDER BY year DESC, semester DESC',
+      `
+        SELECT DISTINCT u.id, u.unit_code, u.semester, u.year
+        FROM units u
+        LEFT JOIN unit_memberships um
+          ON um.unit_id = u.id
+         AND um.user_id = $1
+         AND um.role = 'coordinator'
+        WHERE u.unit_coordinator_id = $1 OR um.id IS NOT NULL
+        ORDER BY u.year DESC, u.semester DESC
+      `,
       [coordinatorId]
     );
 

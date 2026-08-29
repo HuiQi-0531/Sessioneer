@@ -531,6 +531,25 @@ export const unitsAPI = {
     return response.json();
   },
 
+  getCoordinators: async (id) => {
+    const response = await fetch(`${API_URL}/units/${id}/coordinators`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to fetch unit coordinators');
+    return response.json();
+  },
+
+  addCoordinator: async (id, email) => {
+    const response = await fetch(`${API_URL}/units/${id}/coordinators`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ email })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to add unit coordinator');
+    return data;
+  },
+
   addSelfTutorRole: async (id) => {
     const response = await fetch(`${API_URL}/units/${id}/self-tutor-role`, {
       method: 'POST',

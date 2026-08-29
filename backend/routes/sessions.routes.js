@@ -10,6 +10,7 @@ const {
   timeToSlot
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 // Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
 // students triggers one more suggested tutor. Used as a fallback whenever a
@@ -41,13 +42,8 @@ const getMissingSessionFields = (session) => {
     .map(([, label]) => label);
 };
 
-// Confirms the given unit belongs to the logged-in coordinator.
 const getOwnedUnitId = async (unitId, coordinatorId) => {
-  const result = await pool.query(
-    'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
-    [unitId, coordinatorId]
-  );
-  return result.rows[0]?.id || null;
+  return getCoordinatorUnitId(unitId, coordinatorId);
 };
 
 const isScheduleLocked = async (unitId) => {
@@ -762,14 +758,26 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
       [confirmed, confirmed ? null : reason.trim(), sessionId, req.user.id]
     );
 
-    const unitResult = await pool.query('SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1', [unitId]);
+    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [unitId]);
     const unit = unitResult.rows[0];
+    const coordinatorsResult = await pool.query(
+      `
+      SELECT unit_coordinator_id as user_id
+      FROM units
+      WHERE id = $1
+      UNION
+      SELECT user_id
+      FROM unit_memberships
+      WHERE unit_id = $1 AND role = 'coordinator'
+      `,
+      [unitId]
+    );
 
     const tutorDisplayName = await getUserDisplayName(req.user.id);
 
-    if (unit) {
-      await createNotification({
-        userId: unit.unit_coordinator_id,
+    if (unit && coordinatorsResult.rows.length > 0) {
+      await Promise.all(coordinatorsResult.rows.map(coordinator => createNotification({
+        userId: coordinator.user_id,
         type: confirmed ? 'session_confirmed' : 'session_declined',
         title: confirmed ? 'Tutor confirmed a session' : 'Tutor declined a session',
         content: confirmed
@@ -778,7 +786,7 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
         unitId,
         sessionId,
         actionUrl: `/schedule-builder/${unitId}`
-      });
+      })));
     }
 
     const withTutors = await pool.query(

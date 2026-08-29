@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
+const { getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     const sessionsResult = await client.query(
       `
       SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time, s.location,
-             s.assigned_tutor_id, un.unit_code, un.unit_coordinator_id
+             s.assigned_tutor_id, un.unit_code
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
       WHERE s.id = ANY($1::uuid[])
@@ -39,16 +40,16 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
       return res.status(404).json({ error: 'One or more sessions could not be found.' });
     }
 
-    const notOwned = sessionsResult.rows.find(s => s.unit_coordinator_id !== req.user.id);
-    if (notOwned) {
-      return res.status(403).json({ error: 'You can only broadcast sessions from your own units.' });
-    }
-
     const unitIds = [...new Set(sessionsResult.rows.map(s => s.unit_id))];
     if (unitIds.length > 1) {
       return res.status(400).json({ error: 'Select sessions from a single unit at a time.' });
     }
     const unitId = unitIds[0];
+    const coordinatorUnitId = await getCoordinatorUnitId(unitId, req.user.id, client);
+    if (!coordinatorUnitId) {
+      return res.status(403).json({ error: 'You can only broadcast sessions from your own units.' });
+    }
+
     const unitCode = sessionsResult.rows[0].unit_code;
 
     await client.query('BEGIN');
@@ -131,6 +132,13 @@ router.get('/uc/cover-requests', verifyToken, requireRole('coordinator'), async 
       LEFT JOIN users orig ON orig.id = cr.original_tutor_id
       LEFT JOIN users claimer ON claimer.id = cr.claimed_by_id
       WHERE un.unit_coordinator_id = $1
+         OR EXISTS (
+           SELECT 1
+           FROM unit_memberships um
+           WHERE um.unit_id = un.id
+             AND um.user_id = $1
+             AND um.role = 'coordinator'
+         )
       ORDER BY cr.created_at DESC
       `,
       [req.user.id]
@@ -239,9 +247,20 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     await client.query('COMMIT');
 
     const claimerName = await getUserDisplayName(req.user.id);
-    const unitResult = await pool.query('SELECT unit_code, unit_coordinator_id FROM units WHERE id = $1', [claimed.unit_id]);
+    const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [claimed.unit_id]);
     const unitCode = unitResult.rows[0]?.unit_code || 'the unit';
-    const coordinatorId = unitResult.rows[0]?.unit_coordinator_id;
+    const coordinatorsResult = await pool.query(
+      `
+      SELECT unit_coordinator_id as user_id
+      FROM units
+      WHERE id = $1
+      UNION
+      SELECT user_id
+      FROM unit_memberships
+      WHERE unit_id = $1 AND role = 'coordinator'
+      `,
+      [claimed.unit_id]
+    );
 
     if (claimed.original_tutor_id) {
       await createNotification({
@@ -254,16 +273,16 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
         actionUrl: '/tutor-schedule'
       });
     }
-    if (coordinatorId) {
-      await createNotification({
-        userId: coordinatorId,
+    if (coordinatorsResult.rows.length > 0) {
+      await Promise.all(coordinatorsResult.rows.map(coordinator => createNotification({
+        userId: coordinator.user_id,
         type: 'session_cover_claimed',
         title: 'Cover request claimed',
         content: `${claimerName} claimed a cover request in ${unitCode}.`,
         unitId: claimed.unit_id,
         sessionId: claimed.session_id,
         actionUrl: '/uc-requests'
-      });
+      })));
     }
 
     console.log('Cover request claimed:', id, 'by', req.user.id);
@@ -290,7 +309,16 @@ router.delete('/uc/cover-requests/batch/:batchId', verifyToken, requireRole('coo
       JOIN units un ON un.id = cb.unit_id
       WHERE cover_requests.batch_id = $1
         AND cover_requests.batch_id = cb.id
-        AND un.unit_coordinator_id = $2
+        AND (
+          un.unit_coordinator_id = $2
+          OR EXISTS (
+            SELECT 1
+            FROM unit_memberships um
+            WHERE um.unit_id = un.id
+              AND um.user_id = $2
+              AND um.role = 'coordinator'
+          )
+        )
         AND cover_requests.status = 'open'
       RETURNING cover_requests.id
       `,
