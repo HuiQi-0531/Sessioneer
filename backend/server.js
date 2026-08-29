@@ -21,6 +21,7 @@ const dashboardRoutes = require('./routes/dashboard.routes');
 const profileRoutes = require('./routes/profile.routes');
 const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
 const coverRoutes = require('./routes/cover.routes');
+const jobsRoutes = require('./routes/jobs.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -458,6 +459,30 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+pool.query(`
+  CREATE TABLE IF NOT EXISTS session_tutors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    tutor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    tutor_confirmed BOOLEAN DEFAULT NULL,
+    tutor_reject_reason TEXT,
+    assigned_at TIMESTAMP DEFAULT NOW(),
+    reminder_sent_at TIMESTAMP,
+    UNIQUE(session_id, tutor_id)
+  );
+
+  ALTER TABLE session_tutors
+    ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
+
+  CREATE INDEX IF NOT EXISTS idx_session_tutors_pending_reminders
+    ON session_tutors(assigned_at)
+    WHERE tutor_confirmed IS NULL AND reminder_sent_at IS NULL;
+`).then(() => {
+  console.log('session_tutors reminder schema OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Tutor application/onboarding tables
 pool.query(`
   CREATE TABLE IF NOT EXISTS tutor_applications (
@@ -620,6 +645,7 @@ app.use('/tutor-applications', tutorApplicationsRoutes);
 app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legacy)
 app.use('/', coverRoutes);          // /cover-requests, /uc/cover-requests
 app.use('/availability', availabilityRoutes);
+app.use('/jobs', jobsRoutes);
 
 // Handle 404
 app.use((req, res) => {

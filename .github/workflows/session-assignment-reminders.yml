@@ -1,0 +1,18 @@
+name: Session Assignment Reminders
+
+on:
+  schedule:
+    # Runs daily at 9:00 AM Brisbane time.
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder job
+        run: |
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.SESSIONEER_CRON_SECRET }}" \
+            https://sessioneer-backend.onrender.com/jobs/session-assignment-reminders
