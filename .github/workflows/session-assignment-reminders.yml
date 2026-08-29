@@ -12,7 +12,18 @@ jobs:
     steps:
       - name: Trigger reminder job
         run: |
-          curl --fail --show-error --silent \
+          response_file="$(mktemp)"
+          status_code="$(curl --show-error --silent \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
             --request POST \
             --header "Authorization: Bearer ${{ secrets.SESSIONEER_CRON_SECRET }}" \
-            https://sessioneer-backend.onrender.com/jobs/session-assignment-reminders
+            https://sessioneer-backend.onrender.com/jobs/session-assignment-reminders)"
+
+          echo "Backend status: $status_code"
+          echo "Backend response:"
+          cat "$response_file"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            exit 1
+          fi
