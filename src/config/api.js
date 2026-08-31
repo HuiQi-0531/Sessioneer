@@ -582,6 +582,19 @@ export const unitsAPI = {
     return data;
   },
 
+  // Duplicates a unit into a new semester/year. Backs onto
+  // POST /units/:id/duplicate on the server.
+  duplicate: async (id, duplicateData) => {
+    const response = await fetch(`${API_URL}/units/${id}/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(duplicateData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to duplicate unit');
+    return data;
+  },
+
   delete: async (id) => {
     const response = await fetch(`${API_URL}/units/${id}`, {
       method: 'DELETE',

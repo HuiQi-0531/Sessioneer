@@ -64,20 +64,22 @@ const normaliseTime = (rawTime) => {
   return null;
 };
 
-// Works out if a unit's semester has already passed.
+// Works out if a unit's semester is the current one.
 // Semester 1 is treated as Jan-Jun, Semester 2 as Jul-Dec.
+// Only units in the current calendar year AND current half-year window
+// count as active — future years/semesters are NOT active (they're
+// upcoming), and past years/semesters are NOT active either.
 const isUnitActive = (semester, year) => {
   if (!semester || !year) return true; // not enough info, assume active
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0 = Jan
 
-  if (year > currentYear) return true;
-  if (year < currentYear) return false;
+  if (Number(year) !== currentYear) return false;
 
   const isSem1 = semester.toLowerCase().includes('1');
-  if (isSem1) return currentMonth <= 5; // Jan-Jun
-  return currentMonth >= 6; // Jul-Dec
+  return isSem1 ? currentMonth <= 5 : currentMonth >= 6;
 };
 
 // Converts a "HH:MM:SS" string to total minutes since midnight.

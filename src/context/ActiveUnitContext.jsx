@@ -33,7 +33,11 @@ export const ActiveUnitProvider = ({ children }) => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  const refreshUnits = useCallback(async () => {
+  // NEW: accepts { preferUnitId } so callers (e.g. "unit created" / "unit duplicated")
+  // can force the freshly created unit to become active, instead of always
+  // falling back to whatever was previously active.
+  const refreshUnits = useCallback(async (options = {}) => {
+    const { preferUnitId = null } = options;
     const latestFallbackRole = getCurrentUser()?.role;
 
     if (latestFallbackRole !== 'coordinator' && latestFallbackRole !== 'tutor') {
@@ -51,14 +55,18 @@ export const ActiveUnitProvider = ({ children }) => {
 
       setActiveUnitIdState(prevId => {
         const preferredRole = activeViewRole || latestFallbackRole;
+        const preferredUnit = preferUnitId ? units.find(u => u.id === preferUnitId) : null;
         const previousUnit = units.find(u => u.id === prevId);
         const previousUnitForRole = preferredRole
           ? units.find(u => u.id === prevId && u.roles?.includes(preferredRole))
           : null;
+        const firstActiveUnitForRole = preferredRole
+          ? units.find(u => u.roles?.includes(preferredRole) && u.isActive)
+          : null;
         const firstUnitForRole = preferredRole
           ? units.find(u => u.roles?.includes(preferredRole))
           : null;
-        const nextUnit = previousUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
+        const nextUnit = preferredUnit || previousUnitForRole || firstActiveUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
 
         setActiveViewRoleState(getDefaultRole(nextUnit, preferredRole, latestFallbackRole));
         return nextUnit ? nextUnit.id : null;
