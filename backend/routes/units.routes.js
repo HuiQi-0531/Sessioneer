@@ -118,7 +118,7 @@ router.get('/my-units', verifyToken, requireRole('tutor', 'coordinator'), async 
              u.schedule_locked, u.schedule_locked_at, u.draft_released
       FROM units u
       WHERE u.id IN (
-        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
@@ -232,24 +232,6 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
   } catch (error) {
     console.error('Error fetching unit:', error);
     res.status(500).json({ error: 'Failed to fetch unit' });
-  }
-});
-
-// Let a coordinator use the same account as a tutor for one of their units.
-router.post('/:id/self-tutor-role', verifyToken, requireRole('coordinator'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
-
-    if (!coordinatorUnitId) {
-      return res.status(404).json({ error: 'Unit not found' });
-    }
-
-    await ensureUnitMembership(pool, id, req.user.id, 'tutor');
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error adding self tutor role:', error);
-    res.status(500).json({ error: 'Failed to add tutor role' });
   }
 });
 
@@ -841,12 +823,13 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
       await ensureUnitMembership(client, newUnitId, req.user.id, 'coordinator');
 
       // Copy tutors only (not other coordinators, not availability).
+      // Their tier (tutor vs super_tutor) carries over as-is.
       await client.query(
         `
         INSERT INTO unit_memberships (unit_id, user_id, role)
-        SELECT $1, user_id, 'tutor'
+        SELECT $1, user_id, role
         FROM unit_memberships
-        WHERE unit_id = $2 AND role = 'tutor'
+        WHERE unit_id = $2 AND role IN ('tutor', 'super_tutor')
         ON CONFLICT (unit_id, user_id, role) DO NOTHING
         `,
         [newUnitId, id]

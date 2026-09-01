@@ -11,6 +11,7 @@ const {
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 
 // Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
 // students triggers one more suggested tutor. Used as a fallback whenever a
@@ -74,14 +75,14 @@ const isTutorLinkedToUnit = async (userId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
-      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = ANY($3)
       UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
       SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1 AND s.unit_id = $2
     )
     `,
-    [userId, unitId]
+    [userId, unitId, TUTOR_LIKE_ROLES]
   );
   return result.rows.length > 0;
 };
@@ -417,15 +418,17 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 
     const tutorsResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, um.role AS membership_role, m.priority_tag, m.starred, m.flagged
       FROM users u
       JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
+        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = ANY($2)
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name
       `,
-      [unitId]
+      [unitId, TUTOR_LIKE_ROLES]
     );
+
+    const sessionNeedsSuperTutor = requiresSuperTutor(session.session_type);
 
     const availResult = await pool.query(
       `
@@ -470,8 +473,12 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const hoursIfAssigned = existingHours + thisDuration;
       const overMaxHours = tutor.maximum_hours != null && hoursIfAssigned > tutor.maximum_hours;
 
-      const hardBlocked = conflict || overMaxHours;
+      const isSuperTutor = tutor.membership_role === 'super_tutor';
+      const notEligibleForType = sessionNeedsSuperTutor && !isSuperTutor;
+
+      const hardBlocked = conflict || overMaxHours || notEligibleForType;
       const warnings = [];
+      if (notEligibleForType) warnings.push(`Only Super Tutors can be assigned to ${session.session_type} sessions`);
       if (conflict) warnings.push('Already assigned to an overlapping session');
       if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
       if (hasAvoid) warnings.push('Marked "avoid" for this time');
@@ -496,6 +503,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         name: tutor.name,
         email: tutor.email,
         maximumHours: tutor.maximum_hours,
+        isSuperTutor,
         priorityTag: tutor.priority_tag || 'Standard',
         starred: tutor.starred || false,
         flagged: tutor.flagged || false,
@@ -567,16 +575,22 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
 
     const tutorResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours,
+             bool_or(um.role = 'super_tutor') AS is_super_tutor
       FROM users u
       LEFT JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor'
+        ON um.user_id = u.id AND um.unit_id = $2 AND um.role = ANY($3)
       WHERE u.id = $1 AND (u.role = 'tutor' OR um.id IS NOT NULL)
+      GROUP BY u.id, u.name, u.last_name, u.maximum_hours
       `,
-      [tutorId, unitId]
+      [tutorId, unitId, TUTOR_LIKE_ROLES]
     );
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Tutor not found' });
     const tutor = tutorResult.rows[0];
+
+    if (requiresSuperTutor(session.session_type) && !tutor.is_super_tutor) {
+      return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
+    }
 
     const otherSessionsResult = await pool.query(
       `

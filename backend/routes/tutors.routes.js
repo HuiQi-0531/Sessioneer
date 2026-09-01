@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { TUTOR_LIKE_ROLES } = require('../utils/roles');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -22,16 +23,16 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       `
       SELECT
         u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.phone_number, u.work_experience,
-        u.maximum_hours, u.contract_type,
+        u.maximum_hours, u.contract_type, um.role AS membership_role,
         m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
       JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
+        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = ANY($2)
       LEFT JOIN tutor_unit_markers m
         ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name
       `,
-      [unitId]
+      [unitId, TUTOR_LIKE_ROLES]
     );
 
     const tutors = result.rows.map(t => ({
@@ -42,6 +43,8 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       workExperience: t.work_experience,
       maximumHours: t.maximum_hours,
       contractType: t.contract_type,
+      role: t.membership_role || 'tutor',
+      isSuperTutor: t.membership_role === 'super_tutor',
       priorityTag: t.priority_tag || 'Standard',
       internalNotes: t.internal_notes || '',
       tags: t.tags || [],

@@ -27,7 +27,7 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
         UNION
         SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
         UNION
-        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
       )
       ORDER BY u.year DESC, u.semester DESC
       `,

@@ -4,6 +4,7 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { escapeHtml, sendEmail } = require('../utils/email');
+const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 
 const router = express.Router();
 
@@ -174,10 +175,10 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
       FROM unit_memberships um
       JOIN users u ON u.id = um.user_id
       WHERE um.unit_id = $1
-        AND um.role = 'tutor'
+        AND um.role = ANY($2)
         AND u.email IS NOT NULL
       `,
-      [unitId]
+      [unitId, TUTOR_LIKE_ROLES]
     );
     const recipients = tutorsResult.rows.filter(tutor => tutor.id && !excludedTutorIds.has(tutor.id));
     const recipientIds = recipients.map(tutor => tutor.id);
@@ -282,12 +283,12 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
       LEFT JOIN users orig ON orig.id = cr.original_tutor_id
       WHERE cr.status = 'open'
         AND cr.unit_id IN (
-          SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+          SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = ANY($2)
         )
         AND (cr.original_tutor_id IS NULL OR cr.original_tutor_id != $1)
       ORDER BY cr.created_at DESC
       `,
-      [req.user.id]
+      [req.user.id, TUTOR_LIKE_ROLES]
     );
     res.json(result.rows);
   } catch (error) {
@@ -307,12 +308,16 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     // Confirm this tutor actually belongs to the unit this request is on.
     const eligible = await client.query(
       `
-      SELECT cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status
+      SELECT cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status,
+             s.session_type,
+             bool_or(um.role = 'super_tutor') AS is_super_tutor
       FROM cover_requests cr
+      JOIN sessions s ON s.id = cr.session_id
+      JOIN unit_memberships um ON um.unit_id = cr.unit_id AND um.user_id = $2 AND um.role = ANY($3)
       WHERE cr.id = $1
-        AND cr.unit_id IN (SELECT unit_id FROM unit_memberships WHERE user_id = $2 AND role = 'tutor')
+      GROUP BY cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status, s.session_type
       `,
-      [id, req.user.id]
+      [id, req.user.id, TUTOR_LIKE_ROLES]
     );
 
     if (eligible.rows.length === 0) {
@@ -322,6 +327,9 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     const request = eligible.rows[0];
     if (request.original_tutor_id === req.user.id) {
       return res.status(400).json({ error: "You can't claim your own session." });
+    }
+    if (requiresSuperTutor(request.session_type) && !request.is_super_tutor) {
+      return res.status(403).json({ error: `Only Super Tutors can claim ${request.session_type} sessions.` });
     }
 
     await client.query('BEGIN');
