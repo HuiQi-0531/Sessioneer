@@ -214,7 +214,10 @@ const ScheduleBuilder = () => {
                   disabled={isLocked}
                 >
                   <div className="sb-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                  <div className="sb-grid-block-type">{session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}</div>
+                  <div className="sb-grid-block-type">
+                    {session.sessionCode ? `${session.sessionCode}` : (session.sessionType || 'Session')}
+                   {session.location ? ` · ${session.location}` : ''}
+                  </div>
                   <div className="sb-grid-block-tutor">
                     {getTutorDisplayLines(session).map((line, i) => (
                       <div key={i}>{line}</div>
@@ -416,6 +419,7 @@ const ScheduleBuilder = () => {
                 ) : (
                   <table className="sb-table">
                      <colgroup>
+                      <col style={{ width: '9%' }} />
                       <col style={{ width: '10%' }} />
                       <col style={{ width: '16%' }} />
                       <col style={{ width: '16%' }} />
@@ -426,6 +430,7 @@ const ScheduleBuilder = () => {
                     </colgroup>
                     <thead>
                       <tr>
+                        <th>Code</th>
                         <th>Day</th>
                         <th>Time</th>
                         <th>Location</th>
@@ -440,6 +445,7 @@ const ScheduleBuilder = () => {
                         const suggested = suggestedTutorCount(session.capacity);
                        return (
                          <tr key={session.id} className={isLocked ? '' : 'sb-row-clickable'} onClick={() => openAssignModal(session)}>
+                           <td>{session.sessionCode || '-'}</td>
                            <td>{session.day}</td>
                            <td>{formatTimeRange(session.startTime, session.endTime)}</td>
                            <td>{session.location || '-'}</td>
@@ -477,6 +483,7 @@ const ScheduleBuilder = () => {
                 ) : (
                   <table className="sb-table">
                     <colgroup>
+                      <col style={{ width: '9%' }} />
                       <col style={{ width: '10%' }} />
                       <col style={{ width: '16%' }} />
                       <col style={{ width: '16%' }} />
@@ -487,6 +494,7 @@ const ScheduleBuilder = () => {
                     </colgroup>
                     <thead>
                       <tr>
+                        <th>Code</th>
                         <th>Day</th>
                         <th>Time</th>
                         <th>Location</th>
@@ -501,6 +509,7 @@ const ScheduleBuilder = () => {
                        const suggested = suggestedTutorCount(session.capacity);
                        return (
                          <tr key={session.id}>
+                           <td>{session.sessionCode || '-'}</td>
                            <td>{session.day}</td>
                            <td>{formatTimeRange(session.startTime, session.endTime)}</td>
                            <td>{session.location || '-'}</td>
@@ -606,8 +615,10 @@ const ScheduleBuilder = () => {
             <div className="sb-modal-header">
               <h2>Assign a Tutor</h2>
             </div>
-            <p className="sb-modal-session-info">{formatSession(modalSession)}{modalSession.sessionType ? ` - ${modalSession.sessionType}` : ''}</p>
-
+            <p className="sb-modal-session-info">
+              {modalSession.sessionCode ? `${modalSession.sessionCode} · ` : ''}
+              {formatSession(modalSession)}{modalSession.sessionType ? ` - ${modalSession.sessionType}` : ''}
+            </p>
             {suggestedTutorCount(modalSession.capacity) > 1 && (
              <p className="sb-modal-suggestion-line">
                Suggested: {suggestedTutorCount(modalSession.capacity)} tutors (capacity {modalSession.capacity})

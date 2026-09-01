@@ -281,7 +281,8 @@ const TutorSession = () => {
                       >
                           <div className="sb-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
                           <div className="sb-grid-block-type">
-                            {session.sessionType || 'Session'}{session.location ? ` - ${session.location}` : ''}
+                          {session.sessionCode ? `${session.sessionCode}` : (session.sessionType || 'Session')}
+                          {session.location ? ` · ${session.location}` : ''}
                           </div>
                           <div className="sb-grid-block-tutor">
                             {getTutorDisplayLines(session).map((line, i) => (

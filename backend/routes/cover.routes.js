@@ -274,7 +274,7 @@ router.get('/uc/cover-requests', verifyToken, requireRole('coordinator'), async 
         cb.start_date as "startDate",
         cb.end_date as "endDate",
         cr.claimed_at as "claimedAt",
-        s.day, s.start_time as "startTime", s.end_time as "endTime", s.location,
+        s.session_code as "sessionCode", s.day, s.start_time as "startTime", s.end_time as "endTime", s.location,
         un.unit_code as "unitCode",
         TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName",
         TRIM(CONCAT(claimer.name, ' ', COALESCE(claimer.last_name, ''))) as "claimedByName"
@@ -320,7 +320,7 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
         cr.created_at as "createdAt",
         cb.start_date as "startDate",
         cb.end_date as "endDate",
-        s.id as "sessionId", s.day, s.start_time as "startTime", s.end_time as "endTime",
+        s.id as "sessionId", s.session_code as "sessionCode", s.day, s.start_time as "startTime", s.end_time as "endTime",
         s.location, s.session_type as "sessionType",
         un.unit_code as "unitCode", un.unit_name as "unitName",
         TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName"

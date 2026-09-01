@@ -20,6 +20,7 @@ const emptyForm = {
   sessionType: '',
   capacity: '',
   requiredTutors: 1,
+  sessionCode: '',
   status: 'Confirmed'
 };
 
@@ -125,6 +126,7 @@ const Sessions = () => {
       sessionType: session.sessionType || '',
       capacity: session.capacity || '',
       requiredTutors: session.requiredTutors || 1,
+      sessionCode: session.sessionCode || '',
       status: session.status || 'Confirmed'
     });
     setError('');
@@ -207,6 +209,7 @@ const Sessions = () => {
       sessionType: formData.sessionType,
       capacity: capacityNumber,
       requiredTutors: requiredTutorsNumber,
+      sessionCode: formData.sessionCode.trim() || null,
       status: formData.status
     };
 
@@ -482,6 +485,11 @@ const displayedSessions = React.useMemo(() => {
                   </div>
 
                   <div className="ss-field">
+                    <label>Session Code <span className="ss-field-hint" style={{ fontWeight: 400 }}>(optional — auto-generated if left blank)</span></label>
+                    <input type="text" name="sessionCode" value={formData.sessionCode} onChange={handleChange} placeholder="e.g. TUT01" />
+                  </div>
+
+                  <div className="ss-field">
                     <label>Status<span className="ss-required">*</span></label>
                     <select name="status" value={formData.status} onChange={handleChange} required>
                       <option value="Confirmed">Confirmed</option>
@@ -511,6 +519,7 @@ const displayedSessions = React.useMemo(() => {
           ) : (
             <table className="ss-table">
               <colgroup>
+                <col style={{ width: '7%' }} />
                 <col style={{ width: '8%' }} />
                 <col style={{ width: '13%' }} />
                 <col style={{ width: '14%' }} />
@@ -523,6 +532,7 @@ const displayedSessions = React.useMemo(() => {
               </colgroup>
               <thead>
                 <tr>
+                  <th>Code</th>
                   <th>Day</th>
                   <th>Time</th>
                   <th>Location</th>
@@ -642,6 +652,7 @@ const displayedSessions = React.useMemo(() => {
               <tbody>
                 {displayedSessions.map(session => (
                   <tr key={session.id}>
+                    <td>{session.sessionCode || '-'}</td>
                     <td>{session.day}</td>
                     <td>{formatTimeRange(session.startTime, session.endTime)}</td>
                     <td>{session.location || '-'}</td>
@@ -712,6 +723,7 @@ const displayedSessions = React.useMemo(() => {
                             checked={coverSelectedIds.has(s.id)}
                             onChange={() => toggleCoverSession(s.id)}
                           />
+                          {s.sessionCode ? `${s.sessionCode} · ` : ''}
                           {s.day}, {formatTimeRange(s.startTime, s.endTime)}
                           {s.location ? ` at ${s.location}` : ''}
                         </label>

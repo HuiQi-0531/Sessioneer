@@ -49,6 +49,13 @@
   min-width: 0;
 }
 
+.cvr-card-code {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
 .cvr-card-unit {
   font-weight: 700;
   font-size: 15px;

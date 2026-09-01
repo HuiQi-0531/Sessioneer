@@ -509,8 +509,10 @@ const TutorMessages = () => {
                       <span>{s.day}</span>
                       <span>{s.startTime.slice(0, 5)}-{s.endTime.slice(0, 5)}</span>
                     </div>
-                    <div className="msg-profile-session-meta">{s.location || 'No location'} - {s.sessionType || 'Session'}</div>
-                  </div>
+                    <div className="msg-profile-session-meta">
+                      {s.sessionCode ? `${s.sessionCode} · ` : ''}{s.location || 'No location'}
+                    </div>                  
+                </div>
                 ))
               )}
             </div>

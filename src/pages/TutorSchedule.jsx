@@ -148,12 +148,14 @@ const TutorSchedule = () => {
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
 
   const handleExportCsv = () => {
-  const headers = ['Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
+
+  const headers = ['Session Code', 'Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
 
   const rows = sessions.map(session => {
     const status = getMyStatus(session, myId);
 
     return [
+      session.sessionCode || '',
       session.unitCode || '',
       session.day,
       session.startTime.slice(0, 5),
@@ -272,7 +274,9 @@ const handleExportPng = async () => {
                   }}
                 >
                   <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                  <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
+                  <div className="ts-grid-block-type">
+                    {session.sessionCode ? `${session.sessionCode} · ` : ''}{session.unitCode}
+                  </div>
                   <div className="ts-grid-block-status">
                     {status === 'pending'
                       ? 'Awaiting your response'
@@ -393,6 +397,7 @@ const handleExportPng = async () => {
           ) : (
             <table className="ts-table">
               <colgroup>
+                <col style={{ width: '9%' }} />
                 <col style={{ width: '10%' }} />
                 <col style={{ width: '9%' }} />
                 <col style={{ width: '16%' }} />
@@ -403,6 +408,7 @@ const handleExportPng = async () => {
               </colgroup>
               <thead>
                 <tr>
+                  <th>Code</th>
                   <th>Unit</th>
                   <th>Day</th>
                   <th>Time</th>
@@ -417,6 +423,7 @@ const handleExportPng = async () => {
                   const status = getMyStatus(session, myId);
                   return (
                     <tr key={session.id}>
+                      <td>{session.sessionCode || '-'}</td>
                       <td>{session.unitCode || '-'}</td>
                       <td>{session.day}</td>
                       <td>{formatTimeRange(session.startTime, session.endTime)}</td>

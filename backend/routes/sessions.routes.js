@@ -20,6 +20,37 @@ const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 const STUDENTS_PER_TUTOR = 30;
 const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
 
+// Session code prefix per type - e.g. Tutorial sessions get TUT01, TUT02...
+// Falls back to 'SES' for any type not in this list (custom/unlisted types).
+const CODE_PREFIXES = {
+  Tutorial: 'TUT',
+  Consultation: 'CON',
+  Practical: 'PRC',
+  Lecture: 'LEC',
+  Workshop: 'WOR'
+};
+const codePrefixForType = (sessionType) => CODE_PREFIXES[sessionType] || 'SES';
+
+// Finds the next free code for this unit + type, e.g. if TUT01..TUT03 exist,
+// returns TUT04. Scans existing codes with this prefix and picks max+1.
+const generateNextSessionCode = async (client, unitId, sessionType) => {
+  const prefix = codePrefixForType(sessionType);
+  const result = await client.query(
+    `
+    SELECT session_code FROM sessions
+    WHERE unit_id = $1 AND session_code LIKE $2
+    `,
+    [unitId, `${prefix}%`]
+  );
+  let maxNum = 0;
+  result.rows.forEach(r => {
+    const match = String(r.session_code || '').match(new RegExp(`^${prefix}(\\d+)$`));
+    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+  });
+  const nextNum = maxNum + 1;
+  return `${prefix}${String(nextNum).padStart(2, '0')}`;
+};
+
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
 
@@ -89,6 +120,7 @@ const isTutorLinkedToUnit = async (userId, unitId) => {
 
 const formatSessionRow = (s) => ({
   id: s.id,
+  sessionCode: s.session_code || null,
   day: s.day,
   startTime: s.start_time,
   endTime: s.end_time,
@@ -285,6 +317,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;
+    const requestedCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
     const normalisedDay = normaliseDay(day) || day;
 
     const missingFields = getMissingSessionFields({ day: normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status });
@@ -303,17 +336,30 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
+    let sessionCode = requestedCode;
+    if (sessionCode) {
+      const dupeCheck = await pool.query(
+        'SELECT id FROM sessions WHERE unit_id = $1 AND session_code = $2',
+        [unitId, sessionCode]
+      );
+      if (dupeCheck.rows.length > 0) {
+        return res.status(409).json({ error: `Session code "${sessionCode}" is already used in this unit. Please choose another.` });
+      }
+    } else {
+      sessionCode = await generateNextSessionCode(pool, unitId, sessionType);
+    }
+
     const result = await pool.query(
       `
       INSERT INTO sessions
-          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, session_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
       `,
       [
         unitId, normalisedDay, startTime, endTime,
         location.trim(), campus, sessionType,
-        capacityNumber, requiredTutorsNumber, status
+        capacityNumber, requiredTutorsNumber, status, sessionCode
       ]
     );
 
@@ -332,6 +378,21 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;    const normalisedDay = day ? (normaliseDay(day) || day) : null;
+    
+    let sessionCode = undefined;
+    if (req.body.sessionCode !== undefined) {
+      sessionCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
+      if (sessionCode) {
+        const dupeCheck = await pool.query(
+          'SELECT id FROM sessions WHERE unit_id = $1 AND session_code = $2 AND id != $3',
+          [unitId, sessionCode, sessionId]
+        );
+        if (dupeCheck.rows.length > 0) {
+          return res.status(409).json({ error: `Session code "${sessionCode}" is already used in this unit. Please choose another.` });
+        }
+      }
+    }
+    
     const result = await pool.query(
       `
       UPDATE sessions
@@ -344,11 +405,12 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
         session_type = COALESCE($6, session_type),
         capacity = COALESCE($7, capacity),
         required_tutors = COALESCE($8, required_tutors),
-        status = COALESCE($9, status)
-      WHERE id = $10 AND unit_id = $11
+        status = COALESCE($9, status),
+        session_code = CASE WHEN $10::text IS NOT NULL OR $11::boolean THEN $10 ELSE session_code END
+      WHERE id = $12 AND unit_id = $13
       RETURNING *
       `,
-      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionId, unitId]
+      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionCode, sessionCode !== undefined, sessionId, unitId]
     );
 
     if (result.rows.length === 0) {
@@ -420,17 +482,21 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
         continue;
       }
 
+      const sessionCode = row.sessionCode
+        ? String(row.sessionCode).trim().toUpperCase()
+        : await generateNextSessionCode(client, unitId, row.sessionType);
+
       const result = await client.query(
         `
         INSERT INTO sessions
-          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, staff_note)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, staff_note, session_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         `,
         [
           unitId, normalisedDay, normalisedStart, normalisedEnd,
           row.location || null, row.campus || null, row.sessionType || null,
-          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null
+          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null, sessionCode
         ]
       );
       imported.push(result.rows[0].id);
