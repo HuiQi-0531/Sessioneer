@@ -277,7 +277,7 @@ const ImportSessions = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {block.rows.slice(0, 3).map((row, rowIndex) => (
+                      {block.rows.map((row, rowIndex) => (
                         <tr key={rowIndex}>
                           {SYSTEM_FIELDS.map(field => (
                             <td key={field.key}>
@@ -290,9 +290,6 @@ const ImportSessions = () => {
                       ))}
                     </tbody>
                   </table>
-                  {block.rows.length > 3 && (
-                    <p className="is-preview-note">Showing first 3 of {block.rows.length} rows.</p>
-                  )}
                 </div>
               ))}
 
