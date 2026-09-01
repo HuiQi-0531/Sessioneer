@@ -297,11 +297,11 @@ export const requestsAPI = {
 
 export const coverAPI = {
   // UC: broadcast selected sessions to every other tutor on the unit
-  broadcast: async (sessionIds, reason, startDate, endDate) => {
+  broadcast: async (sessionIds, reason) => {
     const response = await fetch(`${API_URL}/uc/cover-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ sessionIds, reason, startDate, endDate })
+      body: JSON.stringify({ sessionIds, reason })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to broadcast cover request');
@@ -1305,6 +1305,36 @@ export const tutorApplicationsAPI = {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to submit application');
     clearApplicationsCache();
+    return result;
+  },
+
+  getForm: async (unitId) => {
+    const response = await fetch(`${API_URL}/tutor-applications/form/${unitId}`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch application form');
+    return result;
+  },
+
+  saveForm: async (unitId, fields) => {
+    const response = await fetch(`${API_URL}/tutor-applications/form/${unitId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ fields })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to save application form');
+    return result;
+  },
+
+  resetForm: async (unitId) => {
+    const response = await fetch(`${API_URL}/tutor-applications/form/${unitId}/reset`, {
+      method: 'POST',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to reset application form');
     return result;
   },
 

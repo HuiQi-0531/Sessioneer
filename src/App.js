@@ -9,6 +9,7 @@ import LogoutConfirm from './pages/LogoutConfirm.jsx';
 import TutorApply from './pages/TutorApply.jsx';
 import SetPassword from './pages/SetPassword.jsx';
 import TutorApplications from './pages/TutorApplications.jsx';
+import ApplicationFormEditor from './pages/ApplicationFormEditor.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -113,6 +114,9 @@ function App() {
           <Route path="/activate/:token" element={<SetPassword />} />
           <Route path="/tutor-applications" element={
             <ProtectedRoute allowedRoles={['coordinator']}><TutorApplications /></ProtectedRoute>
+          } />
+          <Route path="/tutor-applications/form" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><ApplicationFormEditor /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

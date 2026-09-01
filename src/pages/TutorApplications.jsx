@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { tutorApplicationsAPI } from '../config/api';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -7,9 +8,14 @@ import '../styles/UCRequests.css';
 import '../styles/TutorApplications.css';
 
 const TutorApplications = () => {
+  const navigate = useNavigate();
   const { activeUnit, isLoading: unitLoading } = useActiveUnit();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pending');
+  const [showLinkMenu, setShowLinkMenu] = useState(false);
+  const linkMenuRef = useRef(null);
+  const [copiedInviteId, setCopiedInviteId] = useState(null);
 
   const [inviteLinkInfo, setInviteLinkInfo] = useState(null);
   const [isInviting, setIsInviting] = useState(null);
@@ -48,7 +54,24 @@ const TutorApplications = () => {
     loadApplications();
   }, [unitLoading, loadApplications]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (linkMenuRef.current && !linkMenuRef.current.contains(event.target)) {
+        setShowLinkMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const buildInviteUrl = (token) => `${window.location.origin}/activate/${token}`;
+
+  const handleCopyInviteLink = (application) => {
+    if (!application.inviteToken) return;
+    navigator.clipboard.writeText(buildInviteUrl(application.inviteToken));
+    setCopiedInviteId(application.id);
+    setTimeout(() => setCopiedInviteId(null), 2000);
+  };
 
   const handleCopyApplyLink = () => {
     if (!activeUnit?.id) return;
@@ -126,21 +149,46 @@ const TutorApplications = () => {
 
         <div className="tap-content">
           <div className="tap-top-row">
-          <button className="tap-direct-invite-btn" onClick={handleCopyApplyLink}>
-            {linkCopied ? 'Link copied!' : 'Copy application link'}
-         </button>
+            <div className="tap-link-dropdown" ref={linkMenuRef}>
+              <button className="tap-direct-invite-btn" onClick={() => setShowLinkMenu(prev => !prev)}>
+                {linkCopied ? 'Link copied!' : 'Application link'} <span style={{ fontSize: 10 }}>▾</span>
+              </button>
+              {showLinkMenu && (
+                <div className="tap-link-dropdown-menu">
+                  <button onClick={() => { handleCopyApplyLink(); setShowLinkMenu(false); }}>Copy link</button>
+                  <button onClick={() => { setShowLinkMenu(false); navigate('/tutor-applications/form'); }}>Edit application form</button>
+                </div>
+              )}
+            </div>
             <button className="tap-direct-invite-btn" onClick={() => setShowDirectInviteModal(true)}>
               + Invite a known tutor directly
             </button>
           </div>
 
+          <div className="tap-tabs">
+            {['pending', 'invited', 'accepted'].map(tab => (
+              <button
+                key={tab}
+                className={`tap-tab ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'pending' ? 'Pending' : tab === 'invited' ? 'Invited' : 'Joined'}
+                <span className="tap-tab-count">{applications.filter(a => a.status === tab).length}</span>
+              </button>
+            ))}
+          </div>
+
           {isLoading ? (
             <div className="tap-empty-state">Loading...</div>
-          ) : applications.length === 0 ? (
-            <div className="tap-empty-state">No applications yet.</div>
+          ) : applications.filter(a => a.status === activeTab).length === 0 ? (
+            <div className="tap-empty-state">
+              {activeTab === 'pending' && 'No pending applications.'}
+              {activeTab === 'invited' && 'No pending invites.'}
+              {activeTab === 'accepted' && 'No one has joined yet.'}
+            </div>
           ) : (
             <div className="tap-card-list">
-              {applications.map(app => (
+              {applications.filter(a => a.status === activeTab).map(app => (
                 <div key={app.id} className="tap-card">
                   <div className="tap-card-top">
                     <div>
@@ -172,6 +220,11 @@ const TutorApplications = () => {
                         <span className="tap-card-detail-label">Contract</span>{app.contractType}
                       </div>
                     )}
+                    {Object.entries(app.customAnswers || {}).filter(([, v]) => v !== '' && v != null).map(([key, value]) => (
+                      <div className="tap-card-detail-row" key={key}>
+                        <span className="tap-card-detail-label">{key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())}</span>{Array.isArray(value) ? value.join(', ') : String(value)}
+                      </div>
+                    ))}
                     <div className="tap-card-detail-row">
                       <span className="tap-card-detail-label">Applied</span>{formatDate(app.appliedAt)}
                     </div>
@@ -194,9 +247,16 @@ const TutorApplications = () => {
                       </button>
                     )}
                     {app.status === 'invited' && (
-                      <span className="tap-badge" style={{ marginLeft: 8 }}>
-                        Invited as {app.invitedRole === 'super_tutor' ? 'Super Tutor' : 'Tutor'}
-                      </span>
+                      <>
+                        <span className="tap-role-tag" style={{ marginLeft: 8 }}>
+                          Invited as {app.invitedRole === 'super_tutor' ? 'Super Tutor' : 'Tutor'}
+                        </span>
+                        {app.inviteToken && (
+                          <button className="tap-btn tap-btn-resume" onClick={() => handleCopyInviteLink(app)}>
+                            {copiedInviteId === app.id ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

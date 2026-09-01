@@ -404,6 +404,34 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Editable application form: each unit can define its own set of extra
+// application fields (Name/Email stay fixed and aren't part of this JSON).
+// NULL means "hasn't customised it yet" - frontend falls back to the
+// default template in that case. Answers to whatever extra fields exist
+// are stored per-application as JSON, keyed by field id.
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'application_form'
+    ) THEN
+      ALTER TABLE units ADD COLUMN application_form JSONB;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_applications' AND column_name = 'custom_answers'
+    ) THEN
+      ALTER TABLE tutor_applications ADD COLUMN custom_answers JSONB DEFAULT '{}'::jsonb;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('units application_form / tutor_applications custom_answers columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Coordinator "star" (favourite/priority pick) and "flag" (risk/caution) markers on tutors.
 pool.query(`
   DO $$

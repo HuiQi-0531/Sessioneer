@@ -776,7 +776,7 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
     }
 
     const sourceResult = await pool.query(
-      'SELECT unit_code, unit_name, campus, delivery_mode, enrolment_size FROM units WHERE id = $1',
+      'SELECT unit_code, unit_name, campus, delivery_mode, enrolment_size, application_form FROM units WHERE id = $1',
       [id]
     );
     if (sourceResult.rows.length === 0) {
@@ -807,15 +807,16 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
         `
         INSERT INTO units
           (unit_coordinator_id, unit_code, unit_name, semester, year,
-           campus, delivery_mode, enrolment_size)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           campus, delivery_mode, enrolment_size, application_form)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, unit_code, unit_name, semester, year, campus,
                   delivery_mode, enrolment_size, availability_deadline,
                   availability_locked, schedule_locked, schedule_locked_at, draft_released
         `,
         [
           req.user.id, nextUnitCode, nextUnitName, semester, year,
-          source.campus, source.delivery_mode, source.enrolment_size
+          source.campus, source.delivery_mode, source.enrolment_size,
+          source.application_form ? JSON.stringify(source.application_form) : null
         ]
       );
       const newUnitId = insertResult.rows[0].id;

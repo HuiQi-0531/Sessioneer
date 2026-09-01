@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { tutorApplicationsAPI } from '../config/api';
+import { LOCKED_FIELDS, DEFAULT_APPLICATION_FIELDS, LEGACY_FIELD_KEYS } from '../utils/applicationForm';
 import '../styles/TutorApply.css';
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
@@ -13,22 +14,23 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const validateFile = (file) => {
+  if (file.type !== 'application/pdf') return 'Please upload a PDF file.';
+  if (file.size > 5 * 1024 * 1024) return 'File is too large (max 5MB).';
+  return null;
+};
+
 const TutorApply = () => {
   const unitId = new URLSearchParams(window.location.search).get('unitId');
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phoneNumber: '',
-    workExperience: '',
-    maximumHours: '',
-    contractType: ''
-  });
-  const [resumeFile, setResumeFile] = useState(null);
+  const [lockedData, setLockedData] = useState({ firstName: '', lastName: '', email: '' });
+  const [answers, setAnswers] = useState({});
+  const [files, setFiles] = useState({});
   const [error, setError] = useState('');
   const [unitInfo, setUnitInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const fields = unitInfo?.applicationForm || DEFAULT_APPLICATION_FIELDS;
 
   useEffect(() => {
     if (!unitId) return;
@@ -40,60 +42,165 @@ const TutorApply = () => {
       });
   }, [unitId]);
 
-  const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleLockedChange = (e) => {
+    setLockedData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleFileChange = (e) => {
+  const handleAnswerChange = (key, value) => {
+    setAnswers(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleCheckboxOptionToggle = (key, option) => {
+    setAnswers(prev => {
+      const current = Array.isArray(prev[key]) ? prev[key] : [];
+      const next = current.includes(option) ? current.filter(o => o !== option) : [...current, option];
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const handleFileChange = (key, e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.type !== 'application/pdf') {
-      setError('Please upload your resume as a PDF file.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Resume file is too large (max 5MB).');
+    const validationError = validateFile(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError('');
-    setResumeFile(file);
+    setFiles(prev => ({ ...prev, [key]: file }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim()) {
+    if (!lockedData.firstName.trim() || !lockedData.lastName.trim() || !lockedData.email.trim()) {
       setError('First name, last name and email are required.');
+      return;
+    }
+
+    const missingRequired = fields.find(f => f.required && f.type !== 'file' && !answers[f.key] && answers[f.key] !== 0);
+    if (missingRequired) {
+      setError(`"${missingRequired.label}" is required.`);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      let resumeBase64 = null;
-      if (resumeFile) {
-        resumeBase64 = await fileToBase64(resumeFile);
+      const payload = {
+        unitId,
+        firstName: lockedData.firstName.trim(),
+        lastName: lockedData.lastName.trim(),
+        email: lockedData.email.trim()
+      };
+      const customAnswers = {};
+
+      for (const field of fields) {
+        if (field.type === 'file') {
+          const file = files[field.key];
+          if (field.key === 'resume') {
+            if (file) {
+              payload.resumeBase64 = await fileToBase64(file);
+              payload.resumeFilename = file.name;
+              payload.resumeMimeType = file.type;
+            }
+          } else if (file) {
+            customAnswers[field.key] = {
+              filename: file.name,
+              mimeType: file.type,
+              base64: await fileToBase64(file)
+            };
+          }
+          continue;
+        }
+
+        const value = answers[field.key];
+        if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) continue;
+
+        if (LEGACY_FIELD_KEYS.includes(field.key)) {
+          if (field.key === 'maximumHours') payload.maximumHours = parseInt(value, 10);
+          else payload[field.key] = value;
+        } else {
+          customAnswers[field.key] = value;
+        }
       }
 
-      await tutorApplicationsAPI.submit({
-        unitId,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
-        phoneNumber: formData.phoneNumber.trim(),
-        workExperience: formData.workExperience.trim(),
-        maximumHours: formData.maximumHours === '' ? null : parseInt(formData.maximumHours, 10),
-        contractType: formData.contractType || null,
-        resumeBase64,
-        resumeFilename: resumeFile?.name || null,
-        resumeMimeType: resumeFile?.type || null
-      });
+      payload.customAnswers = customAnswers;
 
+      await tutorApplicationsAPI.submit(payload);
       setIsSubmitted(true);
     } catch (err) {
       setError(err.message || 'Failed to submit your application. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const renderField = (field) => {
+    const value = answers[field.key] ?? (field.type === 'checkbox' ? [] : '');
+
+    switch (field.type) {
+      case 'textarea':
+        return (
+          <textarea
+            value={value}
+            onChange={(e) => handleAnswerChange(field.key, e.target.value)}
+            required={field.required}
+          />
+        );
+      case 'number':
+        return (
+          <input
+            type="number"
+            min="0"
+            value={value}
+            onChange={(e) => handleAnswerChange(field.key, e.target.value)}
+            required={field.required}
+          />
+        );
+      case 'select':
+        return (
+          <select value={value} onChange={(e) => handleAnswerChange(field.key, e.target.value)} required={field.required}>
+            <option value="">-- Select --</option>
+            {(field.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        );
+      case 'checkbox':
+        return (
+          <div className="ta-checkbox-group">
+            {(field.options || []).map(opt => (
+              <label key={opt} className="ta-checkbox-option">
+                <input
+                  type="checkbox"
+                  checked={Array.isArray(value) && value.includes(opt)}
+                  onChange={() => handleCheckboxOptionToggle(field.key, opt)}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        );
+      case 'file':
+        return (
+          <label className="ta-file-input">
+            <input type="file" accept="application/pdf" onChange={(e) => handleFileChange(field.key, e)} />
+            {files[field.key] ? (
+              <div className="ta-file-name">{files[field.key].name}</div>
+            ) : (
+              <div style={{ color: '#6b7280', fontSize: 13 }}>Click to upload</div>
+            )}
+            <div className="ta-file-hint">PDF only, max 5MB</div>
+          </label>
+        );
+      default:
+        return (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => handleAnswerChange(field.key, e.target.value)}
+            required={field.required}
+          />
+        );
     }
   };
 
@@ -138,70 +245,27 @@ const TutorApply = () => {
         <form onSubmit={handleSubmit}>
           <div className="ta-name-grid">
             <div className="ta-field">
-              <label>First name *</label>
-              <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required />
+              <label>{LOCKED_FIELDS[0].label} *</label>
+              <input type="text" name="firstName" value={lockedData.firstName} onChange={handleLockedChange} required />
             </div>
 
             <div className="ta-field">
-              <label>Last name *</label>
-              <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required />
+              <label>{LOCKED_FIELDS[1].label} *</label>
+              <input type="text" name="lastName" value={lockedData.lastName} onChange={handleLockedChange} required />
             </div>
           </div>
 
           <div className="ta-field">
-            <label>Email *</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} required />
+            <label>{LOCKED_FIELDS[2].label} *</label>
+            <input type="email" name="email" value={lockedData.email} onChange={handleLockedChange} required />
           </div>
 
-          <div className="ta-field">
-            <label>Phone number</label>
-            <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="e.g. 0400 123 456" />
-          </div>
-
-          <div className="ta-field">
-            <label>Relevant work experience</label>
-            <textarea
-              name="workExperience"
-              value={formData.workExperience}
-              onChange={handleChange}
-              placeholder="Tell us about any tutoring, teaching, or relevant industry experience..."
-            />
-          </div>
-
-          <div className="ta-field">
-            <label>Maximum hours / week</label>
-            <input
-              type="number"
-              name="maximumHours"
-              min="0"
-              value={formData.maximumHours}
-              onChange={handleChange}
-              placeholder="e.g. 10"
-            />
-          </div>
-
-          <div className="ta-field">
-            <label>Preferred contract type</label>
-            <select name="contractType" value={formData.contractType} onChange={handleChange}>
-              <option value="">-- Select --</option>
-              <option value="Casual">Casual</option>
-              <option value="Sessional">Sessional</option>
-              <option value="Fixed-term">Fixed-term (Contract)</option>
-            </select>
-          </div>
-
-          <div className="ta-field">
-            <label>Resume (PDF)</label>
-            <label className="ta-file-input">
-              <input type="file" accept="application/pdf" onChange={handleFileChange} />
-              {resumeFile ? (
-                <div className="ta-file-name">{resumeFile.name}</div>
-              ) : (
-                <div style={{ color: '#6b7280', fontSize: 13 }}>Click to upload your resume</div>
-              )}
-              <div className="ta-file-hint">PDF only, max 5MB</div>
-            </label>
-          </div>
+          {fields.map(field => (
+            <div className="ta-field" key={field.key}>
+              <label>{field.label}{field.required ? ' *' : ''}</label>
+              {renderField(field)}
+            </div>
+          ))}
 
           {error && <p className="ta-error">{error}</p>}
 

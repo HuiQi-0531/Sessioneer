@@ -4,6 +4,7 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { splitDisplayName } = require('../utils/userNames');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
 
 const router = express.Router();
 
@@ -36,7 +37,12 @@ const formatApplication = (a) => ({
   status: a.status,
   appliedAt: a.applied_at,
   invitedAt: a.invited_at,
-  invitedRole: a.invited_role || 'tutor'
+  invitedRole: a.invited_role || 'tutor',
+  // Only meaningful while status === 'invited' - accept-invite nulls this
+  // out, and it's how the "Copy link" button on an already-invited card
+  // can still work after the one-time success modal has been closed.
+  inviteToken: a.status === 'invited' ? a.invite_token : null,
+  customAnswers: a.custom_answers || {}
 });
 
 const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
@@ -53,7 +59,7 @@ router.get('/unit/:unitId', async (req, res) => {
   try {
     const { unitId } = req.params;
     const result = await pool.query(
-      'SELECT id, unit_code, unit_name, semester, year FROM units WHERE id = $1',
+      'SELECT id, unit_code, unit_name, semester, year, application_form FROM units WHERE id = $1',
       [unitId]
     );
 
@@ -67,7 +73,8 @@ router.get('/unit/:unitId', async (req, res) => {
       unitCode: unit.unit_code,
       unitName: unit.unit_name,
       semester: unit.semester,
-      year: unit.year
+      year: unit.year,
+      applicationForm: unit.application_form || DEFAULT_APPLICATION_FIELDS
     });
   } catch (error) {
     console.error('Error fetching application unit:', error);
@@ -77,7 +84,7 @@ router.get('/unit/:unitId', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { unitId, firstName, lastName, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const { unitId, firstName, lastName, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType, customAnswers } = req.body;
     const cleanFirstName = (firstName || name || '').trim();
     const cleanLastName = (lastName || '').trim();
 
@@ -95,14 +102,19 @@ router.post('/', async (req, res) => {
     }
 
     const resumeBuffer = resumeBase64 ? Buffer.from(resumeBase64, 'base64') : null;
+    // Only keep answers for keys that aren't one of the legacy dedicated
+    // columns - those are handled separately above.
+    const cleanCustomAnswers = customAnswers && typeof customAnswers === 'object'
+      ? Object.fromEntries(Object.entries(customAnswers).filter(([key]) => !LEGACY_FIELD_KEYS.includes(key)))
+      : {};
 
     await pool.query(
       `
       INSERT INTO tutor_applications
-        (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
+        (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, custom_answers, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
       `,
-      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
+      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -136,6 +148,64 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   } catch (error) {
     console.error('Error fetching applications:', error);
     res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// GET /tutor-applications/form/:unitId (coordinator only) - this unit's
+// application form. Falls back to the default template if they've never
+// customised it.
+router.get('/form/:unitId', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const result = await pool.query('SELECT application_form FROM units WHERE id = $1', [ownedUnitId]);
+    const stored = result.rows[0]?.application_form;
+    res.json({
+      fields: stored || DEFAULT_APPLICATION_FIELDS,
+      isCustomised: !!stored
+    });
+  } catch (error) {
+    console.error('Error fetching application form:', error);
+    res.status(500).json({ error: 'Failed to fetch application form' });
+  }
+});
+
+// PUT /tutor-applications/form/:unitId (coordinator only) - save this
+// unit's own copy of the application form.
+router.put('/form/:unitId', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const fields = sanitiseFields(req.body.fields);
+    if (!fields) {
+      return res.status(400).json({ error: 'Invalid form fields' });
+    }
+
+    await pool.query('UPDATE units SET application_form = $1 WHERE id = $2', [JSON.stringify(fields), ownedUnitId]);
+    res.json({ fields });
+  } catch (error) {
+    console.error('Error saving application form:', error);
+    res.status(500).json({ error: 'Failed to save application form' });
+  }
+});
+
+// POST /tutor-applications/form/:unitId/reset (coordinator only) - go back
+// to the default template.
+router.post('/form/:unitId/reset', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    await pool.query('UPDATE units SET application_form = NULL WHERE id = $1', [ownedUnitId]);
+    res.json({ fields: DEFAULT_APPLICATION_FIELDS });
+  } catch (error) {
+    console.error('Error resetting application form:', error);
+    res.status(500).json({ error: 'Failed to reset application form' });
   }
 });
 
