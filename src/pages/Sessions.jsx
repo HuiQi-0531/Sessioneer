@@ -57,6 +57,8 @@ const Sessions = () => {
   const [coverTutorId, setCoverTutorId] = useState('');
   const [coverSelectedIds, setCoverSelectedIds] = useState(new Set());
   const [coverReason, setCoverReason] = useState('');
+  const [coverStartDate, setCoverStartDate] = useState('');
+  const [coverEndDate, setCoverEndDate] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [coverError, setCoverError] = useState('');
   const [coverSuccess, setCoverSuccess] = useState('');
@@ -301,6 +303,8 @@ const displayedSessions = React.useMemo(() => {
     setCoverTutorId('');
     setCoverSelectedIds(new Set());
     setCoverReason('');
+    setCoverStartDate('');
+    setCoverEndDate('');
     setCoverError('');
     setCoverSuccess('');
     setShowCoverModal(true);
@@ -330,11 +334,18 @@ const displayedSessions = React.useMemo(() => {
 
   const submitCoverBroadcast = async () => {
     if (coverSelectedSessions.length === 0) return;
+    if (!coverStartDate || !coverEndDate) {
+      setCoverError('Please select the date range this covers.');
+      return;
+    }
+    if (coverStartDate > coverEndDate) {
+      setCoverError('Start date must be before the end date.');
+      return;
+    }
     setIsBroadcasting(true);
     setCoverError('');
     try {
-      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim());
-      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
+      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim(), coverStartDate, coverEndDate);      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
       setShowCoverModal(false);
     } catch (err) {
       setCoverError(err.message || 'Failed to broadcast cover request.');
@@ -708,6 +719,17 @@ const displayedSessions = React.useMemo(() => {
                     ))}
                   </ul>
 
+              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Covering from</label>
+                      <input type="date" value={coverStartDate} onChange={(e) => setCoverStartDate(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Until</label>
+                      <input type="date" value={coverEndDate} onChange={(e) => setCoverEndDate(e.target.value)} min={coverStartDate || undefined} />
+                    </div>
+                  </div>       
+                    
                   <textarea
                     placeholder="Reason (optional) — e.g. Alex is on leave this week"
                     value={coverReason}

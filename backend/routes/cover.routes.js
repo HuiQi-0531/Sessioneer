@@ -1,3 +1,31 @@
+const WEEKDAY_INDEX = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+
+// Counts how many times `day` (e.g. 'THU') falls between startDate and endDate inclusive.
+const countWeekdayOccurrences = (day, startDate, endDate) => {
+  const targetIdx = WEEKDAY_INDEX[String(day).toUpperCase()];
+  if (targetIdx === undefined || !startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
+
+  const cursor = new Date(start);
+  cursor.setDate(cursor.getDate() + ((targetIdx - cursor.getDay() + 7) % 7));
+
+  let count = 0;
+  while (cursor <= end) {
+    count++;
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return count;
+};
+
+const formatDateRange = (startDate, endDate) => {
+  const opts = { day: 'numeric', month: 'short' };
+  const start = new Date(startDate).toLocaleDateString('en-AU', opts);
+  const end = new Date(endDate).toLocaleDateString('en-AU', opts);
+  return `${start} - ${end}`;
+};
+
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -104,10 +132,17 @@ const sendCoverClaimedEmail = async ({ coordinatorEmail, coordinatorName, claime
 router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { sessionIds, reason } = req.body;
+    const { sessionIds, reason, startDate, endDate } = req.body;
 
     if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
       return res.status(400).json({ error: 'Select at least one session to broadcast.' });
+    }
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Select the date range this cover request applies to.' });
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ error: 'Start date must be before the end date.' });
     }
 
     // Pull the sessions and make sure every single one belongs to a unit this
@@ -143,8 +178,8 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     await client.query('BEGIN');
 
     const batchResult = await client.query(
-      `INSERT INTO cover_batches (unit_id, created_by_id, reason) VALUES ($1, $2, $3) RETURNING id`,
-      [unitId, req.user.id, reason || null]
+      `INSERT INTO cover_batches (unit_id, created_by_id, reason, start_date, end_date) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [unitId, req.user.id, reason || null, startDate, endDate]
     );
     const batchId = batchResult.rows[0].id;
 
@@ -184,8 +219,12 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     const recipientIds = recipients.map(tutor => tutor.id);
 
     const sessionSummary = sessionsResult.rows.length === 1
-      ? `${sessionsResult.rows[0].day} ${formatTimeRange(sessionsResult.rows[0].start_time, sessionsResult.rows[0].end_time)}`
-      : `${sessionsResult.rows.length} sessions`;
+      ? (() => {
+          const s = sessionsResult.rows[0];
+          const occurrences = countWeekdayOccurrences(s.day, startDate, endDate);
+          return `${formatDateRange(startDate, endDate)} · ${s.day} ${formatTimeRange(s.start_time, s.end_time)} (${occurrences} session${occurrences === 1 ? '' : 's'})`;
+        })()
+      : `${formatDateRange(startDate, endDate)} · ${sessionsResult.rows.length} sessions`;
 
     await Promise.all(recipientIds.map(userId => createNotification({
       userId,
@@ -232,12 +271,15 @@ router.get('/uc/cover-requests', verifyToken, requireRole('coordinator'), async 
         cr.status,
         cr.reason,
         cr.created_at as "createdAt",
+        cb.start_date as "startDate",
+        cb.end_date as "endDate",
         cr.claimed_at as "claimedAt",
         s.day, s.start_time as "startTime", s.end_time as "endTime", s.location,
         un.unit_code as "unitCode",
         TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName",
         TRIM(CONCAT(claimer.name, ' ', COALESCE(claimer.last_name, ''))) as "claimedByName"
       FROM cover_requests cr
+      JOIN cover_batches cb ON cb.id = cr.batch_id
       JOIN sessions s ON s.id = cr.session_id
       JOIN units un ON un.id = cr.unit_id
       LEFT JOIN users orig ON orig.id = cr.original_tutor_id
@@ -254,7 +296,10 @@ router.get('/uc/cover-requests', verifyToken, requireRole('coordinator'), async 
       `,
       [req.user.id]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => ({
+      ...row,
+      occurrenceCount: countWeekdayOccurrences(row.day, row.startDate, row.endDate)
+    })));
   } catch (error) {
     console.error('Error fetching UC cover requests:', error);
     res.status(500).json({ error: 'Failed to fetch cover requests.' });
@@ -273,11 +318,14 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
         cr.id,
         cr.reason,
         cr.created_at as "createdAt",
+        cb.start_date as "startDate",
+        cb.end_date as "endDate",
         s.id as "sessionId", s.day, s.start_time as "startTime", s.end_time as "endTime",
         s.location, s.session_type as "sessionType",
         un.unit_code as "unitCode", un.unit_name as "unitName",
         TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName"
       FROM cover_requests cr
+      JOIN cover_batches cb ON cb.id = cr.batch_id
       JOIN sessions s ON s.id = cr.session_id
       JOIN units un ON un.id = cr.unit_id
       LEFT JOIN users orig ON orig.id = cr.original_tutor_id
@@ -290,7 +338,10 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
       `,
       [req.user.id, TUTOR_LIKE_ROLES]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => ({
+      ...row,
+      occurrenceCount: countWeekdayOccurrences(row.day, row.startDate, row.endDate)
+    })));
   } catch (error) {
     console.error('Error fetching open cover requests:', error);
     res.status(500).json({ error: 'Failed to fetch open cover requests.' });

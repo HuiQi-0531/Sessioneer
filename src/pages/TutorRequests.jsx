@@ -22,6 +22,11 @@ const unitCodeFromSession = (value) => {
 const sessionLabel = (s) => `${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)} | ${s.location || 'TBA'} | ${s.sessionType || 'Session'}`;
 const sessionValue = (s, unitCode) => `${unitCode}::${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}|${s.location || 'TBA'}`;
 
+const formatShortDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+};
+
 const APPEAL_MARKER = '--- Appeal ---';
 // Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
 // Split that back apart so the UI can show "Reason" and "Appeal" as separate labeled sections.
@@ -93,8 +98,18 @@ const TutorRequests = () => {
     setCoverMessage(null);
     try {
       await coverAPI.claim(request.id);
-      setCoverMessage({ type: 'success', text: `You're now covering ${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.` });
-      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
+      const rangeText = request.startDate && request.endDate
+        ? `${formatShortDate(request.startDate)} - ${formatShortDate(request.endDate)}`
+        : null;
+      const occurrenceText = request.occurrenceCount
+        ? ` (${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'})`
+        : '';
+      setCoverMessage({
+        type: 'success',
+        text: rangeText
+          ? `You're now covering ${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}, ${rangeText}${occurrenceText}.`
+          : `You're now covering ${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.`
+      });      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
     } catch (err) {
       if (err.status === 409) {
         setCoverMessage({ type: 'error', text: 'Too slow — someone else already claimed that session.' });
@@ -440,6 +455,12 @@ const TutorRequests = () => {
                   <div className="cvr-card-main">
                     <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
                     <div className="cvr-card-time">{request.day}, {request.startTime.slice(0, 5)} - {request.endTime.slice(0, 5)}</div>
+                    {request.startDate && request.endDate && (
+                      <div className="cvr-card-daterange">
+                        {formatShortDate(request.startDate)} - {formatShortDate(request.endDate)}
+                        {request.occurrenceCount ? ` · ${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'}` : ''}
+                      </div>
+                    )}               
                     <div className="cvr-card-details">
                       {request.location ? `${request.location} · ` : ''}{request.sessionType || 'Session'}
                     </div>
