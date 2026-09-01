@@ -83,11 +83,21 @@
 
 .td-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   background-color: var(--color-surface);
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--color-border);
+}
+
+.td-table th,
+.td-table td {
+  width: 25%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .td-table th {
@@ -116,6 +126,7 @@
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 999px;
+  display: inline-block;
 }
 
 .td-badge.submitted {
@@ -175,4 +186,45 @@
   color: var(--color-text-subtle);
   margin-top: 2px;
   text-align: left;
+}
+
+.td-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.td-section-header h3 {
+  margin: 0;
+}
+
+.td-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.td-filter-toggle input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.td-table tr.inactive td {
+  opacity: 0.5;
+}
+
+.td-empty-action {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
 }

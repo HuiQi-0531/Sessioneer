@@ -8,6 +8,15 @@ import { getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
 
+// "Semester 2" + 2026 -> "Sem2 2026". Falls back to whatever was given
+// if the semester string doesn't contain a recognisable number.
+const formatUnitDate = (semester, year) => {
+  if (!semester || !year) return '—';
+  const match = String(semester).match(/\d/);
+  const semNumber = match ? match[0] : String(semester).trim();
+  return `Sem${semNumber} ${year}`;
+};
+
 const TutorDashboard = () => {
   const navigate = useNavigate();
   const currentUser = useMemo(() => {
@@ -19,6 +28,9 @@ const TutorDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  // Same concept as the UC dashboard: default to only the current
+  // semester's units, with a toggle to reveal inactive ones.
+  const [showInactiveUnits, setShowInactiveUnits] = useState(false);
 
   useEffect(() => {
     loadSummary();
@@ -67,6 +79,17 @@ const TutorDashboard = () => {
     navigate(notification.actionUrl);
   };
 
+  const visibleUnitStatuses = useMemo(() => {
+    if (!summary) return [];
+    return showInactiveUnits
+      ? summary.unitStatuses
+      : summary.unitStatuses.filter(u => u.isActive);
+  }, [summary, showInactiveUnits]);
+
+  const inactiveUnitCount = summary
+    ? summary.unitStatuses.filter(u => !u.isActive).length
+    : 0;
+
   return (
     <div className="uc-dashboard-container">
       <TutorSidebar activePage="dashboard" />
@@ -107,22 +130,47 @@ const TutorDashboard = () => {
               </div>
 
               <section className="td-section">
-                <h3>Your Units</h3>
+                <div className="td-section-header">
+                  <h3>Your Units</h3>
+                  {inactiveUnitCount > 0 && (
+                    <label className="td-filter-toggle">
+                      <input
+                        type="checkbox"
+                        checked={showInactiveUnits}
+                        onChange={(e) => setShowInactiveUnits(e.target.checked)}
+                      />
+                      Show inactive units ({inactiveUnitCount})
+                    </label>
+                  )}
+                </div>
                 {summary.unitStatuses.length === 0 ? (
                   <div className="td-empty">You're not linked to any units yet.</div>
+                ) : visibleUnitStatuses.length === 0 ? (
+                  <div className="td-empty">
+                    No active units right now.{' '}
+                    <button
+                      type="button"
+                      className="td-empty-action"
+                      onClick={() => setShowInactiveUnits(true)}
+                    >
+                      Show {inactiveUnitCount} inactive unit{inactiveUnitCount === 1 ? '' : 's'}
+                    </button>
+                  </div>
                 ) : (
                   <table className="td-table">
                     <thead>
                       <tr>
                         <th>Unit</th>
+                        <th>Date</th>
                         <th>Availability</th>
                         <th>Assigned</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.unitStatuses.map(u => (
-                        <tr key={u.unitId}>
-                          <td>{u.unitCode}</td>
+                      {visibleUnitStatuses.map(u => (
+                        <tr key={u.unitId} className={!u.isActive ? 'inactive' : ''}>
+                          <td>{u.unitCode}{!u.isActive && ' (inactive)'}</td>
+                          <td>{formatUnitDate(u.semester, u.year)}</td>
                           <td>
                             <span className={`td-badge ${u.availabilitySubmitted ? 'submitted' : 'pending'}`}>
                               {u.availabilitySubmitted ? 'Submitted' : 'Not submitted'}

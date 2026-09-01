@@ -19,6 +19,8 @@ const UnitSetup = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
 
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
+  const activeUnits = coordinatorUnits.filter(unit => unit.isActive);
+  const inactiveUnits = coordinatorUnits.filter(unit => !unit.isActive);
   const selectedUnit = activeUnit?.roles?.includes('coordinator')
     ? activeUnit
     : coordinatorUnits.find(unit => unit.id === activeUnitId) || null;
@@ -101,6 +103,20 @@ const UnitSetup = () => {
     }
   };
 
+  const renderUnitRow = (unit) => (
+    <div
+      key={unit.id}
+      className={`us-unit-row ${selectedUnit?.id === unit.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+      onClick={() => handleSelectUnit(unit)}
+    >
+      <div>
+        <div className="us-unit-code">{unit.unitCode}</div>
+        <div className="us-unit-meta">{unit.unitName} - {unit.semester}, {unit.year}</div>
+      </div>
+      {!unit.isActive && <span className="us-inactive-badge">INACTIVE</span>}
+    </div>
+  );
+
   return (
     <div className="uc-dashboard-container">
       <UCSidebar activePage="unit-setup" />
@@ -123,21 +139,31 @@ const UnitSetup = () => {
             </div>
           ) : (
             <>
-              <div className="us-list">
-                {coordinatorUnits.map(unit => (
-                  <div
-                    key={unit.id}
-                    className={`us-unit-row ${selectedUnit?.id === unit.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
-                    onClick={() => handleSelectUnit(unit)}
-                  >
-                    <div>
-                      <div className="us-unit-code">{unit.unitCode}</div>
-                      <div className="us-unit-meta">{unit.unitName} - {unit.semester}, {unit.year}</div>
-                    </div>
-                    {!unit.isActive && <span className="us-inactive-badge">INACTIVE</span>}
+              <section className="us-group">
+                <h3 className="us-group-title">Active Units</h3>
+                {activeUnits.length === 0 ? (
+                  <div className="us-empty-state us-group-empty">
+                    <p>No active units this semester.</p>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div className="us-list">
+                    {activeUnits.map(renderUnitRow)}
+                  </div>
+                )}
+              </section>
+
+              <section className="us-group">
+                <h3 className="us-group-title">Inactive Units</h3>
+                {inactiveUnits.length === 0 ? (
+                  <div className="us-empty-state us-group-empty">
+                    <p>No inactive units.</p>
+                  </div>
+                ) : (
+                  <div className="us-list">
+                    {inactiveUnits.map(renderUnitRow)}
+                  </div>
+                )}
+              </section>
 
               <div className="us-actions-row">
                 <button className="us-action-btn edit" onClick={handleViewSessions} disabled={!selectedUnit}>

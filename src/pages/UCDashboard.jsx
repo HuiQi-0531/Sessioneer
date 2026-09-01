@@ -9,6 +9,15 @@ import { getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
 
+// "Semester 2" + 2026 -> "Sem2 2026". Falls back to whatever was given
+// if the semester string doesn't contain a recognisable number.
+const formatUnitDate = (semester, year) => {
+  if (!semester || !year) return '—';
+  const match = String(semester).match(/\d/);
+  const semNumber = match ? match[0] : String(semester).trim();
+  return `Sem${semNumber} ${year}`;
+};
+
 const UCDashboard = () => {
   const navigate = useNavigate();
   const { isLoading: unitsLoading } = useActiveUnit();
@@ -22,6 +31,9 @@ const UCDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  // Dashboard defaults to showing only the current semester's units;
+  // this toggle reveals inactive (past/future semester) units too.
+  const [showInactiveUnits, setShowInactiveUnits] = useState(false);
 
   useEffect(() => {
     loadSummary();
@@ -70,6 +82,17 @@ const UCDashboard = () => {
     navigate(notification.actionUrl);
   };
 
+  const visibleUnitStatuses = useMemo(() => {
+    if (!summary) return [];
+    return showInactiveUnits
+      ? summary.unitStatuses
+      : summary.unitStatuses.filter(u => u.isActive);
+  }, [summary, showInactiveUnits]);
+
+  const inactiveUnitCount = summary
+    ? summary.unitStatuses.filter(u => !u.isActive).length
+    : 0;
+
   return (
     <div className="uc-dashboard-container">
       <UCSidebar activePage="dashboard" />
@@ -117,24 +140,52 @@ const UCDashboard = () => {
               <section className="ucd-section">
                 <div className="ucd-section-header">
                   <h3>Your Units</h3>
-                  <Link to="/unit-setup" className="ucd-section-link">Manage units</Link>
+                  <div className="ucd-section-header-actions">
+                    <label className="ucd-filter-toggle">
+                      <input
+                        type="checkbox"
+                        checked={showInactiveUnits}
+                        onChange={(e) => setShowInactiveUnits(e.target.checked)}
+                      />
+                      Show inactive units{inactiveUnitCount > 0 ? ` (${inactiveUnitCount})` : ''}
+                    </label>
+                    <Link to="/unit-setup" className="ucd-section-link">Manage units</Link>
+                  </div>
                 </div>
                 {summary.unitStatuses.length === 0 ? (
                   <div className="ucd-empty">You haven't created any units yet.</div>
+                ) : visibleUnitStatuses.length === 0 ? (
+                  <div className="ucd-empty">
+                    No active units right now.
+                    {inactiveUnitCount > 0 && (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          className="ucd-empty-action"
+                          onClick={() => setShowInactiveUnits(true)}
+                        >
+                          Show {inactiveUnitCount} inactive unit{inactiveUnitCount === 1 ? '' : 's'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <table className="ucd-table">
                     <thead>
                       <tr>
                         <th>Unit</th>
+                        <th>Date</th>
                         <th>Sessions</th>
                         <th>Unassigned</th>
                         <th>Tutors Submitted Availability</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.unitStatuses.map(u => (
+                      {visibleUnitStatuses.map(u => (
                         <tr key={u.unitId} className={!u.isActive ? 'inactive' : ''}>
                           <td>{u.unitCode}{!u.isActive && ' (inactive)'}</td>
+                          <td>{formatUnitDate(u.semester, u.year)}</td>
                           <td>{u.sessionCount}</td>
                           <td>
                             {u.unassignedCount > 0 ? (

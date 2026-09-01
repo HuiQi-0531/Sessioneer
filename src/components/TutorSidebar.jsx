@@ -76,9 +76,12 @@ useEffect(() => {
 
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
-  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor'));
+  // Tutors only ever see units from the current semester in the sidebar --
+  // inactive (past/future semester) units are dropped entirely here rather
+  // than shown greyed out, unlike the UC dashboard's "Show inactive" toggle.
+  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor') && unit.isActive);
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
-  const displayActiveUnit = activeUnit?.roles?.includes('tutor')
+  const displayActiveUnit = activeUnit?.roles?.includes('tutor') && activeUnit?.isActive
     ? activeUnit
     : tutorUnits[0] || null;
   const switcherRoles = currentUser?.role === 'coordinator' ? ['coordinator', 'tutor'] : activeUnitRoles;
@@ -108,7 +111,7 @@ useEffect(() => {
     }
 
     if (role === 'tutor') {
-      const nextTutorUnit = activeUnit?.roles?.includes('tutor')
+      const nextTutorUnit = activeUnit?.roles?.includes('tutor') && activeUnit?.isActive
         ? activeUnit
         : tutorUnits[0];
       if (nextTutorUnit) setActiveUnitId(nextTutorUnit.id);
@@ -175,7 +178,7 @@ useEffect(() => {
             {tutorUnits.map(unit => (
               <button
                 key={unit.id}
-                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''}`}
                 onClick={() => handleSelectUnit(unit.id)}
                 type="button"
               >

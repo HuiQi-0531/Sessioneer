@@ -9,7 +9,10 @@ const router = express.Router();
  * GET /tutor/dashboard-summary
  * Everything the tutor dashboard needs in one call: their units with
  * availability/assignment status, overall session counts, and pending
- * change request count.
+ * change request count. Each unit carries an isActive flag (current
+ * semester or not) so the frontend can default to showing only active
+ * units, with a toggle to reveal inactive ones -- same concept as the
+ * UC dashboard.
  */
 router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
@@ -44,6 +47,9 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
       return {
         unitId: unit.id,
         unitCode: unit.unit_code,
+        semester: unit.semester,
+        year: unit.year,
+        isActive: isUnitActive(unit.semester, unit.year),
         availabilitySubmitted: parseInt(availResult.rows[0].count, 10) > 0,
         assignedSessionCount: parseInt(assignedResult.rows[0].count, 10)
       };
@@ -65,6 +71,7 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
     res.json({
       unitStatuses,
       totalUnits: unitsResult.rows.length,
+      activeUnitCount: unitStatuses.filter(u => u.isActive).length,
       availabilitySubmittedCount: unitStatuses.filter(u => u.availabilitySubmitted).length,
       totalSessions: parseInt(totalSessionsResult.rows[0].count, 10),
       confirmedSessions: parseInt(confirmedSessionsResult.rows[0].count, 10),
@@ -120,6 +127,8 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       return {
         unitId: unit.id,
         unitCode: unit.unit_code,
+        semester: unit.semester,
+        year: unit.year,
         isActive: isUnitActive(unit.semester, unit.year),
         sessionCount: parseInt(sessionCountResult.rows[0].count, 10),
         unassignedCount: parseInt(unassignedResult.rows[0].count, 10),
