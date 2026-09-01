@@ -64,6 +64,11 @@ const Sessions = () => {
   const [coverError, setCoverError] = useState('');
   const [coverSuccess, setCoverSuccess] = useState('');
 
+  const [showUploadInfo, setShowUploadInfo] = useState(false);
+  const [uploadInfoPos, setUploadInfoPos] = useState({ top: 0, left: 0 });
+  const uploadInfoIconRef = useRef(null);
+  const uploadInfoTooltipRef = useRef(null);
+
   // If we arrived via a direct link like /sessions/:unitId, make sure that
   // becomes the active unit (e.g. clicked "Sessions" from the unit list).
   useEffect(() => {
@@ -313,6 +318,29 @@ const displayedSessions = React.useMemo(() => {
     setShowCoverModal(true);
   };
 
+
+    const toggleUploadInfo = () => {
+    if (!showUploadInfo && uploadInfoIconRef.current) {
+      const rect = uploadInfoIconRef.current.getBoundingClientRect();
+      setUploadInfoPos({ top: rect.bottom + 6, left: rect.right - 260 });
+    }
+    setShowUploadInfo(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (!showUploadInfo) return;
+    const handleClickOutside = (event) => {
+      if (
+        uploadInfoIconRef.current && !uploadInfoIconRef.current.contains(event.target) &&
+        uploadInfoTooltipRef.current && !uploadInfoTooltipRef.current.contains(event.target)
+      ) {
+        setShowUploadInfo(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUploadInfo]);
+
   const handleCoverTutorChange = (tutorId) => {
     setCoverTutorId(tutorId);
     setCoverSelectedIds(new Set());
@@ -401,9 +429,39 @@ const displayedSessions = React.useMemo(() => {
             </button>
 
             <div className="ss-top-actions">
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <button
+                  ref={uploadInfoIconRef}
+                  type="button"
+                  onClick={toggleUploadInfo}
+                  style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    border: '1px solid #999', background: '#fff', color: '#555',
+                    fontSize: 12, fontStyle: 'italic', fontWeight: 'bold',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                  aria-label="Difference between Upload Session and Add Session"
+                >
+                  i
+                </button>
+                {showUploadInfo && (
+                  <div
+                    ref={uploadInfoTooltipRef}
+                    style={{
+                      position: 'fixed', top: uploadInfoPos.top, left: uploadInfoPos.left,
+                      background: '#fff', border: '1px solid #ddd', borderRadius: 6,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: '10px 14px',
+                      fontSize: 13, color: '#333', width: 260, zIndex: 9999, textAlign: 'left'
+                    }}
+                  >
+                    <p style={{ margin: '2px 0' }}><strong>Upload Session</strong> — import a whole timetable from a CSV file at once.</p>
+                    <p style={{ margin: '2px 0' }}><strong>Add Session</strong> — create one session manually using the form.</p>
+                  </div>
+                )}
+              </div>
               <button className="ss-btn ss-btn-secondary" onClick={() => navigate('/sessions/import')}>
                 Upload Session
-              </button>
+              </button>             
               <button className="ss-btn ss-btn-primary" onClick={openAddForm}>
                 Add Session
               </button>
