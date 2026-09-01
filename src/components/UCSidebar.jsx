@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback} from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
@@ -12,13 +12,10 @@ const UCSidebar = ({ activePage }) => {
     allUnits,
     setActiveUnitId,
     isLoading,
-    activeViewRole,
-    activeUnitRoles,
-    setActiveViewRole
+    activeViewRole
   } = useActiveUnit();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
-  const navigate = useNavigate();
 
   const readCurrentUser = () => {
     const savedUser = localStorage.getItem('currentUser');
@@ -77,7 +74,6 @@ const UCSidebar = ({ activePage }) => {
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
-  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor'));
 
   // Active Unit widget only ever shows/selects current-semester units.
   // Past/future units stay reachable via "Manage units" -> Unit Setup.
@@ -86,9 +82,6 @@ const UCSidebar = ({ activePage }) => {
   const displayActiveUnit = (activeUnit?.roles?.includes('coordinator') && activeUnit.isActive)
     ? activeUnit
     : activeCoordinatorUnits[0] || null;
-
-  const switcherRoles = currentUser?.role === 'coordinator' ? ['coordinator', 'tutor'] : activeUnitRoles;
-  const showRoleSwitcher = currentUser?.role === 'coordinator' || switcherRoles.length > 1;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -119,25 +112,6 @@ const UCSidebar = ({ activePage }) => {
       setActiveUnitId(activeCoordinatorUnits[0].id);
     }
   }, [activeUnit, activeViewRole, activeCoordinatorUnits, activePage, setActiveUnitId]);
-
-  const handleRoleSwitch = (role) => {
-    if (role === 'coordinator') {
-      const nextCoordinatorUnit = activeUnit?.roles?.includes('coordinator')
-        ? activeUnit
-        : coordinatorUnits[0];
-      if (nextCoordinatorUnit) setActiveUnitId(nextCoordinatorUnit.id);
-    }
-
-    if (role === 'tutor') {
-      const nextTutorUnit = activeUnit?.roles?.includes('tutor')
-        ? activeUnit
-        : tutorUnits[0];
-      if (nextTutorUnit) setActiveUnitId(nextTutorUnit.id);
-    }
-
-    setActiveViewRole(role);
-    navigate(role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard', { replace: true });
-  };
 
   const navItem = (label, path, key, showDot = false) => {
   const content = (
@@ -214,21 +188,6 @@ const UCSidebar = ({ activePage }) => {
           </div>
         )}
       </div>
-
-      {showRoleSwitcher && (
-        <div className="ucs-role-switcher" aria-label="Viewing role">
-          {switcherRoles.map(role => (
-            <button
-              key={role}
-              className={`ucs-role-option ${activeViewRole === role ? 'active' : ''}`}
-              onClick={() => handleRoleSwitch(role)}
-              type="button"
-            >
-              {role === 'coordinator' ? 'UC' : 'Tutor'}
-            </button>
-          ))}
-        </div>
-      )}
 
       <nav className="uc-navigation">
         {navItem('Dashboard', '/uc-dashboard', 'dashboard')}

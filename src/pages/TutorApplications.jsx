@@ -15,11 +15,15 @@ const TutorApplications = () => {
   const [isInviting, setIsInviting] = useState(null);
 
   const [showDirectInviteModal, setShowDirectInviteModal] = useState(false);
-  const [directInviteForm, setDirectInviteForm] = useState({ email: '' });
+  const [directInviteForm, setDirectInviteForm] = useState({ email: '', role: 'tutor' });
   const [directInviteError, setDirectInviteError] = useState('');
   const [isDirectInviting, setIsDirectInviting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [directInviteSuccess, setDirectInviteSuccess] = useState(null);
+
+  // Which application is mid-invite, and which role the UC picked for it.
+  const [inviteRoleModal, setInviteRoleModal] = useState(null);
+  const [inviteRoleChoice, setInviteRoleChoice] = useState('tutor');
 
   const loadApplications = useCallback(async () => {
     if (!activeUnit?.id) {
@@ -54,10 +58,11 @@ const TutorApplications = () => {
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleInvite = async (application) => {
+  const handleInvite = async (application, role) => {
     setIsInviting(application.id);
     try {
-      const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id);
+      const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id, role);
+      setInviteRoleModal(null);
       setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
       await loadApplications();
     } catch (err) {
@@ -83,15 +88,16 @@ const TutorApplications = () => {
     }
     setIsDirectInviting(true);
     try {
-      const result = await tutorApplicationsAPI.directInvite(directInviteForm.email.trim(), activeUnit.id);
+      const roleLabel = directInviteForm.role === 'super_tutor' ? 'Super Tutor' : 'tutor';
+      const result = await tutorApplicationsAPI.directInvite(directInviteForm.email.trim(), activeUnit.id, directInviteForm.role);
       setShowDirectInviteModal(false);
-      setDirectInviteForm({ email: '' });
+      setDirectInviteForm({ email: '', role: 'tutor' });
       if (result.addedExistingUser) {
         setDirectInviteSuccess({
-          title: result.alreadyTutor ? 'Tutor already added' : 'Tutor added',
+          title: result.alreadyTutor ? 'Already added' : 'Tutor added',
           message: result.alreadyTutor
-            ? `${result.fullName || result.email} is already a tutor for ${activeUnit.unitCode}.`
-            : `${result.fullName || result.email} has been added to ${activeUnit.unitCode}.`
+            ? `${result.fullName || result.email} is already a ${roleLabel} for ${activeUnit.unitCode}.`
+            : `${result.fullName || result.email} has been added as a ${roleLabel} for ${activeUnit.unitCode}.`
         });
       } else {
         setInviteLinkInfo({ name: result.fullName || result.name || result.email, url: buildInviteUrl(result.inviteToken) });
@@ -181,11 +187,16 @@ const TutorApplications = () => {
                     {app.status === 'pending' && (
                       <button
                         className="tap-btn tap-btn-invite"
-                        onClick={() => handleInvite(app)}
+                        onClick={() => { setInviteRoleChoice('tutor'); setInviteRoleModal(app); }}
                         disabled={isInviting === app.id}
                       >
                         {isInviting === app.id ? 'Generating...' : 'Invite'}
                       </button>
+                    )}
+                    {app.status === 'invited' && (
+                      <span className="tap-badge" style={{ marginLeft: 8 }}>
+                        Invited as {app.invitedRole === 'super_tutor' ? 'Super Tutor' : 'Tutor'}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -210,10 +221,56 @@ const TutorApplications = () => {
               />
             </div>
 
+            <div className="tap-form-field">
+              <label>Invite as</label>
+              <select
+                value={directInviteForm.role}
+                onChange={(e) => setDirectInviteForm(prev => ({ ...prev, role: e.target.value }))}
+              >
+                <option value="tutor">Tutor</option>
+                <option value="super_tutor">Super Tutor</option>
+              </select>
+              <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                Super Tutors can also be assigned to Lecture and Consultation sessions.
+              </p>
+            </div>
+
             {directInviteError && <p style={{ color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>{directInviteError}</p>}
 
             <button className="tap-btn tap-btn-invite" style={{ width: '100%' }} onClick={handleDirectInviteSubmit} disabled={isDirectInviting}>
               {isDirectInviting ? 'Creating...' : 'Create Invite Link'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {inviteRoleModal && (
+        <div className="tap-modal-overlay" onClick={() => setInviteRoleModal(null)}>
+          <div className="tap-modal-content" onClick={e => e.stopPropagation()}>
+            <h2>Invite {inviteRoleModal.fullName || inviteRoleModal.name || 'applicant'}</h2>
+            <p>Choose what role to invite them as for {activeUnit?.unitCode}.</p>
+
+            <div className="tap-form-field">
+              <label>Invite as</label>
+              <select
+                value={inviteRoleChoice}
+                onChange={(e) => setInviteRoleChoice(e.target.value)}
+              >
+                <option value="tutor">Tutor</option>
+                <option value="super_tutor">Super Tutor</option>
+              </select>
+              <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                Super Tutors can also be assigned to Lecture and Consultation sessions.
+              </p>
+            </div>
+
+            <button
+              className="tap-btn tap-btn-invite"
+              style={{ width: '100%' }}
+              disabled={isInviting === inviteRoleModal.id}
+              onClick={() => handleInvite(inviteRoleModal, inviteRoleChoice)}
+            >
+              {isInviting === inviteRoleModal.id ? 'Generating...' : 'Generate Invite Link'}
             </button>
           </div>
         </div>

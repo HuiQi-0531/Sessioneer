@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { availabilityAPI, messagesAPI, notificationsAPI, profileAPI, requestsAPI, sessionsAPI, tutorApplicationsAPI, tutorDashboardAPI, tutorsAPI, ucAPI, ucDashboardAPI, unitsAPI } from '../config/api';
+import { unitHasTutorAccess } from '../utils/roles';
 
 const ActiveUnitContext = createContext(null);
 
@@ -15,8 +16,14 @@ const getCurrentUser = () => {
   return saved ? JSON.parse(saved) : null;
 };
 
+// The "view role" driving which sidebar/pages show is only ever
+// 'coordinator' or 'tutor' - Super Tutor is a per-unit membership tier, not
+// a separate view. A unit whose only role is 'super_tutor' should still
+// resolve to the tutor view.
+const normaliseViewRole = (role) => (role === 'super_tutor' ? 'tutor' : role);
+
 const getDefaultRole = (unit, preferredRole, fallbackRole) => {
-  const roles = unit?.roles || [];
+  const roles = (unit?.roles || []).map(normaliseViewRole);
   if (fallbackRole === 'coordinator' && preferredRole === 'tutor') return 'tutor';
   if (preferredRole && roles.includes(preferredRole)) return preferredRole;
   if (fallbackRole && roles.includes(fallbackRole)) return fallbackRole;
@@ -145,7 +152,7 @@ export const ActiveUnitProvider = ({ children }) => {
   }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);
 
   useEffect(() => {
-    if (!activeUnit?.id || activeViewRole !== 'tutor' || !activeUnitRoles.includes('tutor')) return;
+    if (!activeUnit?.id || activeViewRole !== 'tutor' || !unitHasTutorAccess(activeUnit)) return;
     sessionsAPI.prefetch(activeUnit.id).catch(() => {
       // Tutor Sessions will show its own error/loading state if the real page load fails.
     });

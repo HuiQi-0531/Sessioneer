@@ -550,16 +550,6 @@ export const unitsAPI = {
     return data;
   },
 
-  addSelfTutorRole: async (id) => {
-    const response = await fetch(`${API_URL}/units/${id}/self-tutor-role`, {
-      method: 'POST',
-      headers: authHeader()
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to add tutor role');
-    return data;
-  },
-
   create: async (unitData) => {
     const response = await fetch(`${API_URL}/units`, {
       method: 'POST',
@@ -1382,11 +1372,11 @@ export const tutorApplicationsAPI = {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   },
 
-  invite: async (applicationId, unitId) => {
+  invite: async (applicationId, unitId, role = 'tutor') => {
     const response = await fetch(`${API_URL}/tutor-applications/${applicationId}/invite`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ unitId })
+      body: JSON.stringify({ unitId, role })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
@@ -1394,11 +1384,11 @@ export const tutorApplicationsAPI = {
     return result;
   },
 
-  directInvite: async (email, unitId) => {
+  directInvite: async (email, unitId, role = 'tutor') => {
     const response = await fetch(`${API_URL}/tutor-applications/direct-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ email, unitId })
+      body: JSON.stringify({ email, unitId, role })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create invite');

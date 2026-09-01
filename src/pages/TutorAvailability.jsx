@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { availabilityAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
@@ -97,7 +98,7 @@ const TutorAvailability = () => {
   ];
 
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
     [allUnits]
   );
 

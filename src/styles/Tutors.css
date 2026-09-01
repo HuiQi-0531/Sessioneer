@@ -255,6 +255,7 @@
 .tt-badge.backup { background-color: var(--color-warning-bg); color: var(--color-warning-hover); }
 .tt-badge.risk { background-color: var(--color-danger-bg); color: var(--color-danger-text); }
 .tt-badge.tag { background-color: #ede9fe; color: #6d28d9; }
+.tt-badge.super-tutor { background-color: #dbeafe; color: #1d4ed8; }
 
 /* Star / flag buttons */
 .tt-star-btn,

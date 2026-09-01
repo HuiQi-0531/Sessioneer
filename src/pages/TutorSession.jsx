@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/TutorSession.css';
@@ -88,7 +89,7 @@ const TutorSession = () => {
   const [notReleased, setNotReleased] = useState(false);
 
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
     [allUnits]
   );
 
@@ -109,14 +110,14 @@ const TutorSession = () => {
       return;
     }
 
-    if (!activeUnit || !activeUnit.roles?.includes('tutor')) {
+    if (!activeUnit || !unitHasTutorAccess(activeUnit)) {
       setActiveUnitId(tutorUnits[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitLoading, tutorUnits, activeUnit]);
 
   useEffect(() => {
-    if (!activeUnit || !activeUnit.roles?.includes('tutor')) {
+    if (!activeUnit || !unitHasTutorAccess(activeUnit)) {
       setIsLoadingSessions(false);
       return;
     }
@@ -188,7 +189,7 @@ const TutorSession = () => {
     );
   }
 
-  if (!activeUnit.roles?.includes('tutor')) {
+  if (!unitHasTutorAccess(activeUnit)) {
     return (
       <div className="dashboard-container">
         <TutorSidebar activePage="sessions" />

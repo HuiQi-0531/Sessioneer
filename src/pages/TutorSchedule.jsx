@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../config/api';
 import html2canvas from 'html2canvas';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
@@ -64,7 +65,7 @@ const TutorSchedule = () => {
   const gridRef = React.useRef(null);
 
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
     [allUnits]
   );
 

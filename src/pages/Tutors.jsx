@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { tutorsAPI, unitsAPI } from '../config/api';
+import { tutorsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -14,16 +14,12 @@ const Tutors = () => {
   const {
     activeUnit,
     activeUnitId,
-    activeUnitRoles,
     setActiveUnitId,
-    setActiveViewRole,
-    refreshUnits,
     isLoading: unitLoading
   } = useActiveUnit();
 
   const [tutors, setTutors] = useState([]);
   const [isLoadingTutors, setIsLoadingTutors] = useState(true);
-  const [isAddingSelf, setIsAddingSelf] = useState(false);
   const [search, setSearch] = useState('');
 
   const [selectedTutor, setSelectedTutor] = useState(null);
@@ -125,29 +121,6 @@ const Tutors = () => {
       setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, flagged: !nextValue } : t)));
       setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, flagged: !nextValue } : prev));
       alert(err.message || 'Failed to update flag.');
-    }
-  };
-
-  const currentUser = (() => {
-    const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : null;
-  })();
-
-  const canAddSelfAsTutor = currentUser?.role === 'coordinator' && !activeUnitRoles.includes('tutor');
-
-  const handleAddSelfAsTutor = async () => {
-    if (!activeUnit) return;
-    setIsAddingSelf(true);
-    try {
-      await unitsAPI.addSelfTutorRole(activeUnit.id);
-      await refreshUnits();
-      await loadTutors(activeUnit.id);
-      setActiveViewRole('tutor');
-    } catch (error) {
-      console.error('Error adding self as tutor:', error);
-      alert(error.message || 'Failed to add yourself as a tutor.');
-    } finally {
-      setIsAddingSelf(false);
     }
   };
 
@@ -383,16 +356,6 @@ const Tutors = () => {
               )}
             </div>
 
-            {canAddSelfAsTutor && (
-              <button
-                className="tt-add-self-btn"
-                onClick={handleAddSelfAsTutor}
-                disabled={isAddingSelf}
-                type="button"
-              >
-                {isAddingSelf ? 'Adding...' : 'Add Myself as Tutor'}
-              </button>
-            )}
           </div>
 
           {isLoadingTutors ? (
@@ -406,7 +369,10 @@ const Tutors = () => {
               {filteredTutors.map(tutor => (
                 <div key={tutor.id} className="tt-card" onClick={() => openProfile(tutor)}>
                   <div className="tt-card-top">
-                    <span className="tt-card-name">{tutor.name}</span>
+                    <span className="tt-card-name">
+                      {tutor.name}
+                      {tutor.isSuperTutor && <span className="tt-badge super-tutor" style={{ marginLeft: 8 }}>Super Tutor</span>}
+                    </span>
                     <div className="tt-card-actions">
                       <button
                         type="button"
@@ -463,7 +429,7 @@ const Tutors = () => {
               <div className="tt-modal-avatar">{selectedTutor.name.charAt(0).toUpperCase()}</div>
               <div>
                 <div className="tt-modal-name">{selectedTutor.name}</div>
-                <div className="tt-modal-role">Tutor</div>
+                <div className="tt-modal-role">{selectedTutor.isSuperTutor ? 'Super Tutor' : 'Tutor'}</div>
               </div>
               <div className="tt-modal-actions">
                 <button

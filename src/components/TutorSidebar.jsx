@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback} from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
 import { getAvatarLetter, getDisplayName } from '../utils/userName';
+import { unitHasTutorAccess, isSuperTutorOnUnit } from '../utils/roles';
 import '../styles/UCSidebar.css';
 
 const TutorSidebar = ({ activePage }) => {
@@ -11,12 +12,8 @@ const TutorSidebar = ({ activePage }) => {
     activeUnit,
     allUnits,
     setActiveUnitId,
-    isLoading,
-    activeViewRole,
-    activeUnitRoles,
-    setActiveViewRole
+    isLoading
   } = useActiveUnit();
-  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -79,13 +76,10 @@ useEffect(() => {
   // Tutors only ever see units from the current semester in the sidebar --
   // inactive (past/future semester) units are dropped entirely here rather
   // than shown greyed out, unlike the UC dashboard's "Show inactive" toggle.
-  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor') && unit.isActive);
-  const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
-  const displayActiveUnit = activeUnit?.roles?.includes('tutor') && activeUnit?.isActive
+  const tutorUnits = allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive);
+  const displayActiveUnit = unitHasTutorAccess(activeUnit) && activeUnit?.isActive
     ? activeUnit
     : tutorUnits[0] || null;
-  const switcherRoles = currentUser?.role === 'coordinator' ? ['coordinator', 'tutor'] : activeUnitRoles;
-  const showRoleSwitcher = currentUser?.role === 'coordinator' || switcherRoles.length > 1;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -100,25 +94,6 @@ useEffect(() => {
   const handleSelectUnit = (unitId) => {
     setActiveUnitId(unitId);
     setShowDropdown(false);
-  };
-
-  const handleRoleSwitch = (role) => {
-    if (role === 'coordinator') {
-      const nextCoordinatorUnit = activeUnit?.roles?.includes('coordinator')
-        ? activeUnit
-        : coordinatorUnits[0];
-      if (nextCoordinatorUnit) setActiveUnitId(nextCoordinatorUnit.id);
-    }
-
-    if (role === 'tutor') {
-      const nextTutorUnit = activeUnit?.roles?.includes('tutor') && activeUnit?.isActive
-        ? activeUnit
-        : tutorUnits[0];
-      if (nextTutorUnit) setActiveUnitId(nextTutorUnit.id);
-    }
-
-    setActiveViewRole(role);
-    navigate(role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard', { replace: true });
   };
 
   const navItem = (label, path, key, showDot = false) => {
@@ -190,21 +165,6 @@ useEffect(() => {
         )}
       </div>
 
-      {showRoleSwitcher && (
-        <div className="ucs-role-switcher" aria-label="Viewing role">
-          {switcherRoles.map(role => (
-            <button
-              key={role}
-              className={`ucs-role-option ${activeViewRole === role ? 'active' : ''}`}
-              onClick={() => handleRoleSwitch(role)}
-              type="button"
-            >
-              {role === 'coordinator' ? 'UC' : 'Tutor'}
-            </button>
-          ))}
-        </div>
-      )}
-
       <nav className="uc-navigation">
         {navItem('Dashboard', '/tutor-dashboard', 'dashboard')}
         {navItem('Sessions', displayActiveUnit ? '/tutor-sessions' : '#sessions', 'sessions')}
@@ -225,7 +185,7 @@ useEffect(() => {
           </div>
           <div className="uc-user-info">
             <p className="uc-user-name">{displayName}</p>
-            <p className="uc-user-role">Tutor</p>
+            <p className="uc-user-role">{isSuperTutorOnUnit(displayActiveUnit) ? 'Super Tutor' : 'Tutor'}</p>
           </div>
         </Link>
         <Link to="/logout" className="uc-logout-btn" aria-label="Log out" title="Log out">
