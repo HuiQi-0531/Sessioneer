@@ -41,6 +41,7 @@ const getMyTutorEntry = (session, myId) => {
 };
 
 const getMyStatus = (session, myId) => {
+  if (session.isCovering) return 'covering';
   const mine = getMyTutorEntry(session, myId);
   if (!mine) return getStatus(session); // fallback to legacy behaviour if tutors[] is missing
   if (mine.confirmed === true) return 'confirmed';
@@ -272,7 +273,13 @@ const handleExportPng = async () => {
                 >
                   <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
                   <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
-                  <div className="ts-grid-block-status">{status === 'pending' ? 'Awaiting your response' : status}</div>
+                  <div className="ts-grid-block-status">
+                    {status === 'pending'
+                      ? 'Awaiting your response'
+                      : status === 'covering' && session.coverStartDate && session.coverEndDate
+                        ? `Covering · ${new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
+                        : status}
+                  </div>
                 </div>
               );
             })
@@ -379,6 +386,7 @@ const handleExportPng = async () => {
                 <span className="ts-legend-item"><span className="ts-legend-dot confirmed"></span>Confirmed</span>
                 <span className="ts-legend-item"><span className="ts-legend-dot pending"></span>Awaiting your response</span>
                 <span className="ts-legend-item"><span className="ts-legend-dot declined"></span>Declined</span>
+                <span className="ts-legend-item"><span className="ts-legend-dot covering"></span>Covering</span>
               </div>
               {renderGrid()}
             </>
@@ -420,6 +428,14 @@ const handleExportPng = async () => {
                         </span>
                         {status === 'declined' && session.tutorRejectReason && (
                           <div className="ts-reject-reason">"{getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason}"</div>                        )}
+                        {status === 'covering' && session.coverStartDate && session.coverEndDate && (
+                          <div className="ts-cover-daterange">
+                            {new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                            {' - '}
+                            {new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                            {session.coverOccurrenceCount ? ` · ${session.coverOccurrenceCount} session${session.coverOccurrenceCount === 1 ? '' : 's'}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td>
                         {status === 'pending' && (

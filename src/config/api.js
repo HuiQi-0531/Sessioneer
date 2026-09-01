@@ -297,11 +297,11 @@ export const requestsAPI = {
 
 export const coverAPI = {
   // UC: broadcast selected sessions to every other tutor on the unit
-  broadcast: async (sessionIds, reason) => {
+  broadcast: async (sessionIds, reason, startDate, endDate) => {
     const response = await fetch(`${API_URL}/uc/cover-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ sessionIds, reason })
+      body: JSON.stringify({ sessionIds, reason, startDate, endDate })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to broadcast cover request');

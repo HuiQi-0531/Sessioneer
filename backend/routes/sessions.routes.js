@@ -110,6 +110,56 @@ const formatSessionRow = (s) => ({
   unitCode: s.unit_code || null
 });
 
+// A tutor's claimed-but-still-active cover requests: covering periods that
+// haven't ended yet. These aren't in session_tutors (that table is the
+// permanent weekly assignment) - covering is temporary, so it's layered on
+// top of the normal session list at read time instead.
+const getActiveCoverSessions = async (tutorId) => {
+  const result = await pool.query(
+    `
+    SELECT
+      s.*,
+      un.unit_code,
+      cb.start_date AS cover_start_date,
+      cb.end_date AS cover_end_date
+    FROM cover_requests cr
+    JOIN cover_batches cb ON cb.id = cr.batch_id
+    JOIN sessions s ON s.id = cr.session_id
+    JOIN units un ON un.id = s.unit_id
+    WHERE cr.claimed_by_id = $1
+      AND cr.status = 'claimed'
+      AND cb.end_date >= CURRENT_DATE
+    `,
+    [tutorId]
+  );
+  return result.rows;
+};
+
+const countWeekdayOccurrences = (day, startDate, endDate) => {
+  const WEEKDAY_INDEX = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+  const targetIdx = WEEKDAY_INDEX[String(day).toUpperCase()];
+  if (targetIdx === undefined || !startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
+  const cursor = new Date(start);
+  cursor.setDate(cursor.getDate() + ((targetIdx - cursor.getDay() + 7) % 7));
+  let count = 0;
+  while (cursor <= end) {
+    count++;
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return count;
+};
+
+const formatCoveringSessionRow = (s) => ({
+  ...formatSessionRow(s),
+  isCovering: true,
+  coverStartDate: s.cover_start_date,
+  coverEndDate: s.cover_end_date,
+  coverOccurrenceCount: countWeekdayOccurrences(s.day, s.cover_start_date, s.cover_end_date)
+});
+
 // Get all sessions for a unit. Coordinators must own the unit; tutors
 // must be linked to it (via availability or an assigned session).
 router.get('/', verifyToken, async (req, res) => {
@@ -159,7 +209,14 @@ router.get('/', verifyToken, async (req, res) => {
       [unitId]
     );
 
-    res.json(result.rows.map(formatSessionRow));
+    const assigned = result.rows.map(formatSessionRow);
+    if (req.user.role !== 'coordinator') {
+      const covering = (await getActiveCoverSessions(req.user.id))
+        .filter(s => s.unit_id === unitId) // this route is scoped to one unit
+        .map(formatCoveringSessionRow);
+      return res.json([...assigned, ...covering]);
+    }
+    res.json(assigned);
   } catch (error) {
     console.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
@@ -206,7 +263,14 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
       [unitId, req.user.id]
     );
 
-    res.json(result.rows.map(formatSessionRow));
+    const formatted = result.rows.map(formatSessionRow);
+    if (req.user.role !== 'coordinator') {
+      const covering = (await getActiveCoverSessions(req.user.id))
+        .filter(s => s.unit_id === unitId)
+        .map(formatCoveringSessionRow);
+      return res.json([...formatted, ...covering]);
+    }
+    res.json(formatted);
   } catch (error) {
     console.error('Error fetching assigned sessions:', error);
     res.status(500).json({ error: 'Failed to fetch assigned sessions' });
