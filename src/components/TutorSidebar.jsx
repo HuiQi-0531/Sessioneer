@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback} from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
@@ -12,8 +12,10 @@ const TutorSidebar = ({ activePage }) => {
     activeUnit,
     allUnits,
     setActiveUnitId,
-    isLoading
+    isLoading,
+    setActiveViewRole
   } = useActiveUnit();
+  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -80,6 +82,15 @@ useEffect(() => {
   const displayActiveUnit = unitHasTutorAccess(activeUnit) && activeUnit?.isActive
     ? activeUnit
     : tutorUnits[0] || null;
+  // Units where this person is a coordinator - shown in the same picker so
+  // switching unit can also switch view back to the UC side.
+  const otherCoordinatorUnits = Array.from(
+    new Map(
+      allUnits
+        .filter(unit => unit.roles?.includes('coordinator') && unit.isActive)
+        .map(unit => [unit.id, unit])
+    ).values()
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -94,6 +105,13 @@ useEffect(() => {
   const handleSelectUnit = (unitId) => {
     setActiveUnitId(unitId);
     setShowDropdown(false);
+  };
+
+  const handleSwitchToCoordinatorUnit = (unitId) => {
+    setActiveUnitId(unitId);
+    setActiveViewRole('coordinator');
+    setShowDropdown(false);
+    navigate('/uc-dashboard');
   };
 
   const navItem = (label, path, key, showDot = false) => {
@@ -133,7 +151,7 @@ useEffect(() => {
         <button
           className="ucs-active-unit-btn"
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || tutorUnits.length === 0}
+          disabled={isLoading || (tutorUnits.length === 0 && otherCoordinatorUnits.length === 0)}
           type="button"
         >
           <div className="ucs-active-unit-text">
@@ -145,7 +163,7 @@ useEffect(() => {
               <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
             )}
           </div>
-          {tutorUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
+          {(tutorUnits.length > 0 || otherCoordinatorUnits.length > 0) && <span className="ucs-dropdown-arrow">&#9662;</span>}
         </button>
 
         {showDropdown && (
@@ -161,6 +179,23 @@ useEffect(() => {
                 <span className="ucs-dropdown-meta">{unit.semester}, {unit.year}</span>
               </button>
             ))}
+
+            {otherCoordinatorUnits.length > 0 && (
+              <>
+                <div className="ucs-dropdown-section-label">As Unit Coordinator</div>
+                {otherCoordinatorUnits.map(unit => (
+                  <button
+                    key={unit.id}
+                    className="ucs-dropdown-item"
+                    onClick={() => handleSwitchToCoordinatorUnit(unit.id)}
+                    type="button"
+                  >
+                    <span className="ucs-dropdown-code">{unit.unitCode}</span>
+                    <span className="ucs-dropdown-meta">UC</span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
