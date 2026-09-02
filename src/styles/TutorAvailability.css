@@ -183,11 +183,22 @@
   max-width: 100%;
 }
  
+.unit-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
 .unit-info {
   font-size: var(--font-lg);
   color: var(--color-text);
   font-weight: 500;
-  margin-bottom: 24px;
+}
+
+.btn-edit-top {
+  flex-shrink: 0;
 }
 
 .unit-info-subtitle {

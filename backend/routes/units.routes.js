@@ -118,7 +118,7 @@ router.get('/my-units', verifyToken, requireRole('tutor', 'coordinator'), async 
              u.schedule_locked, u.schedule_locked_at, u.draft_released
       FROM units u
       WHERE u.id IN (
-        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
@@ -232,24 +232,6 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
   } catch (error) {
     console.error('Error fetching unit:', error);
     res.status(500).json({ error: 'Failed to fetch unit' });
-  }
-});
-
-// Let a coordinator use the same account as a tutor for one of their units.
-router.post('/:id/self-tutor-role', verifyToken, requireRole('coordinator'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
-
-    if (!coordinatorUnitId) {
-      return res.status(404).json({ error: 'Unit not found' });
-    }
-
-    await ensureUnitMembership(pool, id, req.user.id, 'tutor');
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error adding self tutor role:', error);
-    res.status(500).json({ error: 'Failed to add tutor role' });
   }
 });
 
@@ -772,6 +754,134 @@ router.patch('/:id/unlock-availability', verifyToken, requireRole('coordinator')
   } catch (error) {
     console.error('Error unlocking availability:', error);
     res.status(500).json({ error: 'Failed to unlock availability' });
+  }
+});
+
+// POST /units/:id/duplicate (coordinator only)
+// Duplicates a unit into a new semester/year, carrying over only tutors
+// (unit_memberships with role='tutor') and sessions. Everything else
+// (availability, requests, coordinators, lock/release flags) starts fresh.
+router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { semester, year, unitCode, unitName } = req.body;
+
+    if (!semester || !year) {
+      return res.status(400).json({ error: 'Semester and year are required' });
+    }
+
+    const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
+    if (!coordinatorUnitId) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    const sourceResult = await pool.query(
+      'SELECT unit_code, unit_name, campus, delivery_mode, enrolment_size, application_form FROM units WHERE id = $1',
+      [id]
+    );
+    if (sourceResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+    const source = sourceResult.rows[0];
+
+    const nextUnitCode = normaliseUnitCode(unitCode || source.unit_code);
+    const nextUnitName = (unitName || source.unit_name || '').trim() || source.unit_name;
+
+    const duplicateUnit = await findDuplicateUnit({
+      coordinatorId: req.user.id,
+      unitCode: nextUnitCode,
+      semester,
+      year
+    });
+    if (duplicateUnit) {
+      return res.status(409).json({
+        error: `${nextUnitCode} already exists for ${semester}, ${year}. Please use a different unit code or semester.`
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const insertResult = await client.query(
+        `
+        INSERT INTO units
+          (unit_coordinator_id, unit_code, unit_name, semester, year,
+           campus, delivery_mode, enrolment_size, application_form)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, unit_code, unit_name, semester, year, campus,
+                  delivery_mode, enrolment_size, availability_deadline,
+                  availability_locked, schedule_locked, schedule_locked_at, draft_released
+        `,
+        [
+          req.user.id, nextUnitCode, nextUnitName, semester, year,
+          source.campus, source.delivery_mode, source.enrolment_size,
+          source.application_form ? JSON.stringify(source.application_form) : null
+        ]
+      );
+      const newUnitId = insertResult.rows[0].id;
+
+      await ensureUnitMembership(client, newUnitId, req.user.id, 'coordinator');
+
+      // Copy tutors only (not other coordinators, not availability).
+      // Their tier (tutor vs super_tutor) carries over as-is.
+      await client.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        SELECT $1, user_id, role
+        FROM unit_memberships
+        WHERE unit_id = $2 AND role IN ('tutor', 'super_tutor')
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [newUnitId, id]
+      );
+
+      // Copy sessions. Column list is read from information_schema at
+      // runtime rather than hardcoded, since the exact sessions schema
+      // wasn't available when this was written -- swap this block for a
+      // fixed column list once confirmed. Assignment/confirmation columns
+      // (is_assigned, assigned_tutor_id, tutor_confirmed, id, unit_id,
+      // created_at, updated_at) are excluded so each copied session starts
+      // unassigned in the new unit, even though tutors were carried over.
+      const EXCLUDED_SESSION_COLUMNS = [
+        'id', 'unit_id', 'is_assigned', 'assigned_tutor_id',
+        'tutor_confirmed', 'created_at', 'updated_at'
+      ];
+      const columnsResult = await client.query(
+        `
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'sessions'
+          AND column_name != ALL($1::text[])
+        ORDER BY ordinal_position
+        `,
+        [EXCLUDED_SESSION_COLUMNS]
+      );
+      const sessionColumns = columnsResult.rows.map(r => r.column_name);
+
+      if (sessionColumns.length > 0) {
+        const colList = sessionColumns.map(c => `"${c}"`).join(', ');
+        await client.query(
+          `
+          INSERT INTO sessions (unit_id, ${colList})
+          SELECT $1, ${colList}
+          FROM sessions
+          WHERE unit_id = $2
+          `,
+          [newUnitId, id]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json(formatUnit(insertResult.rows[0]));
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error duplicating unit:', error);
+    res.status(500).json({ error: 'Failed to duplicate unit' });
   }
 });
 

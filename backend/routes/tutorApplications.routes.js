@@ -4,8 +4,14 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { splitDisplayName } = require('../utils/userNames');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
 
 const router = express.Router();
+
+// The only two roles a coordinator can invite someone as. Anything else in
+// the request body is ignored and falls back to 'tutor'.
+const INVITABLE_ROLES = ['tutor', 'super_tutor'];
+const normaliseInvitedRole = (role) => (INVITABLE_ROLES.includes(role) ? role : 'tutor');
 
 // Same password hashing scheme used by auth.routes.js
 const hashPassword = (password) => {
@@ -30,7 +36,13 @@ const formatApplication = (a) => ({
   resumeFilename: a.resume_filename,
   status: a.status,
   appliedAt: a.applied_at,
-  invitedAt: a.invited_at
+  invitedAt: a.invited_at,
+  invitedRole: a.invited_role || 'tutor',
+  // Only meaningful while status === 'invited' - accept-invite nulls this
+  // out, and it's how the "Copy link" button on an already-invited card
+  // can still work after the one-time success modal has been closed.
+  inviteToken: a.status === 'invited' ? a.invite_token : null,
+  customAnswers: a.custom_answers || {}
 });
 
 const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
@@ -47,7 +59,7 @@ router.get('/unit/:unitId', async (req, res) => {
   try {
     const { unitId } = req.params;
     const result = await pool.query(
-      'SELECT id, unit_code, unit_name, semester, year FROM units WHERE id = $1',
+      'SELECT id, unit_code, unit_name, semester, year, application_form FROM units WHERE id = $1',
       [unitId]
     );
 
@@ -61,7 +73,8 @@ router.get('/unit/:unitId', async (req, res) => {
       unitCode: unit.unit_code,
       unitName: unit.unit_name,
       semester: unit.semester,
-      year: unit.year
+      year: unit.year,
+      applicationForm: unit.application_form || DEFAULT_APPLICATION_FIELDS
     });
   } catch (error) {
     console.error('Error fetching application unit:', error);
@@ -71,7 +84,7 @@ router.get('/unit/:unitId', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { unitId, firstName, lastName, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType } = req.body;
+    const { unitId, firstName, lastName, name, email, phoneNumber, workExperience, maximumHours, contractType, resumeBase64, resumeFilename, resumeMimeType, customAnswers } = req.body;
     const cleanFirstName = (firstName || name || '').trim();
     const cleanLastName = (lastName || '').trim();
 
@@ -89,14 +102,19 @@ router.post('/', async (req, res) => {
     }
 
     const resumeBuffer = resumeBase64 ? Buffer.from(resumeBase64, 'base64') : null;
+    // Only keep answers for keys that aren't one of the legacy dedicated
+    // columns - those are handled separately above.
+    const cleanCustomAnswers = customAnswers && typeof customAnswers === 'object'
+      ? Object.fromEntries(Object.entries(customAnswers).filter(([key]) => !LEGACY_FIELD_KEYS.includes(key)))
+      : {};
 
     await pool.query(
       `
       INSERT INTO tutor_applications
-        (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
+        (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, custom_answers, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
       `,
-      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer]
+      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -133,6 +151,64 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   }
 });
 
+// GET /tutor-applications/form/:unitId (coordinator only) - this unit's
+// application form. Falls back to the default template if they've never
+// customised it.
+router.get('/form/:unitId', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const result = await pool.query('SELECT application_form FROM units WHERE id = $1', [ownedUnitId]);
+    const stored = result.rows[0]?.application_form;
+    res.json({
+      fields: stored || DEFAULT_APPLICATION_FIELDS,
+      isCustomised: !!stored
+    });
+  } catch (error) {
+    console.error('Error fetching application form:', error);
+    res.status(500).json({ error: 'Failed to fetch application form' });
+  }
+});
+
+// PUT /tutor-applications/form/:unitId (coordinator only) - save this
+// unit's own copy of the application form.
+router.put('/form/:unitId', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const fields = sanitiseFields(req.body.fields);
+    if (!fields) {
+      return res.status(400).json({ error: 'Invalid form fields' });
+    }
+
+    await pool.query('UPDATE units SET application_form = $1 WHERE id = $2', [JSON.stringify(fields), ownedUnitId]);
+    res.json({ fields });
+  } catch (error) {
+    console.error('Error saving application form:', error);
+    res.status(500).json({ error: 'Failed to save application form' });
+  }
+});
+
+// POST /tutor-applications/form/:unitId/reset (coordinator only) - go back
+// to the default template.
+router.post('/form/:unitId/reset', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    await pool.query('UPDATE units SET application_form = NULL WHERE id = $1', [ownedUnitId]);
+    res.json({ fields: DEFAULT_APPLICATION_FIELDS });
+  } catch (error) {
+    console.error('Error resetting application form:', error);
+    res.status(500).json({ error: 'Failed to reset application form' });
+  }
+});
+
 // GET /tutor-applications/:id/resume (coordinator only) - download the resume file
 router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
@@ -158,13 +234,14 @@ router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, r
 router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { unitId } = req.body;
+    const { unitId, role } = req.body;
     if (!unitId) {
       return res.status(400).json({ error: 'Unit is required' });
     }
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
+    const invitedRole = normaliseInvitedRole(role);
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -172,11 +249,11 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
       `
       UPDATE tutor_applications
       SET status = 'invited', invited_by_id = $1, invited_at = NOW(),
-          invite_token = $2, invite_token_expires_at = $3
-      WHERE id = $4 AND unit_id = $5
+          invite_token = $2, invite_token_expires_at = $3, invited_role = $4
+      WHERE id = $5 AND unit_id = $6
       RETURNING *
       `,
-      [req.user.id, token, expiresAt, id, unitId]
+      [req.user.id, token, expiresAt, invitedRole, id, unitId]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
@@ -195,7 +272,7 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
  */
 router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
-    const { unitId, email } = req.body;
+    const { unitId, email, role } = req.body;
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) {
       return res.status(400).json({ error: 'Tutor email is required' });
@@ -203,6 +280,7 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
     if (!unitId) {
       return res.status(400).json({ error: 'Unit is required' });
     }
+    const invitedRole = normaliseInvitedRole(role);
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
@@ -219,17 +297,32 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
-      const membershipResult = await pool.query(
-        `
-        INSERT INTO unit_memberships (unit_id, user_id, role)
-        VALUES ($1, $2, 'tutor')
-        ON CONFLICT (unit_id, user_id, role) DO NOTHING
-        RETURNING id
-        `,
-        [ownedUnitId, user.id]
-      );
 
-      if (membershipResult.rows.length > 0) {
+      // A person only holds one tutor-tier role per unit (tutor OR super_tutor).
+      // Re-inviting them as the other one swaps it instead of stacking both.
+      const alreadyHasThisRole = await pool.query(
+        `SELECT id FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role = $3`,
+        [ownedUnitId, user.id, invitedRole]
+      );
+      await pool.query(
+        `DELETE FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor') AND role != $3`,
+        [ownedUnitId, user.id, invitedRole]
+      );
+      const membershipResult = alreadyHasThisRole.rows.length > 0
+        ? alreadyHasThisRole
+        : await pool.query(
+          `
+          INSERT INTO unit_memberships (unit_id, user_id, role)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (unit_id, user_id, role) DO NOTHING
+          RETURNING id
+          `,
+          [ownedUnitId, user.id, invitedRole]
+        );
+
+      const roleLabel = invitedRole === 'super_tutor' ? 'Super Tutor' : 'tutor';
+
+      if (alreadyHasThisRole.rows.length === 0) {
         await pool.query(
           `
           INSERT INTO notifications
@@ -240,7 +333,7 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
             user.id,
             'tutor_unit_invite',
             'Added to a new tutor unit',
-            `You have been added as a tutor for ${unit.unit_code || 'a unit'}.`,
+            `You have been added as a ${roleLabel} for ${unit.unit_code || 'a unit'}.`,
             ownedUnitId,
             '/tutor-dashboard'
           ]
@@ -249,7 +342,8 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
 
       return res.json({
         addedExistingUser: true,
-        alreadyTutor: membershipResult.rows.length === 0,
+        alreadyTutor: alreadyHasThisRole.rows.length > 0,
+        invitedRole,
         userId: user.id,
         email: user.email,
         fullName: [user.name, user.last_name].filter(Boolean).join(' ')
@@ -262,11 +356,11 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
     const result = await pool.query(
       `
       INSERT INTO tutor_applications
-        (unit_id, name, email, status, invited_by_id, invited_at, invite_token, invite_token_expires_at)
-      VALUES ($1, $2, $3, 'invited', $4, NOW(), $5, $6)
+        (unit_id, name, email, status, invited_by_id, invited_at, invite_token, invite_token_expires_at, invited_role)
+      VALUES ($1, $2, $3, 'invited', $4, NOW(), $5, $6, $7)
       RETURNING *
       `,
-      [unitId, '', cleanEmail, req.user.id, token, expiresAt]
+      [unitId, '', cleanEmail, req.user.id, token, expiresAt, invitedRole]
     );
 
     res.status(201).json({ ...formatApplication(result.rows[0]), inviteToken: token });
@@ -370,10 +464,10 @@ router.post('/accept-invite', async (req, res) => {
       await client.query(
         `
         INSERT INTO unit_memberships (unit_id, user_id, role)
-        VALUES ($1, $2, 'tutor')
+        VALUES ($1, $2, $3)
         ON CONFLICT (unit_id, user_id, role) DO NOTHING
         `,
-        [application.unit_id, newUserId]
+        [application.unit_id, newUserId, application.invited_role || 'tutor']
       );
     }
 

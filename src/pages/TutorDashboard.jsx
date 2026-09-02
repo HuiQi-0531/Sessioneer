@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { CalendarDays, Clock, ListChecks, RefreshCw, MessageSquare, LayoutGrid } from 'lucide-react';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -7,6 +8,8 @@ import { formatTimeAgo } from '../utils/time';
 import { getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
+
+
 
 const TutorDashboard = () => {
   const navigate = useNavigate();
@@ -19,6 +22,7 @@ const TutorDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  
 
   useEffect(() => {
     loadSummary();
@@ -67,6 +71,7 @@ const TutorDashboard = () => {
     navigate(notification.actionUrl);
   };
 
+
   return (
     <div className="uc-dashboard-container">
       <TutorSidebar activePage="dashboard" />
@@ -106,34 +111,34 @@ const TutorDashboard = () => {
                 </Link>
               </div>
 
-              <section className="td-section">
-                <h3>Your Units</h3>
-                {summary.unitStatuses.length === 0 ? (
-                  <div className="td-empty">You're not linked to any units yet.</div>
-                ) : (
-                  <table className="td-table">
-                    <thead>
-                      <tr>
-                        <th>Unit</th>
-                        <th>Availability</th>
-                        <th>Assigned</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.unitStatuses.map(u => (
-                        <tr key={u.unitId}>
-                          <td>{u.unitCode}</td>
-                          <td>
-                            <span className={`td-badge ${u.availabilitySubmitted ? 'submitted' : 'pending'}`}>
-                              {u.availabilitySubmitted ? 'Submitted' : 'Not submitted'}
-                            </span>
-                          </td>
-                          <td>{u.assignedSessionCount} session{u.assignedSessionCount !== 1 ? 's' : ''}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                            <section className="td-section">
+                <h3>Quick Links</h3>
+                <div className="td-quicklinks-grid">
+                  <Link to="/tutor-sessions" className="td-quicklink-card">
+                    <ListChecks size={22} />
+                    <span>Sessions</span>
+                  </Link>
+                  <Link to="/availability" className="td-quicklink-card">
+                    <Clock size={22} />
+                    <span>Availability</span>
+                  </Link>
+                  <Link to="/tutor-schedule" className="td-quicklink-card">
+                    <CalendarDays size={22} />
+                    <span>Schedule</span>
+                  </Link>
+                  <Link to="/requests" className="td-quicklink-card">
+                    <RefreshCw size={22} />
+                    <span>Requests</span>
+                  </Link>
+                  <Link to="/tutor-messages" className="td-quicklink-card">
+                    <MessageSquare size={22} />
+                    <span>Messages</span>
+                  </Link>
+                  <Link to="/tutor-units" className="td-quicklink-card td-quicklink-highlight">
+                    <LayoutGrid size={22} />
+                    <span>View All Units</span>
+                  </Link>
+                </div>
               </section>
 
               <section className="td-section">

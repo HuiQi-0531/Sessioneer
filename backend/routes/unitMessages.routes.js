@@ -14,7 +14,7 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
-      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role IN ('tutor', 'super_tutor')
       UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
@@ -75,7 +75,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
         FROM users u
         WHERE u.role = 'tutor'
           AND (
-            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor')
+            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $1)
             OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $1)
           )
@@ -122,7 +122,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
         WHERE u.role = 'tutor'
           AND u.id != $1
           AND (
-            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor')
+            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $2 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $2)
             OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $2)
           )

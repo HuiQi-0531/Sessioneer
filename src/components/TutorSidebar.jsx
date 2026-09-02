@@ -4,6 +4,7 @@ import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
 import { getCachedHasUnreadMessages, invalidateMessageUnreadCache } from '../utils/messageUnreadCache';
 import { getAvatarLetter, getDisplayName } from '../utils/userName';
+import { unitHasTutorAccess, isSuperTutorOnUnit } from '../utils/roles';
 import '../styles/UCSidebar.css';
 
 const TutorSidebar = ({ activePage }) => {
@@ -12,8 +13,6 @@ const TutorSidebar = ({ activePage }) => {
     allUnits,
     setActiveUnitId,
     isLoading,
-    activeViewRole,
-    activeUnitRoles,
     setActiveViewRole
   } = useActiveUnit();
   const navigate = useNavigate();
@@ -76,13 +75,22 @@ useEffect(() => {
 
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
-  const tutorUnits = allUnits.filter(unit => unit.roles?.includes('tutor'));
-  const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
-  const displayActiveUnit = activeUnit?.roles?.includes('tutor')
+  // Tutors only ever see units from the current semester in the sidebar --
+  // inactive (past/future semester) units are dropped entirely here rather
+  // than shown greyed out, unlike the UC dashboard's "Show inactive" toggle.
+  const tutorUnits = allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive);
+  const displayActiveUnit = unitHasTutorAccess(activeUnit) && activeUnit?.isActive
     ? activeUnit
     : tutorUnits[0] || null;
-  const switcherRoles = currentUser?.role === 'coordinator' ? ['coordinator', 'tutor'] : activeUnitRoles;
-  const showRoleSwitcher = currentUser?.role === 'coordinator' || switcherRoles.length > 1;
+  // Units where this person is a coordinator - shown in the same picker so
+  // switching unit can also switch view back to the UC side.
+  const otherCoordinatorUnits = Array.from(
+    new Map(
+      allUnits
+        .filter(unit => unit.roles?.includes('coordinator') && unit.isActive)
+        .map(unit => [unit.id, unit])
+    ).values()
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -99,23 +107,11 @@ useEffect(() => {
     setShowDropdown(false);
   };
 
-  const handleRoleSwitch = (role) => {
-    if (role === 'coordinator') {
-      const nextCoordinatorUnit = activeUnit?.roles?.includes('coordinator')
-        ? activeUnit
-        : coordinatorUnits[0];
-      if (nextCoordinatorUnit) setActiveUnitId(nextCoordinatorUnit.id);
-    }
-
-    if (role === 'tutor') {
-      const nextTutorUnit = activeUnit?.roles?.includes('tutor')
-        ? activeUnit
-        : tutorUnits[0];
-      if (nextTutorUnit) setActiveUnitId(nextTutorUnit.id);
-    }
-
-    setActiveViewRole(role);
-    navigate(role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard', { replace: true });
+  const handleSwitchToCoordinatorUnit = (unitId) => {
+    setActiveUnitId(unitId);
+    setActiveViewRole('coordinator');
+    setShowDropdown(false);
+    navigate('/uc-dashboard');
   };
 
   const navItem = (label, path, key, showDot = false) => {
@@ -155,7 +151,7 @@ useEffect(() => {
         <button
           className="ucs-active-unit-btn"
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || tutorUnits.length === 0}
+          disabled={isLoading || (tutorUnits.length === 0 && otherCoordinatorUnits.length === 0)}
           type="button"
         >
           <div className="ucs-active-unit-text">
@@ -167,7 +163,7 @@ useEffect(() => {
               <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
             )}
           </div>
-          {tutorUnits.length > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
+          {(tutorUnits.length > 0 || otherCoordinatorUnits.length > 0) && <span className="ucs-dropdown-arrow">&#9662;</span>}
         </button>
 
         {showDropdown && (
@@ -175,7 +171,7 @@ useEffect(() => {
             {tutorUnits.map(unit => (
               <button
                 key={unit.id}
-                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+                className={`ucs-dropdown-item ${unit.id === displayActiveUnit?.id ? 'selected' : ''}`}
                 onClick={() => handleSelectUnit(unit.id)}
                 type="button"
               >
@@ -183,24 +179,26 @@ useEffect(() => {
                 <span className="ucs-dropdown-meta">{unit.semester}, {unit.year}</span>
               </button>
             ))}
+
+            {otherCoordinatorUnits.length > 0 && (
+              <>
+                <div className="ucs-dropdown-section-label">As Unit Coordinator</div>
+                {otherCoordinatorUnits.map(unit => (
+                  <button
+                    key={unit.id}
+                    className="ucs-dropdown-item"
+                    onClick={() => handleSwitchToCoordinatorUnit(unit.id)}
+                    type="button"
+                  >
+                    <span className="ucs-dropdown-code">{unit.unitCode}</span>
+                    <span className="ucs-dropdown-meta">UC</span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
-
-      {showRoleSwitcher && (
-        <div className="ucs-role-switcher" aria-label="Viewing role">
-          {switcherRoles.map(role => (
-            <button
-              key={role}
-              className={`ucs-role-option ${activeViewRole === role ? 'active' : ''}`}
-              onClick={() => handleRoleSwitch(role)}
-              type="button"
-            >
-              {role === 'coordinator' ? 'UC' : 'Tutor'}
-            </button>
-          ))}
-        </div>
-      )}
 
       <nav className="uc-navigation">
         {navItem('Dashboard', '/tutor-dashboard', 'dashboard')}
@@ -222,7 +220,7 @@ useEffect(() => {
           </div>
           <div className="uc-user-info">
             <p className="uc-user-name">{displayName}</p>
-            <p className="uc-user-role">Tutor</p>
+            <p className="uc-user-role">{isSuperTutorOnUnit(displayActiveUnit) ? 'Super Tutor' : 'Tutor'}</p>
           </div>
         </Link>
         <Link to="/logout" className="uc-logout-btn" aria-label="Log out" title="Log out">

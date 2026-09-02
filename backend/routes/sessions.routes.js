@@ -11,6 +11,7 @@ const {
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 
 // Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
 // students triggers one more suggested tutor. Used as a fallback whenever a
@@ -18,6 +19,37 @@ const { getCoordinatorUnitId } = require('../utils/unitAccess');
 // defaulting to 1 regardless of capacity.
 const STUDENTS_PER_TUTOR = 30;
 const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
+
+// Session code prefix per type - e.g. Tutorial sessions get TUT01, TUT02...
+// Falls back to 'SES' for any type not in this list (custom/unlisted types).
+const CODE_PREFIXES = {
+  Tutorial: 'TUT',
+  Consultation: 'CON',
+  Practical: 'PRC',
+  Lecture: 'LEC',
+  Workshop: 'WOR'
+};
+const codePrefixForType = (sessionType) => CODE_PREFIXES[sessionType] || 'SES';
+
+// Finds the next free code for this unit + type, e.g. if TUT01..TUT03 exist,
+// returns TUT04. Scans existing codes with this prefix and picks max+1.
+const generateNextSessionCode = async (client, unitId, sessionType) => {
+  const prefix = codePrefixForType(sessionType);
+  const result = await client.query(
+    `
+    SELECT session_code FROM sessions
+    WHERE unit_id = $1 AND session_code LIKE $2
+    `,
+    [unitId, `${prefix}%`]
+  );
+  let maxNum = 0;
+  result.rows.forEach(r => {
+    const match = String(r.session_code || '').match(new RegExp(`^${prefix}(\\d+)$`));
+    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+  });
+  const nextNum = maxNum + 1;
+  return `${prefix}${String(nextNum).padStart(2, '0')}`;
+};
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -74,39 +106,100 @@ const isTutorLinkedToUnit = async (userId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
-      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = ANY($3)
       UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
       SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1 AND s.unit_id = $2
     )
     `,
-    [userId, unitId]
+    [userId, unitId, TUTOR_LIKE_ROLES]
   );
   return result.rows.length > 0;
 };
 
-const formatSessionRow = (s) => ({
-  id: s.id,
-  day: s.day,
-  startTime: s.start_time,
-  endTime: s.end_time,
-  location: s.location,
-  campus: s.campus,
-  sessionType: s.session_type,
-  capacity: s.capacity,
-  requiredTutors: s.required_tutors,
-  status: s.status,
-  staffNote: s.staff_note,
-  tutors: s.tutors || [],
-  isAssigned: (s.tutors || []).length > 0,
-  // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
-  // Reflects the first tutor in the list, if any.
-  assignedTutorId: (s.tutors && s.tutors[0]?.tutorId) || null,
-  assignedTutorName: (s.tutors && s.tutors[0]?.tutorName) || null,
-  tutorConfirmed: (s.tutors && s.tutors[0]?.confirmed) ?? null,
-  tutorRejectReason: (s.tutors && s.tutors[0]?.rejectReason) || null,
-  unitCode: s.unit_code || null
+const formatSessionRow = (s) => {
+  const allTutors = s.tutors || [];
+  // A declined tutor (confirmed === false) doesn't count as filling the
+  // slot — the session should reappear as needing reassignment. Pending
+  // (confirmed === null) and confirmed (confirmed === true) tutors do.
+  const activeTutors = allTutors.filter(t => t.confirmed !== false);
+  const declinedTutors = allTutors.filter(t => t.confirmed === false);
+
+  return {
+    id: s.id,
+    sessionCode: s.session_code || null,
+    day: s.day,
+    startTime: s.start_time,
+    endTime: s.end_time,
+    location: s.location,
+    campus: s.campus,
+    sessionType: s.session_type,
+    capacity: s.capacity,
+    requiredTutors: s.required_tutors,
+    status: s.status,
+    staffNote: s.staff_note,
+    tutors: activeTutors,
+    declinedTutors,
+    isAssigned: activeTutors.length > 0,
+    // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
+    // Reflects the first active (non-declined) tutor, if any.
+    assignedTutorId: activeTutors[0]?.tutorId || null,
+    assignedTutorName: activeTutors[0]?.tutorName || null,
+    tutorConfirmed: activeTutors[0]?.confirmed ?? null,
+    tutorRejectReason: activeTutors[0]?.rejectReason || null,
+    unitCode: s.unit_code || null
+  };
+};
+
+// A tutor's claimed-but-still-active cover requests: covering periods that
+// haven't ended yet. These aren't in session_tutors (that table is the
+// permanent weekly assignment) - covering is temporary, so it's layered on
+// top of the normal session list at read time instead.
+const getActiveCoverSessions = async (tutorId) => {
+  const result = await pool.query(
+    `
+    SELECT
+      s.*,
+      un.unit_code,
+      cb.start_date AS cover_start_date,
+      cb.end_date AS cover_end_date
+    FROM cover_requests cr
+    JOIN cover_batches cb ON cb.id = cr.batch_id
+    JOIN sessions s ON s.id = cr.session_id
+    JOIN units un ON un.id = s.unit_id
+    WHERE cr.claimed_by_id = $1
+      AND cr.status = 'claimed'
+      AND cb.end_date >= CURRENT_DATE
+    `,
+    [tutorId]
+  );
+  return result.rows;
+};
+
+const countWeekdayOccurrences = (day, startDate, endDate) => {
+  const WEEKDAY_INDEX = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+  const targetIdx = WEEKDAY_INDEX[String(day).toUpperCase()];
+  if (targetIdx === undefined || !startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
+  const cursor = new Date(start);
+  cursor.setDate(cursor.getDate() + ((targetIdx - cursor.getDay() + 7) % 7));
+  let count = 0;
+  while (cursor <= end) {
+    count++;
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return count;
+};
+
+const formatCoveringSessionRow = (s) => ({
+  ...formatSessionRow(s),
+  isCovering: true,
+  coverStartDate: s.cover_start_date,
+  coverEndDate: s.cover_end_date,
+  coverOccurrenceCount: countWeekdayOccurrences(s.day, s.cover_start_date, s.cover_end_date)
 });
 
 // Get all sessions for a unit. Coordinators must own the unit; tutors
@@ -158,7 +251,14 @@ router.get('/', verifyToken, async (req, res) => {
       [unitId]
     );
 
-    res.json(result.rows.map(formatSessionRow));
+    const assigned = result.rows.map(formatSessionRow);
+    if (req.user.role !== 'coordinator') {
+      const covering = (await getActiveCoverSessions(req.user.id))
+        .filter(s => s.unit_id === unitId) // this route is scoped to one unit
+        .map(formatCoveringSessionRow);
+      return res.json([...assigned, ...covering]);
+    }
+    res.json(assigned);
   } catch (error) {
     console.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
@@ -193,7 +293,7 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
       WHERE s.unit_id = $1 AND s.id IN (
-        SELECT session_id FROM session_tutors WHERE tutor_id = $2
+        SELECT session_id FROM session_tutors WHERE tutor_id = $2 AND tutor_confirmed IS DISTINCT FROM false
       )
       GROUP BY s.id, un.unit_code      ORDER BY
         CASE s.day
@@ -205,7 +305,14 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
       [unitId, req.user.id]
     );
 
-    res.json(result.rows.map(formatSessionRow));
+    const formatted = result.rows.map(formatSessionRow);
+    if (req.user.role !== 'coordinator') {
+      const covering = (await getActiveCoverSessions(req.user.id))
+        .filter(s => s.unit_id === unitId)
+        .map(formatCoveringSessionRow);
+      return res.json([...formatted, ...covering]);
+    }
+    res.json(formatted);
   } catch (error) {
     console.error('Error fetching assigned sessions:', error);
     res.status(500).json({ error: 'Failed to fetch assigned sessions' });
@@ -220,6 +327,7 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;
+    const requestedCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
     const normalisedDay = normaliseDay(day) || day;
 
     const missingFields = getMissingSessionFields({ day: normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status });
@@ -238,17 +346,30 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
+    let sessionCode = requestedCode;
+    if (sessionCode) {
+      const dupeCheck = await pool.query(
+        'SELECT id FROM sessions WHERE unit_id = $1 AND session_code = $2',
+        [unitId, sessionCode]
+      );
+      if (dupeCheck.rows.length > 0) {
+        return res.status(409).json({ error: `Session code "${sessionCode}" is already used in this unit. Please choose another.` });
+      }
+    } else {
+      sessionCode = await generateNextSessionCode(pool, unitId, sessionType);
+    }
+
     const result = await pool.query(
       `
       INSERT INTO sessions
-          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, session_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
       `,
       [
         unitId, normalisedDay, startTime, endTime,
         location.trim(), campus, sessionType,
-        capacityNumber, requiredTutorsNumber, status
+        capacityNumber, requiredTutorsNumber, status, sessionCode
       ]
     );
 
@@ -267,6 +388,21 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;    const normalisedDay = day ? (normaliseDay(day) || day) : null;
+    
+    let sessionCode = undefined;
+    if (req.body.sessionCode !== undefined) {
+      sessionCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
+      if (sessionCode) {
+        const dupeCheck = await pool.query(
+          'SELECT id FROM sessions WHERE unit_id = $1 AND session_code = $2 AND id != $3',
+          [unitId, sessionCode, sessionId]
+        );
+        if (dupeCheck.rows.length > 0) {
+          return res.status(409).json({ error: `Session code "${sessionCode}" is already used in this unit. Please choose another.` });
+        }
+      }
+    }
+    
     const result = await pool.query(
       `
       UPDATE sessions
@@ -279,11 +415,12 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
         session_type = COALESCE($6, session_type),
         capacity = COALESCE($7, capacity),
         required_tutors = COALESCE($8, required_tutors),
-        status = COALESCE($9, status)
-      WHERE id = $10 AND unit_id = $11
+        status = COALESCE($9, status),
+        session_code = CASE WHEN $10::text IS NOT NULL OR $11::boolean THEN $10 ELSE session_code END
+      WHERE id = $12 AND unit_id = $13
       RETURNING *
       `,
-      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionId, unitId]
+      [normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionCode, sessionCode !== undefined, sessionId, unitId]
     );
 
     if (result.rows.length === 0) {
@@ -355,17 +492,21 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
         continue;
       }
 
+      const sessionCode = row.sessionCode
+        ? String(row.sessionCode).trim().toUpperCase()
+        : await generateNextSessionCode(client, unitId, row.sessionType);
+
       const result = await client.query(
         `
         INSERT INTO sessions
-          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, staff_note)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, staff_note, session_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         `,
         [
           unitId, normalisedDay, normalisedStart, normalisedEnd,
           row.location || null, row.campus || null, row.sessionType || null,
-          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null
+          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null, sessionCode
         ]
       );
       imported.push(result.rows[0].id);
@@ -410,22 +551,24 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
     const thisDuration = sessionDurationHours(session.start_time, session.end_time);
 
     const currentTutorsResult = await pool.query(
-      'SELECT tutor_id FROM session_tutors WHERE session_id = $1',
+      'SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM false',
       [sessionId]
     );
     const currentTutorIds = new Set(currentTutorsResult.rows.map(r => r.tutor_id));
 
     const tutorsResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, m.priority_tag, m.starred, m.flagged
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, um.role AS membership_role, m.priority_tag, m.starred, m.flagged
       FROM users u
       JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = 'tutor'
+        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = ANY($2)
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name
       `,
-      [unitId]
+      [unitId, TUTOR_LIKE_ROLES]
     );
+
+    const sessionNeedsSuperTutor = requiresSuperTutor(session.session_type);
 
     const availResult = await pool.query(
       `
@@ -441,7 +584,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       SELECT s.id, s.day, s.start_time, s.end_time, st.tutor_id
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2
+      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
       [unitId, sessionId]
     );
@@ -470,8 +613,12 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const hoursIfAssigned = existingHours + thisDuration;
       const overMaxHours = tutor.maximum_hours != null && hoursIfAssigned > tutor.maximum_hours;
 
-      const hardBlocked = conflict || overMaxHours;
+      const isSuperTutor = tutor.membership_role === 'super_tutor';
+      const notEligibleForType = sessionNeedsSuperTutor && !isSuperTutor;
+
+      const hardBlocked = conflict || overMaxHours || notEligibleForType;
       const warnings = [];
+      if (notEligibleForType) warnings.push(`Only Super Tutors can be assigned to ${session.session_type} sessions`);
       if (conflict) warnings.push('Already assigned to an overlapping session');
       if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
       if (hasAvoid) warnings.push('Marked "avoid" for this time');
@@ -496,6 +643,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         name: tutor.name,
         email: tutor.email,
         maximumHours: tutor.maximum_hours,
+        isSuperTutor,
         priorityTag: tutor.priority_tag || 'Standard',
         starred: tutor.starred || false,
         flagged: tutor.flagged || false,
@@ -553,37 +701,45 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     if (sessionResult.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
     const session = sessionResult.rows[0];
 
-    const existingTutorsResult = await pool.query(
-      'SELECT tutor_id FROM session_tutors WHERE session_id = $1',
+        const existingTutorsResult = await pool.query(
+      'SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1',
       [sessionId]
     );
-    if (existingTutorsResult.rows.some(r => r.tutor_id === tutorId)) {
+    const activeExistingTutors = existingTutorsResult.rows.filter(r => r.tutor_confirmed !== false);
+
+    if (activeExistingTutors.some(r => r.tutor_id === tutorId)) {
       return res.status(409).json({ error: 'This tutor is already assigned to this session' });
     }
     const requiredTutors = session.required_tutors || 1;
-    if (existingTutorsResult.rows.length >= requiredTutors) {
+    if (activeExistingTutors.length >= requiredTutors) {
       return res.status(409).json({ error: `This session already has its required ${requiredTutors} tutor(s) assigned` });
     }
 
     const tutorResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours,
+             bool_or(um.role = 'super_tutor') AS is_super_tutor
       FROM users u
       LEFT JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $2 AND um.role = 'tutor'
+        ON um.user_id = u.id AND um.unit_id = $2 AND um.role = ANY($3)
       WHERE u.id = $1 AND (u.role = 'tutor' OR um.id IS NOT NULL)
+      GROUP BY u.id, u.name, u.last_name, u.maximum_hours
       `,
-      [tutorId, unitId]
+      [tutorId, unitId, TUTOR_LIKE_ROLES]
     );
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Tutor not found' });
     const tutor = tutorResult.rows[0];
+
+    if (requiresSuperTutor(session.session_type) && !tutor.is_super_tutor) {
+      return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
+    }
 
     const otherSessionsResult = await pool.query(
       `
       SELECT s.id, s.day, s.start_time, s.end_time
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_id = $3
+      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_id = $3 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
       [unitId, sessionId, tutorId]
     );
@@ -611,6 +767,8 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       `
       INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed, tutor_reject_reason)
       VALUES ($1, $2, NULL, NULL)
+      ON CONFLICT (session_id, tutor_id)
+      DO UPDATE SET tutor_confirmed = NULL, tutor_reject_reason = NULL
       `,
       [sessionId, tutorId]
     );

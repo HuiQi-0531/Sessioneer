@@ -9,7 +9,10 @@ const router = express.Router();
  * GET /tutor/dashboard-summary
  * Everything the tutor dashboard needs in one call: their units with
  * availability/assignment status, overall session counts, and pending
- * change request count.
+ * change request count. Each unit carries an isActive flag (current
+ * semester or not) so the frontend can default to showing only active
+ * units, with a toggle to reveal inactive ones -- same concept as the
+ * UC dashboard.
  */
 router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
@@ -24,7 +27,12 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
         UNION
         SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
         UNION
-        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
+      )
+      -- A unit coordinator doesn't need a tutor view for their own unit -
+      -- they assign themselves directly when scheduling instead.
+      AND u.id NOT IN (
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'coordinator'
       )
       ORDER BY u.year DESC, u.semester DESC
       `,
@@ -44,6 +52,9 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
       return {
         unitId: unit.id,
         unitCode: unit.unit_code,
+        semester: unit.semester,
+        year: unit.year,
+        isActive: isUnitActive(unit.semester, unit.year),
         availabilitySubmitted: parseInt(availResult.rows[0].count, 10) > 0,
         assignedSessionCount: parseInt(assignedResult.rows[0].count, 10)
       };
@@ -65,6 +76,7 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
     res.json({
       unitStatuses,
       totalUnits: unitsResult.rows.length,
+      activeUnitCount: unitStatuses.filter(u => u.isActive).length,
       availabilitySubmittedCount: unitStatuses.filter(u => u.availabilitySubmitted).length,
       totalSessions: parseInt(totalSessionsResult.rows[0].count, 10),
       confirmedSessions: parseInt(confirmedSessionsResult.rows[0].count, 10),
@@ -120,6 +132,8 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       return {
         unitId: unit.id,
         unitCode: unit.unit_code,
+        semester: unit.semester,
+        year: unit.year,
         isActive: isUnitActive(unit.semester, unit.year),
         sessionCount: parseInt(sessionCountResult.rows[0].count, 10),
         unassignedCount: parseInt(unassignedResult.rows[0].count, 10),

@@ -243,3 +243,20 @@
   cursor: pointer;
   border: none;
 }
+
+.is-preview-table {
+  display: block;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.is-preview-table thead,
+.is-preview-table tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.is-preview-table thead {
+  width: calc(100% - 1em); 
+}

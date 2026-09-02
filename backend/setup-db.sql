@@ -167,6 +167,32 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Cover request batches (a broadcast: "these sessions need covering, from X to Y")
+CREATE TABLE IF NOT EXISTS cover_batches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id),
+    created_by_id UUID REFERENCES users(id),
+    reason TEXT,
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Individual sessions inside a cover batch, claimable first-come-first-served
+CREATE TABLE IF NOT EXISTS cover_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    batch_id UUID REFERENCES cover_batches(id),
+    session_id UUID REFERENCES sessions(id),
+    unit_id UUID REFERENCES units(id),
+    original_tutor_id UUID REFERENCES users(id),
+    reason TEXT,
+    status VARCHAR(20) DEFAULT 'open',
+    created_by_id UUID REFERENCES users(id),
+    claimed_by_id UUID REFERENCES users(id),
+    claimed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);

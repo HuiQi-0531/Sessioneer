@@ -150,6 +150,17 @@
   color: var(--color-text-muted);
 }
 
+.ucs-dropdown-section-label {
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border-strong);
+  margin-top: 4px;
+}
+
 .ucs-dropdown-manage {
   display: block;
   text-align: center;

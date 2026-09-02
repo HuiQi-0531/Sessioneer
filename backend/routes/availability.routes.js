@@ -41,7 +41,7 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
   const result = await pool.query(
     `
     SELECT 1 WHERE EXISTS (
-      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role IN ('tutor', 'super_tutor')
       UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
@@ -79,7 +79,7 @@ router.get('/', verifyToken, async (req, res) => {
     const membershipUnitParam = hasCoordinatorAccess ? '$1' : '$2';
     const availabilityScope = hasCoordinatorAccess
       ? `tutor_id IN (
-          SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role = 'tutor'
+          SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role IN ('tutor', 'super_tutor')
         )`
       : 'tutor_id = $1';
     const availabilityParams = hasCoordinatorAccess ? [unit_id] : [req.user.id];
@@ -90,7 +90,7 @@ router.get('/', verifyToken, async (req, res) => {
         SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name
         FROM users u
         JOIN unit_memberships um
-          ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role = 'tutor'
+          ON um.user_id = u.id AND um.unit_id = ${membershipUnitParam} AND um.role IN ('tutor', 'super_tutor')
         WHERE 1 = 1 ${tutorWhere}
         ORDER BY name
         `,

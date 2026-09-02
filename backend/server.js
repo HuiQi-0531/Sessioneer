@@ -226,6 +226,13 @@ pool.query(`
   FROM sessions
   WHERE assigned_tutor_id IS NOT NULL AND unit_id IS NOT NULL
   ON CONFLICT (unit_id, user_id, role) DO NOTHING;
+
+  -- Widen the role check to allow 'super_tutor' (Super Tutor = tutor who can
+  -- also be assigned to Lecture / Consultation sessions). Table may already
+  -- exist with the old constraint from before this feature, so drop + re-add.
+  ALTER TABLE unit_memberships DROP CONSTRAINT IF EXISTS unit_memberships_role_check;
+  ALTER TABLE unit_memberships ADD CONSTRAINT unit_memberships_role_check
+    CHECK (role IN ('coordinator', 'tutor', 'super_tutor'));
 `).then(() => {
   console.log('unit_memberships schema OK');
 }).catch(err => {
@@ -398,6 +405,34 @@ pool.query(`
   console.error('Schema update error:', err);
 });
 
+// Editable application form: each unit can define its own set of extra
+// application fields (Name/Email stay fixed and aren't part of this JSON).
+// NULL means "hasn't customised it yet" - frontend falls back to the
+// default template in that case. Answers to whatever extra fields exist
+// are stored per-application as JSON, keyed by field id.
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'application_form'
+    ) THEN
+      ALTER TABLE units ADD COLUMN application_form JSONB;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_applications' AND column_name = 'custom_answers'
+    ) THEN
+      ALTER TABLE tutor_applications ADD COLUMN custom_answers JSONB DEFAULT '{}'::jsonb;
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('units application_form / tutor_applications custom_answers columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
 // Coordinator "star" (favourite/priority pick) and "flag" (risk/caution) markers on tutors.
 pool.query(`
   DO $$
@@ -554,6 +589,25 @@ pool.query(`
   END $$;
 `).then(() => {
   console.log('tutor_applications name columns OK');
+}).catch(err => {
+  console.error('Schema update error:', err);
+});
+
+// Which unit role the coordinator picked when inviting this applicant -
+// 'tutor' or 'super_tutor'. Applied to unit_memberships once the invite is
+// accepted (or immediately, for a direct-invite of an existing user).
+pool.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tutor_applications' AND column_name = 'invited_role'
+    ) THEN
+      ALTER TABLE tutor_applications ADD COLUMN invited_role VARCHAR(20) NOT NULL DEFAULT 'tutor';
+    END IF;
+  END $$;
+`).then(() => {
+  console.log('tutor_applications invited_role column OK');
 }).catch(err => {
   console.error('Schema update error:', err);
 });

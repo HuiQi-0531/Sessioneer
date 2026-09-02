@@ -9,6 +9,7 @@ import LogoutConfirm from './pages/LogoutConfirm.jsx';
 import TutorApply from './pages/TutorApply.jsx';
 import SetPassword from './pages/SetPassword.jsx';
 import TutorApplications from './pages/TutorApplications.jsx';
+import ApplicationFormEditor from './pages/ApplicationFormEditor.jsx';
 import TutorRequests from './pages/TutorRequests.jsx';
 import UCRequests from './pages/UCRequests.jsx';
 import UCAvailability from './pages/UCAvailability.jsx';
@@ -20,6 +21,7 @@ import Tutors from './pages/Tutors.jsx';
 import ScheduleBuilder from './pages/ScheduleBuilder.jsx';
 import Messages from './pages/Messages.jsx';
 import TutorSchedule from './pages/TutorSchedule.jsx';
+import TutorUnits from './pages/TutorUnits.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -107,6 +109,9 @@ function App() {
           <Route path="/tutor-messages" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorMessages /></ProtectedRoute>
           } />
+          <Route path="/tutor-units" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorUnits /></ProtectedRoute>
+          } />
           <Route path="/uc-dashboard" element={
             <ProtectedRoute allowedRoles={['coordinator']}><UCDashboard /></ProtectedRoute>
           } />
@@ -141,6 +146,9 @@ function App() {
           <Route path="/activate/:token" element={<SetPassword />} />
           <Route path="/tutor-applications" element={
             <ProtectedRoute allowedRoles={['coordinator']}><TutorApplications /></ProtectedRoute>
+          } />
+          <Route path="/tutor-applications/form" element={
+            <ProtectedRoute allowedRoles={['coordinator']}><ApplicationFormEditor /></ProtectedRoute>
           } />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />

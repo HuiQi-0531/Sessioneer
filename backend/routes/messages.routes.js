@@ -184,7 +184,7 @@ const canAccessUnit = async (user, unitId) => {
     const result = await pool.query(
       `
       SELECT 1 WHERE EXISTS (
-        SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role = 'tutor'
+        SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role IN ('tutor', 'super_tutor')
         UNION
         SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
         UNION
@@ -328,7 +328,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor', 'coordinator'), asy
         )
       )
       WHERE u.id IN (
-        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'tutor'
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION

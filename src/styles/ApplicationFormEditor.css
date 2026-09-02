@@ -1,0 +1,195 @@
+.afe-content {
+  max-width: 780px;
+  text-align: left;
+}
+
+.afe-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.afe-back-link:hover {
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+
+.afe-intro {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.6;
+  background-color: #eef2ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.afe-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.afe-field-row {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  padding: 16px;
+  background-color: var(--color-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.afe-field-locked {
+  background-color: var(--color-bg-subtle);
+}
+
+.afe-field-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.afe-field-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.afe-field-type-tag {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.afe-label-input {
+  flex: 1 1 220px;
+  min-width: 160px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.afe-label-input:focus,
+.afe-type-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #4f46e5);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.afe-type-select {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 7px 30px 7px 10px;
+  font-size: 13px;
+  background-color: var(--color-surface);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' fill-rule='evenodd'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+
+.afe-required-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.afe-options-row {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.afe-options-row label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.afe-options-row input {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.afe-field-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.afe-field-controls button {
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.afe-field-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.afe-delete-btn {
+  color: var(--color-danger-text, #b91c1c) !important;
+}
+
+.afe-add-field-btn {
+  border: 1px dashed var(--color-border-strong);
+  background: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.afe-add-field-btn:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.afe-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.afe-reset-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.afe-save-message {
+  font-size: 13px;
+  color: var(--color-success, #16a34a);
+  font-weight: 600;
+}

@@ -84,11 +84,81 @@
   text-align: left;
 }
 
+.ucd-quicklinks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.ucd-quicklink-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.ucd-quicklink-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.ucd-quicklink-card svg {
+  color: var(--color-primary);
+}
+
+.ucd-quicklink-highlight {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
 .ucd-section-link {
   font-size: 13px;
   color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
+}
+
+.ucd-section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ucd-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ucd-filter-toggle input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.ucd-empty-action {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .ucd-section-link:hover {
@@ -107,6 +177,7 @@
 
 .ucd-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   background-color: var(--color-surface);
   border-radius: 12px;
@@ -122,6 +193,9 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-bg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ucd-table td {
@@ -129,6 +203,9 @@
   border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
   color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ucd-table tr:last-child td {
@@ -137,6 +214,32 @@
 
 .ucd-table tr.inactive td {
   opacity: 0.5;
+}
+
+/* Column order: Unit, Date, Sessions, Unassigned, Tutors Submitted Availability */
+.ucd-table th:nth-child(1),
+.ucd-table td:nth-child(1) {
+  width: 22%;
+}
+
+.ucd-table th:nth-child(2),
+.ucd-table td:nth-child(2) {
+  width: 14%;
+}
+
+.ucd-table th:nth-child(3),
+.ucd-table td:nth-child(3) {
+  width: 14%;
+}
+
+.ucd-table th:nth-child(4),
+.ucd-table td:nth-child(4) {
+  width: 20%;
+}
+
+.ucd-table th:nth-child(5),
+.ucd-table td:nth-child(5) {
+  width: 30%;
 }
 
 .ucd-badge {

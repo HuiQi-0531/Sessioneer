@@ -110,6 +110,20 @@
   resize: vertical;
 }
 
+.ta-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ta-checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
 .ta-file-input {
   border: 2px dashed var(--color-border-strong);
   border-radius: 8px;

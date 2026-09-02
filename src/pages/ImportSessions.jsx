@@ -1,5 +1,4 @@
-import React, { useState, useRef } from 'react';
-import Papa from 'papaparse';
+import React, { useState, useRef, useEffect } from 'react';import Papa from 'papaparse';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -39,6 +38,14 @@ const ImportSessions = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
+  const [existingSessions, setExistingSessions] = useState([]);
+  const [showExisting, setShowExisting] = useState(false);
+
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const infoIconRef = useRef(null);
+  const tooltipRef = useRef(null);
+
   const handleFileSelected = (file) => {
     if (!file) return;
     setError('');
@@ -60,6 +67,12 @@ const ImportSessions = () => {
       setMappings(detectedBlocks.map(b => guessColumnMapping(b.headers)));
       setSessionTypeOverrides(detectedBlocks.map(b => b.suggestedSessionType || ''));
       setStep('mapping');
+
+      if (effectiveUnitId) {
+        sessionsAPI.getAll(effectiveUnitId)
+          .then(data => setExistingSessions(Array.isArray(data) ? data : []))
+          .catch(() => setExistingSessions([]));
+      }
     };
     reader.onerror = () => {
       setError('Could not read this file. Please try again.');
@@ -70,6 +83,28 @@ const ImportSessions = () => {
   const handleFileInputChange = (e) => {
     handleFileSelected(e.target.files[0]);
   };
+
+  const toggleInfoTooltip = () => {
+    if (!showInfoTooltip && infoIconRef.current) {
+      const rect = infoIconRef.current.getBoundingClientRect();
+      setTooltipPos({ top: rect.bottom + 6, left: rect.right - 260 });
+    }
+    setShowInfoTooltip(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (!showInfoTooltip) return;
+    const handleClickOutside = (event) => {
+      if (
+        infoIconRef.current && !infoIconRef.current.contains(event.target) &&
+        tooltipRef.current && !tooltipRef.current.contains(event.target)
+      ) {
+        setShowInfoTooltip(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showInfoTooltip]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -195,7 +230,41 @@ const ImportSessions = () => {
 
       <main className="uc-main-content">
         <header className="uc-header">
-          <h1>Upload Session{activeUnit ? ` - ${activeUnit.unitCode}` : ''}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1>Upload Session{activeUnit ? ` - ${activeUnit.unitCode}` : ''}</h1>
+            <div style={{ position: 'relative' }}>
+              <button
+                ref={infoIconRef}
+                type="button"
+                onClick={toggleInfoTooltip}
+                style={{
+                  width: 22, height: 22, borderRadius: '50%',
+                  border: '1px solid #999', background: '#fff', color: '#555',
+                  fontSize: 13, fontStyle: 'italic', fontWeight: 'bold',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                aria-label="How to import a session CSV"
+              >
+                i
+              </button>
+              {showInfoTooltip && (
+                <div
+                  ref={tooltipRef}
+                  style={{
+                    position: 'fixed', top: tooltipPos.top, left: tooltipPos.left,
+                    background: '#fff', border: '1px solid #ddd', borderRadius: 6,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: '10px 14px',
+                    fontSize: 13, color: '#333', width: 260, zIndex: 9999, textAlign: 'left'
+                  }}
+                >
+                  <p style={{ margin: '2px 0' }}>1. Upload a CSV timetable export.</p>
+                  <p style={{ margin: '2px 0' }}>2. The system auto-detects tables and splits mixed session types.</p>
+                  <p style={{ margin: '2px 0' }}>3. Check the column mapping for each table before importing.</p>
+                  <p style={{ margin: '2px 0' }}>4. Existing sessions in this unit are shown above — expand to check for clashes before choosing Replace or Add.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         <div className="is-content">
@@ -231,6 +300,49 @@ const ImportSessions = () => {
 
           {step === 'mapping' && (
             <>
+              {existingSessions.length > 0 && (
+                <div className="is-block-card">
+                  <button
+                    type="button"
+                    onClick={() => setShowExisting(prev => !prev)}
+                    style={{
+                      width: '100%', display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center', border: 'none', background: 'none',
+                      cursor: 'pointer', padding: 0, fontSize: 14, fontWeight: 600
+                    }}
+                  >
+                    <span>Existing sessions in this unit ({existingSessions.length})</span>
+                    <span>{showExisting ? '▲' : '▼'}</span>
+                  </button>
+                  {showExisting && (
+                    <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto' }}>
+                      <table className="is-preview-table">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>Day</th>
+                            <th>Time</th>
+                            <th>Location</th>
+                            <th>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {existingSessions.map(s => (
+                            <tr key={s.id}>
+                              <td>{s.sessionCode || '-'}</td>
+                              <td>{s.day}</td>
+                              <td>{s.startTime?.slice(0, 5)} - {s.endTime?.slice(0, 5)}</td>
+                              <td>{s.location || '-'}</td>
+                              <td>{s.sessionType || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+          
               {blocks.map((block, blockIndex) => (
                 <div className="is-block-card" key={blockIndex}>
                   <div className="is-block-header">
@@ -277,7 +389,7 @@ const ImportSessions = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {block.rows.slice(0, 3).map((row, rowIndex) => (
+                      {block.rows.map((row, rowIndex) => (
                         <tr key={rowIndex}>
                           {SYSTEM_FIELDS.map(field => (
                             <td key={field.key}>
@@ -290,9 +402,6 @@ const ImportSessions = () => {
                       ))}
                     </tbody>
                   </table>
-                  {block.rows.length > 3 && (
-                    <p className="is-preview-note">Showing first 3 of {block.rows.length} rows.</p>
-                  )}
                 </div>
               ))}
 

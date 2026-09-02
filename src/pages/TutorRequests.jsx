@@ -20,7 +20,13 @@ const unitCodeFromSession = (value) => {
 };
 
 const sessionLabel = (s) => `${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)} | ${s.location || 'TBA'} | ${s.sessionType || 'Session'}`;
+const sessionLabelWithCode = (s) => `${s.sessionCode ? s.sessionCode + ' | ' : ''}${sessionLabel(s)}`;
 const sessionValue = (s, unitCode) => `${unitCode}::${s.day} ${s.startTime.slice(0, 5)}-${s.endTime.slice(0, 5)}|${s.location || 'TBA'}`;
+
+const formatShortDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+};
 
 const APPEAL_MARKER = '--- Appeal ---';
 // Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
@@ -93,8 +99,19 @@ const TutorRequests = () => {
     setCoverMessage(null);
     try {
       await coverAPI.claim(request.id);
-      setCoverMessage({ type: 'success', text: `You're now covering ${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.` });
-      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
+      const rangeText = request.startDate && request.endDate
+        ? `${formatShortDate(request.startDate)} - ${formatShortDate(request.endDate)}`
+        : null;
+      const occurrenceText = request.occurrenceCount
+        ? ` (${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'})`
+        : '';
+      const codePrefix = request.sessionCode ? `${request.sessionCode} · ` : '';
+      setCoverMessage({
+        type: 'success',
+        text: rangeText
+          ? `You're now covering ${codePrefix}${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}, ${rangeText}${occurrenceText}.`
+          : `You're now covering ${codePrefix}${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.`
+      });      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
     } catch (err) {
       if (err.status === 409) {
         setCoverMessage({ type: 'error', text: 'Too slow — someone else already claimed that session.' });
@@ -439,7 +456,16 @@ const TutorRequests = () => {
                 <div key={request.id} className="cvr-card">
                   <div className="cvr-card-main">
                     <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
+                    {request.sessionCode && (
+                      <div className="cvr-card-code">{request.sessionCode}</div>
+                    )}
                     <div className="cvr-card-time">{request.day}, {request.startTime.slice(0, 5)} - {request.endTime.slice(0, 5)}</div>
+                    {request.startDate && request.endDate && (
+                      <div className="cvr-card-daterange">
+                        {formatShortDate(request.startDate)} - {formatShortDate(request.endDate)}
+                        {request.occurrenceCount ? ` · ${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'}` : ''}
+                      </div>
+                    )}               
                     <div className="cvr-card-details">
                       {request.location ? `${request.location} · ` : ''}{request.sessionType || 'Session'}
                     </div>
@@ -556,7 +582,7 @@ const TutorRequests = () => {
                     {!formData.selectedUnit ? '— Select a unit first —' : isLoadingSessions ? '— Loading —' : unitSessions.length === 0 ? '— No sessions assigned to you —' : '— Select a session —'}
                   </option>
                   {unitSessions.map(s => (
-                    <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>{sessionLabel(s)}</option>
+                    <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>{sessionLabelWithCode(s)}</option>
                   ))}
                 </select>
                 {errors.currentSession && <p className="error-message">{errors.currentSession}</p>}
@@ -569,8 +595,7 @@ const TutorRequests = () => {
                     {!formData.selectedUnit ? '— Select a unit first —' : '— Select a session —'}
                   </option>
                   {unitSessions.filter(s => sessionValue(s, selectedUnitObj?.unitCode) !== formData.currentSession)
-                    .map(s => <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>{sessionLabel(s)}</option>)}
-                </select>
+                    .map(s => <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>{sessionLabelWithCode(s)}</option>)}                </select>
               </div>
               <div className="form-group">
                 <label>Reason for request <span className="required">*</span></label>

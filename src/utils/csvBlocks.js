@@ -29,6 +29,34 @@ const guessSessionTypeFromTitle = (title) => {
   return singular.charAt(0).toUpperCase() + singular.slice(1);
 };
 
+// If a block's rows contain multiple distinct session types (no section title
+// separated them), split it into one block per type so the UI shows them
+// as separate tables - same as if the CSV had used section headers.
+const splitBlockByType = (block) => {
+  const mapping = guessColumnMapping(block.headers);
+  const typeHeader = mapping.sessionType;
+  if (!typeHeader) return [block];
+
+  const typeColIndex = block.headers.indexOf(typeHeader);
+  if (typeColIndex === -1) return [block];
+
+  const distinctTypes = new Set(
+    block.rows
+      .map(row => (row[typeColIndex] || '').toString().trim())
+      .filter(Boolean)
+  );
+
+  // Only one type (or none) present - nothing to split.
+  if (distinctTypes.size <= 1) return [block];
+
+  return Array.from(distinctTypes).map(typeValue => ({
+    sectionTitle: typeValue,
+    suggestedSessionType: guessSessionTypeFromTitle(typeValue) || typeValue,
+    headers: block.headers,
+    rows: block.rows.filter(row => (row[typeColIndex] || '').toString().trim() === typeValue)
+  }));
+};
+
 /**
  * Splits raw parsed CSV rows (array of arrays of strings) into blocks.
  * Each block is { sectionTitle, suggestedSessionType, headers, rows }.
@@ -74,7 +102,7 @@ export const parseCsvIntoBlocks = (rawRows) => {
     pendingTitle = null;
   }
 
-  return blocks;
+  return blocks.flatMap(splitBlockByType);
 };
 
 // Guesses which CSV column corresponds to each system field, based on
@@ -102,7 +130,12 @@ export const guessColumnMapping = (headers) => {
   const campusHeader = findHeader(h => h.includes('campus'));
   if (campusHeader) { mapping.campus = campusHeader; used.add(campusHeader); }
 
-  const staffHeader = findHeader(h => h.includes('staff') || h.includes('tutor'));
+  // "Tutor" columns map to requiredTutors (the system field for tutor count/name);
+  // "Staff" columns map to staffNote (a free-text note, not matched to requiredTutors).
+  const tutorHeader = findHeader(h => h.includes('tutor'));
+  if (tutorHeader) { mapping.requiredTutors = tutorHeader; used.add(tutorHeader); }
+
+  const staffHeader = findHeader(h => h.includes('staff'));
   if (staffHeader) { mapping.staffNote = staffHeader; used.add(staffHeader); }
 
   const capacityHeader = findHeader(h => h.includes('capacity') || h.includes('size'));

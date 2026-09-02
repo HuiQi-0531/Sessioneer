@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../config/api';
 import html2canvas from 'html2canvas';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
@@ -40,6 +41,7 @@ const getMyTutorEntry = (session, myId) => {
 };
 
 const getMyStatus = (session, myId) => {
+  if (session.isCovering) return 'covering';
   const mine = getMyTutorEntry(session, myId);
   if (!mine) return getStatus(session); // fallback to legacy behaviour if tutors[] is missing
   if (mine.confirmed === true) return 'confirmed';
@@ -64,7 +66,7 @@ const TutorSchedule = () => {
   const gridRef = React.useRef(null);
 
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unit.roles?.includes('tutor')),
+    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
     [allUnits]
   );
 
@@ -146,12 +148,14 @@ const TutorSchedule = () => {
   const formatTimeRange = (start, end) => `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
 
   const handleExportCsv = () => {
-  const headers = ['Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
+
+  const headers = ['Session Code', 'Unit', 'Day', 'Start Time', 'End Time', 'Location', 'Type', 'Status'];
 
   const rows = sessions.map(session => {
     const status = getMyStatus(session, myId);
 
     return [
+      session.sessionCode || '',
       session.unitCode || '',
       session.day,
       session.startTime.slice(0, 5),
@@ -270,8 +274,16 @@ const handleExportPng = async () => {
                   }}
                 >
                   <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                  <div className="ts-grid-block-type">{session.unitCode} - {session.sessionType || 'Session'}</div>
-                  <div className="ts-grid-block-status">{status === 'pending' ? 'Awaiting your response' : status}</div>
+                  <div className="ts-grid-block-type">
+                    {session.sessionCode ? `${session.sessionCode} · ` : ''}{session.unitCode}
+                  </div>
+                  <div className="ts-grid-block-status">
+                    {status === 'pending'
+                      ? 'Awaiting your response'
+                      : status === 'covering' && session.coverStartDate && session.coverEndDate
+                        ? `Covering · ${new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
+                        : status}
+                  </div>
                 </div>
               );
             })
@@ -378,12 +390,14 @@ const handleExportPng = async () => {
                 <span className="ts-legend-item"><span className="ts-legend-dot confirmed"></span>Confirmed</span>
                 <span className="ts-legend-item"><span className="ts-legend-dot pending"></span>Awaiting your response</span>
                 <span className="ts-legend-item"><span className="ts-legend-dot declined"></span>Declined</span>
+                <span className="ts-legend-item"><span className="ts-legend-dot covering"></span>Covering</span>
               </div>
               {renderGrid()}
             </>
           ) : (
             <table className="ts-table">
               <colgroup>
+                <col style={{ width: '9%' }} />
                 <col style={{ width: '10%' }} />
                 <col style={{ width: '9%' }} />
                 <col style={{ width: '16%' }} />
@@ -394,6 +408,7 @@ const handleExportPng = async () => {
               </colgroup>
               <thead>
                 <tr>
+                  <th>Code</th>
                   <th>Unit</th>
                   <th>Day</th>
                   <th>Time</th>
@@ -408,6 +423,7 @@ const handleExportPng = async () => {
                   const status = getMyStatus(session, myId);
                   return (
                     <tr key={session.id}>
+                      <td>{session.sessionCode || '-'}</td>
                       <td>{session.unitCode || '-'}</td>
                       <td>{session.day}</td>
                       <td>{formatTimeRange(session.startTime, session.endTime)}</td>
@@ -419,6 +435,14 @@ const handleExportPng = async () => {
                         </span>
                         {status === 'declined' && session.tutorRejectReason && (
                           <div className="ts-reject-reason">"{getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason}"</div>                        )}
+                        {status === 'covering' && session.coverStartDate && session.coverEndDate && (
+                          <div className="ts-cover-daterange">
+                            {new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                            {' - '}
+                            {new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                            {session.coverOccurrenceCount ? ` · ${session.coverOccurrenceCount} session${session.coverOccurrenceCount === 1 ? '' : 's'}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td>
                         {status === 'pending' && (

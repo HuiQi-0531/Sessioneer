@@ -36,6 +36,28 @@
   margin: 0 auto;
 }
 
+.us-group {
+  max-width: 480px;
+  margin: 0 auto 32px;
+}
+
+.us-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.us-group-empty {
+  padding: 24px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 .us-unit-row {
   display: flex;
   align-items: center;
@@ -178,4 +200,44 @@
 .us-modal-buttons .cancel {
   background-color: var(--color-bg-subtle);
   color: var(--color-text-secondary);
+}
+
+.us-form-field {
+  text-align: left;
+  margin-bottom: 14px;
+}
+
+.us-form-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.us-form-field input,
+.us-form-field select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+}
+
+.us-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.us-form-row .us-form-field {
+  flex: 1;
+}
+
+.us-form-error {
+  color: var(--color-danger-text);
+  font-size: 13px;
+  margin-bottom: 12px;
+  text-align: left;
 }

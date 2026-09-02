@@ -20,6 +20,7 @@ const emptyForm = {
   sessionType: '',
   capacity: '',
   requiredTutors: 1,
+  sessionCode: '',
   status: 'Confirmed'
 };
 
@@ -57,9 +58,16 @@ const Sessions = () => {
   const [coverTutorId, setCoverTutorId] = useState('');
   const [coverSelectedIds, setCoverSelectedIds] = useState(new Set());
   const [coverReason, setCoverReason] = useState('');
+  const [coverStartDate, setCoverStartDate] = useState('');
+  const [coverEndDate, setCoverEndDate] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [coverError, setCoverError] = useState('');
   const [coverSuccess, setCoverSuccess] = useState('');
+
+  const [showUploadInfo, setShowUploadInfo] = useState(false);
+  const [uploadInfoPos, setUploadInfoPos] = useState({ top: 0, left: 0 });
+  const uploadInfoIconRef = useRef(null);
+  const uploadInfoTooltipRef = useRef(null);
 
   // If we arrived via a direct link like /sessions/:unitId, make sure that
   // becomes the active unit (e.g. clicked "Sessions" from the unit list).
@@ -123,6 +131,7 @@ const Sessions = () => {
       sessionType: session.sessionType || '',
       capacity: session.capacity || '',
       requiredTutors: session.requiredTutors || 1,
+      sessionCode: session.sessionCode || '',
       status: session.status || 'Confirmed'
     });
     setError('');
@@ -205,6 +214,7 @@ const Sessions = () => {
       sessionType: formData.sessionType,
       capacity: capacityNumber,
       requiredTutors: requiredTutorsNumber,
+      sessionCode: formData.sessionCode.trim() || null,
       status: formData.status
     };
 
@@ -301,10 +311,35 @@ const displayedSessions = React.useMemo(() => {
     setCoverTutorId('');
     setCoverSelectedIds(new Set());
     setCoverReason('');
+    setCoverStartDate('');
+    setCoverEndDate('');
     setCoverError('');
     setCoverSuccess('');
     setShowCoverModal(true);
   };
+
+
+    const toggleUploadInfo = () => {
+    if (!showUploadInfo && uploadInfoIconRef.current) {
+      const rect = uploadInfoIconRef.current.getBoundingClientRect();
+      setUploadInfoPos({ top: rect.bottom + 6, left: rect.right - 260 });
+    }
+    setShowUploadInfo(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (!showUploadInfo) return;
+    const handleClickOutside = (event) => {
+      if (
+        uploadInfoIconRef.current && !uploadInfoIconRef.current.contains(event.target) &&
+        uploadInfoTooltipRef.current && !uploadInfoTooltipRef.current.contains(event.target)
+      ) {
+        setShowUploadInfo(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUploadInfo]);
 
   const handleCoverTutorChange = (tutorId) => {
     setCoverTutorId(tutorId);
@@ -330,11 +365,18 @@ const displayedSessions = React.useMemo(() => {
 
   const submitCoverBroadcast = async () => {
     if (coverSelectedSessions.length === 0) return;
+    if (!coverStartDate || !coverEndDate) {
+      setCoverError('Please select the date range this covers.');
+      return;
+    }
+    if (coverStartDate > coverEndDate) {
+      setCoverError('Start date must be before the end date.');
+      return;
+    }
     setIsBroadcasting(true);
     setCoverError('');
     try {
-      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim());
-      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
+      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim(), coverStartDate, coverEndDate);      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
       setShowCoverModal(false);
     } catch (err) {
       setCoverError(err.message || 'Failed to broadcast cover request.');
@@ -387,9 +429,39 @@ const displayedSessions = React.useMemo(() => {
             </button>
 
             <div className="ss-top-actions">
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <button
+                  ref={uploadInfoIconRef}
+                  type="button"
+                  onClick={toggleUploadInfo}
+                  style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    border: '1px solid #999', background: '#fff', color: '#555',
+                    fontSize: 12, fontStyle: 'italic', fontWeight: 'bold',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                  aria-label="Difference between Upload Session and Add Session"
+                >
+                  i
+                </button>
+                {showUploadInfo && (
+                  <div
+                    ref={uploadInfoTooltipRef}
+                    style={{
+                      position: 'fixed', top: uploadInfoPos.top, left: uploadInfoPos.left,
+                      background: '#fff', border: '1px solid #ddd', borderRadius: 6,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: '10px 14px',
+                      fontSize: 13, color: '#333', width: 260, zIndex: 9999, textAlign: 'left'
+                    }}
+                  >
+                    <p style={{ margin: '2px 0' }}><strong>Upload Session</strong> — import a whole timetable from a CSV file at once.</p>
+                    <p style={{ margin: '2px 0' }}><strong>Add Session</strong> — create one session manually using the form.</p>
+                  </div>
+                )}
+              </div>
               <button className="ss-btn ss-btn-secondary" onClick={() => navigate('/sessions/import')}>
                 Upload Session
-              </button>
+              </button>             
               <button className="ss-btn ss-btn-primary" onClick={openAddForm}>
                 Add Session
               </button>
@@ -471,6 +543,11 @@ const displayedSessions = React.useMemo(() => {
                   </div>
 
                   <div className="ss-field">
+                    <label>Session Code <span className="ss-field-hint" style={{ fontWeight: 400 }}>(optional — auto-generated if left blank)</span></label>
+                    <input type="text" name="sessionCode" value={formData.sessionCode} onChange={handleChange} placeholder="e.g. TUT01" />
+                  </div>
+
+                  <div className="ss-field">
                     <label>Status<span className="ss-required">*</span></label>
                     <select name="status" value={formData.status} onChange={handleChange} required>
                       <option value="Confirmed">Confirmed</option>
@@ -500,6 +577,7 @@ const displayedSessions = React.useMemo(() => {
           ) : (
             <table className="ss-table">
               <colgroup>
+                <col style={{ width: '7%' }} />
                 <col style={{ width: '8%' }} />
                 <col style={{ width: '13%' }} />
                 <col style={{ width: '14%' }} />
@@ -512,6 +590,7 @@ const displayedSessions = React.useMemo(() => {
               </colgroup>
               <thead>
                 <tr>
+                  <th>Code</th>
                   <th>Day</th>
                   <th>Time</th>
                   <th>Location</th>
@@ -631,6 +710,7 @@ const displayedSessions = React.useMemo(() => {
               <tbody>
                 {displayedSessions.map(session => (
                   <tr key={session.id}>
+                    <td>{session.sessionCode || '-'}</td>
                     <td>{session.day}</td>
                     <td>{formatTimeRange(session.startTime, session.endTime)}</td>
                     <td>{session.location || '-'}</td>
@@ -701,6 +781,7 @@ const displayedSessions = React.useMemo(() => {
                             checked={coverSelectedIds.has(s.id)}
                             onChange={() => toggleCoverSession(s.id)}
                           />
+                          {s.sessionCode ? `${s.sessionCode} · ` : ''}
                           {s.day}, {formatTimeRange(s.startTime, s.endTime)}
                           {s.location ? ` at ${s.location}` : ''}
                         </label>
@@ -708,6 +789,17 @@ const displayedSessions = React.useMemo(() => {
                     ))}
                   </ul>
 
+              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Covering from</label>
+                      <input type="date" value={coverStartDate} onChange={(e) => setCoverStartDate(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Until</label>
+                      <input type="date" value={coverEndDate} onChange={(e) => setCoverEndDate(e.target.value)} min={coverStartDate || undefined} />
+                    </div>
+                  </div>       
+                    
                   <textarea
                     placeholder="Reason (optional) — e.g. Alex is on leave this week"
                     value={coverReason}

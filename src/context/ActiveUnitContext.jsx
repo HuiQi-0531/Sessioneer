@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { availabilityAPI, messagesAPI, notificationsAPI, profileAPI, requestsAPI, sessionsAPI, tutorApplicationsAPI, tutorDashboardAPI, tutorsAPI, ucAPI, ucDashboardAPI, unitsAPI } from '../config/api';
+import { unitHasTutorAccess } from '../utils/roles';
 
 const ActiveUnitContext = createContext(null);
 
@@ -15,8 +16,14 @@ const getCurrentUser = () => {
   return saved ? JSON.parse(saved) : null;
 };
 
+// The "view role" driving which sidebar/pages show is only ever
+// 'coordinator' or 'tutor' - Super Tutor is a per-unit membership tier, not
+// a separate view. A unit whose only role is 'super_tutor' should still
+// resolve to the tutor view.
+const normaliseViewRole = (role) => (role === 'super_tutor' ? 'tutor' : role);
+
 const getDefaultRole = (unit, preferredRole, fallbackRole) => {
-  const roles = unit?.roles || [];
+  const roles = (unit?.roles || []).map(normaliseViewRole);
   if (fallbackRole === 'coordinator' && preferredRole === 'tutor') return 'tutor';
   if (preferredRole && roles.includes(preferredRole)) return preferredRole;
   if (fallbackRole && roles.includes(fallbackRole)) return fallbackRole;
@@ -33,7 +40,11 @@ export const ActiveUnitProvider = ({ children }) => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  const refreshUnits = useCallback(async () => {
+  // NEW: accepts { preferUnitId } so callers (e.g. "unit created" / "unit duplicated")
+  // can force the freshly created unit to become active, instead of always
+  // falling back to whatever was previously active.
+  const refreshUnits = useCallback(async (options = {}) => {
+    const { preferUnitId = null } = options;
     const latestFallbackRole = getCurrentUser()?.role;
 
     if (latestFallbackRole !== 'coordinator' && latestFallbackRole !== 'tutor') {
@@ -51,14 +62,18 @@ export const ActiveUnitProvider = ({ children }) => {
 
       setActiveUnitIdState(prevId => {
         const preferredRole = activeViewRole || latestFallbackRole;
+        const preferredUnit = preferUnitId ? units.find(u => u.id === preferUnitId) : null;
         const previousUnit = units.find(u => u.id === prevId);
         const previousUnitForRole = preferredRole
           ? units.find(u => u.id === prevId && u.roles?.includes(preferredRole))
           : null;
+        const firstActiveUnitForRole = preferredRole
+          ? units.find(u => u.roles?.includes(preferredRole) && u.isActive)
+          : null;
         const firstUnitForRole = preferredRole
           ? units.find(u => u.roles?.includes(preferredRole))
           : null;
-        const nextUnit = previousUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
+        const nextUnit = preferredUnit || previousUnitForRole || firstActiveUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
 
         setActiveViewRoleState(getDefaultRole(nextUnit, preferredRole, latestFallbackRole));
         return nextUnit ? nextUnit.id : null;
@@ -137,7 +152,7 @@ export const ActiveUnitProvider = ({ children }) => {
   }, [activeUnit?.id, activeViewRole, activeUnitRoleKey]);
 
   useEffect(() => {
-    if (!activeUnit?.id || activeViewRole !== 'tutor' || !activeUnitRoles.includes('tutor')) return;
+    if (!activeUnit?.id || activeViewRole !== 'tutor' || !unitHasTutorAccess(activeUnit)) return;
     sessionsAPI.prefetch(activeUnit.id).catch(() => {
       // Tutor Sessions will show its own error/loading state if the real page load fails.
     });
