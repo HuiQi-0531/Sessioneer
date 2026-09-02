@@ -21,6 +21,7 @@ import Tutors from './pages/Tutors.jsx';
 import ScheduleBuilder from './pages/ScheduleBuilder.jsx';
 import Messages from './pages/Messages.jsx';
 import TutorSchedule from './pages/TutorSchedule.jsx';
+import TutorUnits from './pages/TutorUnits.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -100,6 +101,9 @@ function App() {
           } />
           <Route path="/tutor-messages" element={
             <ProtectedRoute allowedRoles={['tutor']}><TutorMessages /></ProtectedRoute>
+          } />
+          <Route path="/tutor-units" element={
+            <ProtectedRoute allowedRoles={['tutor']}><TutorUnits /></ProtectedRoute>
           } />
           <Route path="/uc-dashboard" element={
             <ProtectedRoute allowedRoles={['coordinator']}><UCDashboard /></ProtectedRoute>

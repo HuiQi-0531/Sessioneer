@@ -84,6 +84,44 @@
   text-align: left;
 }
 
+.ucd-quicklinks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.ucd-quicklink-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.ucd-quicklink-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.ucd-quicklink-card svg {
+  color: var(--color-primary);
+}
+
+.ucd-quicklink-highlight {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
 .ucd-section-link {
   font-size: 13px;
   color: var(--color-primary);

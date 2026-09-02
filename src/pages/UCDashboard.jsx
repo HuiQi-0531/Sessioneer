@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { LayoutGrid, CalendarDays, Users, FileText, Clock, ListChecks, RefreshCw, MessageSquare } from 'lucide-react';
 import { notificationsAPI, ucDashboardAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
@@ -9,14 +10,7 @@ import { getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
 
-// "Semester 2" + 2026 -> "Sem2 2026". Falls back to whatever was given
-// if the semester string doesn't contain a recognisable number.
-const formatUnitDate = (semester, year) => {
-  if (!semester || !year) return '—';
-  const match = String(semester).match(/\d/);
-  const semNumber = match ? match[0] : String(semester).trim();
-  return `Sem${semNumber} ${year}`;
-};
+
 
 const UCDashboard = () => {
   const navigate = useNavigate();
@@ -31,10 +25,7 @@ const UCDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [notifications, setNotifications] = useState([]);
-  // Dashboard defaults to showing only the current semester's units;
-  // this toggle reveals inactive (past/future semester) units too.
-  const [showInactiveUnits, setShowInactiveUnits] = useState(false);
-
+  
   useEffect(() => {
     loadSummary();
     loadNotifications();
@@ -82,17 +73,6 @@ const UCDashboard = () => {
     navigate(notification.actionUrl);
   };
 
-  const visibleUnitStatuses = useMemo(() => {
-    if (!summary) return [];
-    return showInactiveUnits
-      ? summary.unitStatuses
-      : summary.unitStatuses.filter(u => u.isActive);
-  }, [summary, showInactiveUnits]);
-
-  const inactiveUnitCount = summary
-    ? summary.unitStatuses.filter(u => !u.isActive).length
-    : 0;
-
   return (
     <div className="uc-dashboard-container">
       <UCSidebar activePage="dashboard" />
@@ -137,69 +117,42 @@ const UCDashboard = () => {
                 </Link>
               </div>
 
-              <section className="ucd-section">
-                <div className="ucd-section-header">
-                  <h3>Your Units</h3>
-                  <div className="ucd-section-header-actions">
-                    <label className="ucd-filter-toggle">
-                      <input
-                        type="checkbox"
-                        checked={showInactiveUnits}
-                        onChange={(e) => setShowInactiveUnits(e.target.checked)}
-                      />
-                      Show inactive units{inactiveUnitCount > 0 ? ` (${inactiveUnitCount})` : ''}
-                    </label>
-                    <Link to="/unit-setup" className="ucd-section-link">Manage units</Link>
-                  </div>
+                            <section className="ucd-section">
+                <h3>Quick Links</h3>
+                <div className="ucd-quicklinks-grid">
+                  <Link to="/sessions" className="ucd-quicklink-card">
+                    <ListChecks size={22} />
+                    <span>Sessions</span>
+                  </Link>
+                  <Link to="/tutors" className="ucd-quicklink-card">
+                    <Users size={22} />
+                    <span>Tutors</span>
+                  </Link>
+                  <Link to="/tutor-applications" className="ucd-quicklink-card">
+                    <FileText size={22} />
+                    <span>Applications</span>
+                  </Link>
+                  <Link to="/uc-availability" className="ucd-quicklink-card">
+                    <Clock size={22} />
+                    <span>Availability</span>
+                  </Link>
+                  <Link to="/schedule-builder" className="ucd-quicklink-card">
+                    <CalendarDays size={22} />
+                    <span>Schedule Builder</span>
+                  </Link>
+                  <Link to="/uc-requests" className="ucd-quicklink-card">
+                    <RefreshCw size={22} />
+                    <span>Requests</span>
+                  </Link>
+                  <Link to="/messages" className="ucd-quicklink-card">
+                    <MessageSquare size={22} />
+                    <span>Messages</span>
+                  </Link>
+                  <Link to="/unit-setup" className="ucd-quicklink-card ucd-quicklink-highlight">
+                    <LayoutGrid size={22} />
+                    <span>View All Units</span>
+                  </Link>
                 </div>
-                {summary.unitStatuses.length === 0 ? (
-                  <div className="ucd-empty">You haven't created any units yet.</div>
-                ) : visibleUnitStatuses.length === 0 ? (
-                  <div className="ucd-empty">
-                    No active units right now.
-                    {inactiveUnitCount > 0 && (
-                      <>
-                        {' '}
-                        <button
-                          type="button"
-                          className="ucd-empty-action"
-                          onClick={() => setShowInactiveUnits(true)}
-                        >
-                          Show {inactiveUnitCount} inactive unit{inactiveUnitCount === 1 ? '' : 's'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <table className="ucd-table">
-                    <thead>
-                      <tr>
-                        <th>Unit</th>
-                        <th>Date</th>
-                        <th>Sessions</th>
-                        <th>Unassigned</th>
-                        <th>Tutors Submitted Availability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleUnitStatuses.map(u => (
-                        <tr key={u.unitId} className={!u.isActive ? 'inactive' : ''}>
-                          <td>{u.unitCode}{!u.isActive && ' (inactive)'}</td>
-                          <td>{formatUnitDate(u.semester, u.year)}</td>
-                          <td>{u.sessionCount}</td>
-                          <td>
-                            {u.unassignedCount > 0 ? (
-                              <span className="ucd-badge warn">{u.unassignedCount} unassigned</span>
-                            ) : (
-                              <span className="ucd-badge ok">All assigned</span>
-                            )}
-                          </td>
-                          <td>{u.tutorsSubmittedCount}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
               </section>
 
               <section className="ucd-section">
