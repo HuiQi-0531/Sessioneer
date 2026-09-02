@@ -318,11 +318,18 @@ const TutorAvailability = () => {
 
         <div className="content-area">
           <div className="availability-card">
-            <div className="unit-info">
-              My Availability
-              <span className="unit-info-subtitle">
-                Applies to all tutor units
-              </span>
+            <div className="unit-info-row">
+              <div className="unit-info">
+                My Availability
+                <span className="unit-info-subtitle">
+                  Applies to all tutor units
+                </span>
+              </div>
+              {!isWindowClosed && !isEditable && (
+                <button className="btn btn-edit btn-edit-top" onClick={handleEdit}>
+                  Edit
+                </button>
+              )}
             </div>
 
             <div className="legend">
@@ -528,11 +535,6 @@ const TutorAvailability = () => {
             </div>
 
             <div className="action-buttons">
-              {!isWindowClosed && !isEditable && (
-                <button className="btn btn-edit" onClick={handleEdit}>
-                  Edit
-                </button>
-              )}
               {!isWindowClosed && isEditable && (
                 <button className="btn btn-submit" onClick={handleSubmit} disabled={isSubmitting}>
                   {isSubmitting ? 'Submitting...' : 'Submit'}
