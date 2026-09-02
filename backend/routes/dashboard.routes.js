@@ -29,6 +29,11 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
         UNION
         SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
       )
+      -- A unit coordinator doesn't need a tutor view for their own unit -
+      -- they assign themselves directly when scheduling instead.
+      AND u.id NOT IN (
+        SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'coordinator'
+      )
       ORDER BY u.year DESC, u.semester DESC
       `,
       [tutorId]
