@@ -106,7 +106,7 @@ router.post('/login', async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, name, last_name, email, role, password_hash, avatar_url
+      SELECT id, name, last_name, email, role, password_hash, avatar_url, account_status
       FROM users
       WHERE email = $1
       LIMIT 1
@@ -118,6 +118,14 @@ router.post('/login', async (req, res) => {
 
     if (!user || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (user.account_status === 'disabled') {
+      return res.status(403).json({ error: 'This account has been disabled. Please contact an administrator.' });
+    }
+
+    if (user.account_status === 'pending') {
+      return res.status(403).json({ error: 'This account is still pending. Please contact an administrator.' });
     }
 
     const token = jwt.sign(

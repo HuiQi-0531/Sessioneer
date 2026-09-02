@@ -16,6 +16,12 @@ const Login = () => {
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const getHomePath = (role) => {
+        if (role === 'admin') return '/admin-dashboard';
+        if (role === 'coordinator') return '/uc-dashboard';
+        return '/tutor-dashboard';
+    };
+
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -41,7 +47,7 @@ const Login = () => {
             localStorage.setItem('token', data.token);
 
             await refreshUnits();
-            navigate(data.user.role === 'coordinator' ? '/uc-dashboard' : '/tutor-dashboard');
+            navigate(getHomePath(data.user.role));
 
         } catch (err) {
             setError(err.message || 'Login failed. Please try again.');

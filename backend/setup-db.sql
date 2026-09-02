@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     maximum_hours INTEGER,
     contract_type VARCHAR(50),
     avatar_url TEXT,
+    account_status VARCHAR(20) DEFAULT 'active',
     application_status VARCHAR(50),
     applied_at TIMESTAMP,
     approved_at TIMESTAMP,

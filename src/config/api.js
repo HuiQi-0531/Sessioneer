@@ -1,5 +1,11 @@
 // API Configuration
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+const LOCAL_API_URL = 'http://localhost:5001';
+const isLocalFrontend = typeof window !== 'undefined'
+  && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+export const API_URL = isLocalFrontend
+  ? LOCAL_API_URL
+  : process.env.REACT_APP_API_URL || LOCAL_API_URL;
 
 // Reads the saved token and returns the Authorization header,
 // or an empty object if there is no token (e.g. not logged in).
@@ -1409,6 +1415,240 @@ export const tutorApplicationsAPI = {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to create account');
     clearApplicationsCache();
+    return result;
+  }
+};
+
+export const adminAPI = {
+  getUsers: async () => {
+    const response = await fetch(`${API_URL}/admin/users`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch users');
+    return result;
+  },
+
+  createUser: async (userData) => {
+    const response = await fetch(`${API_URL}/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(userData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to create user');
+    return result;
+  },
+
+  updateUser: async (userId, userData) => {
+    const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(userData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update user');
+    return result;
+  },
+
+  sendUserResetLink: async (userId) => {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/send-reset-link`, {
+      method: 'POST',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to send reset link');
+    return result;
+  },
+
+  getUserUnits: async (userId) => {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/units`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch user unit access');
+    return result;
+  },
+
+  addUserUnit: async (userId, unitId, role) => {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/units`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ unitId, role })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to add unit access');
+    return result;
+  },
+
+  removeUserUnit: async (userId, unitId, role) => {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/units/${unitId}/${role}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to remove unit access');
+    return result;
+  },
+
+  getUnits: async () => {
+    const response = await fetch(`${API_URL}/admin/units`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch units');
+    return result;
+  },
+
+  createUnit: async (unitData) => {
+    const response = await fetch(`${API_URL}/admin/units`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(unitData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to create unit');
+    return result;
+  },
+
+  updateUnit: async (unitId, unitData) => {
+    const response = await fetch(`${API_URL}/admin/units/${unitId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(unitData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update unit');
+    return result;
+  },
+
+  getUnitTutors: async (unitId) => {
+    const response = await fetch(`${API_URL}/admin/units/${unitId}/tutors`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch unit tutors');
+    return result;
+  },
+
+  addUnitTutor: async (unitId, email) => {
+    const response = await fetch(`${API_URL}/admin/units/${unitId}/tutors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ email })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to add tutor');
+    return result;
+  },
+
+  removeUnitTutor: async (unitId, userId) => {
+    const response = await fetch(`${API_URL}/admin/units/${unitId}/tutors/${userId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to remove tutor');
+    return result;
+  },
+
+  getSessions: async () => {
+    const response = await fetch(`${API_URL}/admin/sessions`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch sessions');
+    return result;
+  },
+
+  createSession: async (sessionData) => {
+    const response = await fetch(`${API_URL}/admin/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(sessionData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to create session');
+    return result;
+  },
+
+  updateSession: async (sessionId, sessionData) => {
+    const response = await fetch(`${API_URL}/admin/sessions/${sessionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(sessionData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update session');
+    return result;
+  },
+
+  deleteSession: async (sessionId) => {
+    const response = await fetch(`${API_URL}/admin/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to delete session');
+    return result;
+  },
+
+  getApplications: async () => {
+    const response = await fetch(`${API_URL}/admin/applications`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch applications');
+    return result;
+  },
+
+  downloadApplicationResume: async (applicationId) => {
+    const response = await fetch(`${API_URL}/admin/applications/${applicationId}/resume`, {
+      headers: authHeader()
+    });
+    if (!response.ok) throw new Error('Failed to download resume');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  },
+
+  getRequests: async () => {
+    const response = await fetch(`${API_URL}/admin/requests`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch requests');
+    return result;
+  },
+
+  getRequestSuggestionSessions: async (requestId) => {
+    const response = await fetch(`${API_URL}/admin/requests/${requestId}/suggestion-sessions`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch suggestion sessions');
+    return result;
+  },
+
+  reviewRequest: async (requestId, status, reviewNotes) => {
+    const response = await fetch(`${API_URL}/admin/requests/${requestId}/review`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ status, reviewNotes })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to review request');
+    return result;
+  },
+
+  cancelCoverRequest: async (requestId) => {
+    const response = await fetch(`${API_URL}/admin/cover-requests/${requestId}/cancel`, {
+      method: 'PATCH',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to cancel cover request');
     return result;
   }
 };

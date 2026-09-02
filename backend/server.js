@@ -22,6 +22,7 @@ const profileRoutes = require('./routes/profile.routes');
 const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
 const coverRoutes = require('./routes/cover.routes');
 const jobsRoutes = require('./routes/jobs.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -452,6 +453,13 @@ pool.query(`
     ) THEN
       ALTER TABLE users ADD COLUMN avatar_url TEXT;
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'account_status'
+    ) THEN
+      ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'active';
+    END IF;
   END $$;
 `).then(() => {
   console.log('users profile columns OK');
@@ -654,6 +662,7 @@ app.use('/', requestsRoutes);       // /requests, /uc/requests, /sessions (legac
 app.use('/', coverRoutes);          // /cover-requests, /uc/cover-requests
 app.use('/availability', availabilityRoutes);
 app.use('/jobs', jobsRoutes);
+app.use('/admin', adminRoutes);
 
 // Handle 404
 app.use((req, res) => {
