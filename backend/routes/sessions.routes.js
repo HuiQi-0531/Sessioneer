@@ -118,29 +118,39 @@ const isTutorLinkedToUnit = async (userId, unitId) => {
   return result.rows.length > 0;
 };
 
-const formatSessionRow = (s) => ({
-  id: s.id,
-  sessionCode: s.session_code || null,
-  day: s.day,
-  startTime: s.start_time,
-  endTime: s.end_time,
-  location: s.location,
-  campus: s.campus,
-  sessionType: s.session_type,
-  capacity: s.capacity,
-  requiredTutors: s.required_tutors,
-  status: s.status,
-  staffNote: s.staff_note,
-  tutors: s.tutors || [],
-  isAssigned: (s.tutors || []).length > 0,
-  // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
-  // Reflects the first tutor in the list, if any.
-  assignedTutorId: (s.tutors && s.tutors[0]?.tutorId) || null,
-  assignedTutorName: (s.tutors && s.tutors[0]?.tutorName) || null,
-  tutorConfirmed: (s.tutors && s.tutors[0]?.confirmed) ?? null,
-  tutorRejectReason: (s.tutors && s.tutors[0]?.rejectReason) || null,
-  unitCode: s.unit_code || null
-});
+const formatSessionRow = (s) => {
+  const allTutors = s.tutors || [];
+  // A declined tutor (confirmed === false) doesn't count as filling the
+  // slot — the session should reappear as needing reassignment. Pending
+  // (confirmed === null) and confirmed (confirmed === true) tutors do.
+  const activeTutors = allTutors.filter(t => t.confirmed !== false);
+  const declinedTutors = allTutors.filter(t => t.confirmed === false);
+
+  return {
+    id: s.id,
+    sessionCode: s.session_code || null,
+    day: s.day,
+    startTime: s.start_time,
+    endTime: s.end_time,
+    location: s.location,
+    campus: s.campus,
+    sessionType: s.session_type,
+    capacity: s.capacity,
+    requiredTutors: s.required_tutors,
+    status: s.status,
+    staffNote: s.staff_note,
+    tutors: activeTutors,
+    declinedTutors,
+    isAssigned: activeTutors.length > 0,
+    // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
+    // Reflects the first active (non-declined) tutor, if any.
+    assignedTutorId: activeTutors[0]?.tutorId || null,
+    assignedTutorName: activeTutors[0]?.tutorName || null,
+    tutorConfirmed: activeTutors[0]?.confirmed ?? null,
+    tutorRejectReason: activeTutors[0]?.rejectReason || null,
+    unitCode: s.unit_code || null
+  };
+};
 
 // A tutor's claimed-but-still-active cover requests: covering periods that
 // haven't ended yet. These aren't in session_tutors (that table is the
@@ -283,7 +293,7 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
       WHERE s.unit_id = $1 AND s.id IN (
-        SELECT session_id FROM session_tutors WHERE tutor_id = $2
+        SELECT session_id FROM session_tutors WHERE tutor_id = $2 AND tutor_confirmed IS DISTINCT FROM false
       )
       GROUP BY s.id, un.unit_code      ORDER BY
         CASE s.day
@@ -541,7 +551,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
     const thisDuration = sessionDurationHours(session.start_time, session.end_time);
 
     const currentTutorsResult = await pool.query(
-      'SELECT tutor_id FROM session_tutors WHERE session_id = $1',
+      'SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM false',
       [sessionId]
     );
     const currentTutorIds = new Set(currentTutorsResult.rows.map(r => r.tutor_id));
@@ -574,7 +584,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       SELECT s.id, s.day, s.start_time, s.end_time, st.tutor_id
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2
+      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
       [unitId, sessionId]
     );
@@ -691,15 +701,17 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     if (sessionResult.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
     const session = sessionResult.rows[0];
 
-    const existingTutorsResult = await pool.query(
-      'SELECT tutor_id FROM session_tutors WHERE session_id = $1',
+        const existingTutorsResult = await pool.query(
+      'SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1',
       [sessionId]
     );
-    if (existingTutorsResult.rows.some(r => r.tutor_id === tutorId)) {
+    const activeExistingTutors = existingTutorsResult.rows.filter(r => r.tutor_confirmed !== false);
+
+    if (activeExistingTutors.some(r => r.tutor_id === tutorId)) {
       return res.status(409).json({ error: 'This tutor is already assigned to this session' });
     }
     const requiredTutors = session.required_tutors || 1;
-    if (existingTutorsResult.rows.length >= requiredTutors) {
+    if (activeExistingTutors.length >= requiredTutors) {
       return res.status(409).json({ error: `This session already has its required ${requiredTutors} tutor(s) assigned` });
     }
 
@@ -727,7 +739,7 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       SELECT s.id, s.day, s.start_time, s.end_time
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_id = $3
+      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_id = $3 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
       [unitId, sessionId, tutorId]
     );
@@ -755,6 +767,8 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       `
       INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed, tutor_reject_reason)
       VALUES ($1, $2, NULL, NULL)
+      ON CONFLICT (session_id, tutor_id)
+      DO UPDATE SET tutor_confirmed = NULL, tutor_reject_reason = NULL
       `,
       [sessionId, tutorId]
     );
