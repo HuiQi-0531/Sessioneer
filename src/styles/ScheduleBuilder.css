@@ -205,6 +205,12 @@
   background-color: var(--color-bg);
 }
 
+.sb-candidate-row.tentative {
+  border-color: #fdba74;
+  background-color: #fff7ed;
+  opacity: 1;
+}
+
 .sb-candidate-row.top-pick {
   border-color: #6ee7b7;
   background-color: #f0fdf4;
@@ -241,6 +247,13 @@
 .sb-warning-text {
   font-size: 13px;
   color: var(--color-danger-text);
+  display: block;
+}
+
+.sb-tentative-text {
+  font-size: 13px;
+  color: #c2410c;
+  font-weight: 600;
   display: block;
 }
 
