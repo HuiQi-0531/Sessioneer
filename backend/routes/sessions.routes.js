@@ -579,14 +579,17 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [unitId, session.day]
     );
 
+        // Cross-unit aware: a tutor pending/confirmed on an overlapping session
+    // in ANY unit is a hard block, not just within this unit.
     const otherSessionsResult = await pool.query(
       `
-      SELECT s.id, s.day, s.start_time, s.end_time, st.tutor_id
+      SELECT s.id, s.day, s.start_time, s.end_time, s.unit_id, st.tutor_id, st.tutor_confirmed, un.unit_code
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_confirmed IS DISTINCT FROM false
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id != $1 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
-      [unitId, sessionId]
+      [sessionId]
     );
 
     const candidates = tutorsResult.rows.map(tutor => {
@@ -601,11 +604,18 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const allPreferred = slotPreferences.length > 0 && slotPreferences.every(p => p === 'preferred');
       const allKnown = slotPreferences.every(p => p !== null);
 
-      const conflict = otherSessionsResult.rows.some(other =>
+            const overlappingSessions = otherSessionsResult.rows.filter(other =>
         other.tutor_id === tutor.id &&
         other.day === session.day &&
         timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
       );
+      const conflict = overlappingSessions.length > 0;
+      // A conflict where the OTHER assignment is still pending (not yet
+      // confirmed by the tutor) gets a distinct "tentative" warning, since
+      // it may resolve itself if the tutor declines that other session.
+      const tentativeConflict = overlappingSessions.some(other => other.tutor_confirmed === null);
+      const confirmedConflict = overlappingSessions.some(other => other.tutor_confirmed === true);
+      const conflictUnitCodes = [...new Set(overlappingSessions.map(other => other.unit_code))];
 
       const existingHours = otherSessionsResult.rows
         .filter(other => other.tutor_id === tutor.id)
@@ -619,7 +629,11 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const hardBlocked = conflict || overMaxHours || notEligibleForType;
       const warnings = [];
       if (notEligibleForType) warnings.push(`Only Super Tutors can be assigned to ${session.session_type} sessions`);
-      if (conflict) warnings.push('Already assigned to an overlapping session');
+      if (confirmedConflict) {
+        warnings.push(`Already confirmed on an overlapping session in ${conflictUnitCodes.join(', ')}`);
+      } else if (tentativeConflict) {
+        warnings.push(`Tentatively assigned to an overlapping session in ${conflictUnitCodes.join(', ')} — awaiting their confirmation`);
+      }
       if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
       if (hasAvoid) warnings.push('Marked "avoid" for this time');
       if (!hasAnyAvailabilityData) warnings.push('No availability submitted');
@@ -638,7 +652,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 
       const score = availabilityScore + priorityBonus;
 
-      return {
+            return {
         id: tutor.id,
         name: tutor.name,
         email: tutor.email,
@@ -651,6 +665,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         allPreferred,
         allKnown,
         hardBlocked,
+        tentativeConflict,
         warnings,
         isAssignedToThisSession: currentTutorIds.has(tutor.id),
         score
@@ -734,22 +749,25 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
     }
 
-    const otherSessionsResult = await pool.query(
+        const otherSessionsResult = await pool.query(
       `
-      SELECT s.id, s.day, s.start_time, s.end_time
+      SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code
       FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
-      WHERE s.unit_id = $1 AND s.id != $2 AND st.tutor_id = $3 AND st.tutor_confirmed IS DISTINCT FROM false
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id != $1 AND st.tutor_id = $2 AND st.tutor_confirmed IS DISTINCT FROM false
       `,
-      [unitId, sessionId, tutorId]
+      [sessionId, tutorId]
     );
 
-    const conflict = otherSessionsResult.rows.some(other =>
+    const conflictingSession = otherSessionsResult.rows.find(other =>
       other.day === session.day &&
       timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
     );
-    if (conflict) {
-      return res.status(409).json({ error: 'This tutor is already assigned to an overlapping session' });
+    if (conflictingSession) {
+      return res.status(409).json({
+        error: `This tutor is already assigned to an overlapping session in ${conflictingSession.unit_code}`
+      });
     }
 
     const thisDuration = sessionDurationHours(session.start_time, session.end_time);

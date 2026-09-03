@@ -635,7 +635,7 @@ const ScheduleBuilder = () => {
                 return (
                   <div
                     key={candidate.id}
-                    className={`sb-candidate-row ${candidate.hardBlocked ? 'blocked' : ''} ${isTopPick ? 'top-pick' : ''} ${candidate.isAssignedToThisSession ? 'top-pick' : ''}`}
+                    className={`sb-candidate-row ${candidate.hardBlocked ? 'blocked' : ''} ${candidate.tentativeConflict ? 'tentative' : ''} ${isTopPick ? 'top-pick' : ''} ${candidate.isAssignedToThisSession ? 'top-pick' : ''}`}
                   >
                     <div className="sb-candidate-info">
                       <div className="sb-candidate-name">
@@ -655,9 +655,12 @@ const ScheduleBuilder = () => {
                         {candidate.allPreferred && (
                           <span className="sb-availability-text">Marked this whole time as preferred</span>
                         )}
-                        {candidate.warnings.map((w, i) => (
-                          <span key={i} className="sb-warning-text">{w}</span>
-                        ))}
+                        {candidate.warnings.map((w, i) => {
+                          const isTentativeWarning = candidate.tentativeConflict && w.toLowerCase().includes('tentatively');
+                          return (
+                            <span key={i} className={isTentativeWarning ? 'sb-tentative-text' : 'sb-warning-text'}>{w}</span>
+                          );
+                        })}
                       </div>
                     </div>
                     <button

@@ -15,6 +15,8 @@ const DAY_CODE_TO_NAME = {
   FRI: 'Friday'
 };
 
+const ALL_UNITS_VALUE = 'all';
+
 const TutorAvailability = () => {
   const { allUnits, isLoading: unitLoading } = useActiveUnit();
 
@@ -22,6 +24,11 @@ const TutorAvailability = () => {
     const savedUser = localStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
   }, []);
+
+  // 'all' = submit to every tutor unit (default, current behaviour).
+  // Otherwise this is a specific unit's id, and everything below scopes
+  // to just that one unit instead.
+  const [selectedUnitId, setSelectedUnitId] = useState(ALL_UNITS_VALUE);
 
   const [isEditable, setIsEditable] = useState(true);
   const [availabilityData, setAvailabilityData] = useState({});
@@ -114,7 +121,23 @@ const TutorAvailability = () => {
     [tutorUnits, isUnitWindowClosed]
   );
 
-  const isWindowClosed = tutorUnits.length > 0 && openTutorUnits.length === 0;
+  // Reset back to "All Units" if the previously selected specific unit
+  // disappears from the tutor's unit list (e.g. semester rollover).
+  useEffect(() => {
+    if (selectedUnitId === ALL_UNITS_VALUE) return;
+    if (!tutorUnits.some(u => u.id === selectedUnitId)) {
+      setSelectedUnitId(ALL_UNITS_VALUE);
+    }
+  }, [tutorUnits, selectedUnitId]);
+
+  const isAllUnitsMode = selectedUnitId === ALL_UNITS_VALUE;
+  const selectedUnit = isAllUnitsMode ? null : tutorUnits.find(u => u.id === selectedUnitId) || null;
+
+  // Whether the currently selected scope (all units, or just the one
+  // picked unit) is closed for submission.
+  const isWindowClosed = isAllUnitsMode
+    ? (tutorUnits.length > 0 && openTutorUnits.length === 0)
+    : (selectedUnit ? isUnitWindowClosed(selectedUnit) : false);
 
   const hydrateTutorAvailability = useCallback((data) => {
     const tutorId = currentUser?.id;
@@ -134,14 +157,20 @@ const TutorAvailability = () => {
     return next;
   }, [currentUser?.id]);
 
-  // Availability is tutor-wide. The same submitted grid is saved into every
-  // tutor unit so each UC still sees the tutor's availability in their unit.
+  // In "All Units" mode, one shared grid is saved into every open unit.
+  // In "specific unit" mode, each unit gets its own independent cache key,
+  // so switching units in the dropdown shows that unit's own data.
   const storageKey = currentUser?.id
-    ? `availabilityData_${currentUser.id}_shared`
+    ? isAllUnitsMode
+      ? `availabilityData_${currentUser.id}_shared`
+      : selectedUnitId
+        ? `availabilityData_${currentUser.id}_unit_${selectedUnitId}`
+        : null
     : null;
 
   useEffect(() => {
     if (!storageKey || tutorUnits.length === 0) return;
+    if (!isAllUnitsMode && !selectedUnit) return;
 
     const loadSavedAvailability = async () => {
       setSubmitError('');
@@ -158,8 +187,27 @@ const TutorAvailability = () => {
 
       setIsLoadingLatest(true);
       try {
-        for (const unit of tutorUnits) {
-          const data = await availabilityAPI.get(unit.unitCode);
+        if (isAllUnitsMode) {
+          // Same as before: check every open unit, first one with actual
+          // submitted data wins and becomes the shared grid shown here.
+          for (const unit of tutorUnits) {
+            const data = await availabilityAPI.get(unit.unitCode);
+            const backendAvailability = hydrateTutorAvailability(data);
+            const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
+
+            if (hasSubmittedAvailability) {
+              setAvailabilityData(backendAvailability);
+              localStorage.setItem(storageKey, JSON.stringify(backendAvailability));
+              setIsEditable(false);
+              return;
+            }
+          }
+        } else {
+          // Specific unit: load only that unit's own current data. If it
+          // has nothing yet, the grid starts blank (prefilled means
+          // "prefilled with whatever's already saved for this unit",
+          // which is nothing the first time).
+          const data = await availabilityAPI.get(selectedUnit.unitCode);
           const backendAvailability = hydrateTutorAvailability(data);
           const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
 
@@ -167,7 +215,9 @@ const TutorAvailability = () => {
             setAvailabilityData(backendAvailability);
             localStorage.setItem(storageKey, JSON.stringify(backendAvailability));
             setIsEditable(false);
-            return;
+          } else if (!savedData) {
+            setAvailabilityData({});
+            setIsEditable(!isWindowClosed);
           }
         }
       } catch (error) {
@@ -179,7 +229,8 @@ const TutorAvailability = () => {
     };
 
     loadSavedAvailability();
-  }, [tutorUnits, storageKey, isWindowClosed, hydrateTutorAvailability]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorUnits, storageKey, isAllUnitsMode, selectedUnitId, isWindowClosed, hydrateTutorAvailability]);
 
   // Single tap applies whichever status is currently selected as the
   // "paint color". Tapping a cell that already has that exact status
@@ -251,13 +302,20 @@ const TutorAvailability = () => {
   };
 
   const handleSubmit = async () => {
-    if (openTutorUnits.length === 0 || isWindowClosed) return;
+    if (isWindowClosed) return;
+    if (isAllUnitsMode && openTutorUnits.length === 0) return;
+    if (!isAllUnitsMode && !selectedUnit) return;
+
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      await Promise.all(
-        openTutorUnits.map(unit => availabilityAPI.submit(unit.unitCode, availabilityData))
-      );
+      if (isAllUnitsMode) {
+        await Promise.all(
+          openTutorUnits.map(unit => availabilityAPI.submit(unit.unitCode, availabilityData))
+        );
+      } else {
+        await availabilityAPI.submit(selectedUnit.unitCode, availabilityData);
+      }
       localStorage.setItem(storageKey, JSON.stringify(availabilityData));
 
       setIsEditable(false);
@@ -322,7 +380,9 @@ const TutorAvailability = () => {
               <div className="unit-info">
                 My Availability
                 <span className="unit-info-subtitle">
-                  Applies to all tutor units
+                  {isAllUnitsMode
+                    ? 'Applies to all tutor units'
+                    : `Applies to ${selectedUnit?.unitCode || 'this unit'} only`}
                 </span>
               </div>
               {!isWindowClosed && !isEditable && (
@@ -330,6 +390,23 @@ const TutorAvailability = () => {
                   Edit
                 </button>
               )}
+            </div>
+
+            <div className="unit-select-row">
+              <label htmlFor="availability-unit-select" className="unit-select-label">
+                Submit to:
+              </label>
+              <select
+                id="availability-unit-select"
+                className="unit-select"
+                value={selectedUnitId}
+                onChange={(e) => setSelectedUnitId(e.target.value)}
+              >
+                <option value={ALL_UNITS_VALUE}>All Units</option>
+                {tutorUnits.map(unit => (
+                  <option key={unit.id} value={unit.id}>{unit.unitCode}</option>
+                ))}
+              </select>
             </div>
 
             <div className="legend">
@@ -404,8 +481,10 @@ const TutorAvailability = () => {
               <div className="warning-message" style={{ backgroundColor: '#fee2e2', borderLeftColor: '#ef4444' }}>
                 <span className="warning-icon" style={{ color: '#ef4444' }}>!</span>
                 <span>
-                  Submissions are closed for this unit
-                  . Contact your unit coordinator if you need to make changes.
+                  {isAllUnitsMode
+                    ? 'Submissions are closed for this unit.'
+                    : `Submissions are closed for ${selectedUnit?.unitCode || 'this unit'}.`}
+                  {' '}Contact your unit coordinator if you need to make changes.
                 </span>
               </div>
             ) : isEditable ? (
@@ -413,13 +492,15 @@ const TutorAvailability = () => {
                 <span className="warning-icon">!</span>
                 <span>
                   Please select your preferred time before the due date!
-                  {openTutorUnits.length < tutorUnits.length &&
+                  {isAllUnitsMode && openTutorUnits.length < tutorUnits.length &&
                     ` ${tutorUnits.length - openTutorUnits.length} unit${tutorUnits.length - openTutorUnits.length > 1 ? 's are' : ' is'} already closed and will keep the previous submission.`}
                 </span>
               </div>
             ) : (
               <div className="status-badges">
-                <div className="status-badge unlocked">SUBMITTED</div>
+                <div className="status-badge unlocked">
+                  SUBMITTED{!isAllUnitsMode && selectedUnit ? ` — ${selectedUnit.unitCode}` : ''}
+                </div>
                 <div className="status-badge preferred">PREFERRED: {counts.preferred}</div>
                 <div className="status-badge available">AVAILABLE: {counts.available}</div>
                 <div className="status-badge avoid">AVOID: {counts.avoid}</div>
@@ -571,7 +652,7 @@ const TutorAvailability = () => {
 
       {showSuccess && (
         <div className="success-message">
-          Availability saved successfully!
+          {isAllUnitsMode ? 'Availability saved successfully!' : `Availability saved for ${selectedUnit?.unitCode || 'this unit'}!`}
         </div>
       )}
     </div>
