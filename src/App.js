@@ -25,6 +25,13 @@ import TutorUnits from './pages/TutorUnits.jsx';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
+import AdminUsers from './pages/AdminUsers.jsx';
+import AdminUnits from './pages/AdminUnits.jsx';
+import AdminSessions from './pages/AdminSessions.jsx';
+import AdminApplications from './pages/AdminApplications.jsx';
+import AdminRequests from './pages/AdminRequests.jsx';
+import AdminSettings from './pages/AdminSettings.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { ActiveUnitProvider } from './context/ActiveUnitContext.jsx';
 import './App.css'
@@ -107,6 +114,27 @@ function App() {
           } />
           <Route path="/uc-dashboard" element={
             <ProtectedRoute allowedRoles={['coordinator']}><UCDashboard /></ProtectedRoute>
+          } />
+          <Route path="/admin-dashboard" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>
+          } />
+          <Route path="/admin/units" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminUnits /></ProtectedRoute>
+          } />
+          <Route path="/admin/sessions" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminSessions /></ProtectedRoute>
+          } />
+          <Route path="/admin/applications" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminApplications /></ProtectedRoute>
+          } />
+          <Route path="/admin/requests" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminRequests /></ProtectedRoute>
+          } />
+          <Route path="/admin/settings" element={
+            <ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute><Profile /></ProtectedRoute>
