@@ -764,6 +764,11 @@
   color: #1d4ed8;
 }
 
+.admin-pill.role-super_tutor {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 .admin-pill.role-admin {
   background: #ede9fe;
   color: #5b21b6;
@@ -1397,6 +1402,10 @@
 
 .admin-tutor-add-form {
   flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px auto;
+  align-items: end;
+  gap: 12px;
   padding: 10px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -1404,16 +1413,21 @@
   box-shadow: none;
 }
 
-.admin-tutor-add-form input:focus {
+.admin-tutor-add-form input:focus,
+.admin-tutor-add-form select:focus {
   border-color: #5b4fe8;
   box-shadow: 0 0 0 3px rgba(91, 79, 232, 0.12);
   outline: none;
 }
 
+.admin-tutor-role-field {
+  min-width: 0;
+}
+
 .admin-tutor-list-header {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 178px 98px;
+  grid-template-columns: minmax(0, 1fr) 178px 250px;
   gap: 12px;
   padding: 0 18px 0 14px;
   color: #64748b;
@@ -1451,7 +1465,7 @@
 
 .admin-list.bordered .admin-tutor-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 178px 98px;
+  grid-template-columns: minmax(0, 1fr) 178px 250px;
   align-items: center;
   gap: 12px;
   margin-bottom: 0;
@@ -1523,7 +1537,28 @@
 }
 
 .admin-tutor-row > .admin-row-actions {
-  display: contents;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.admin-compact-select {
+  width: 124px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-compact-select:focus {
+  border-color: #5b4fe8;
+  box-shadow: 0 0 0 3px rgba(91, 79, 232, 0.12);
+  outline: none;
 }
 
 .admin-session-count {
@@ -1659,12 +1694,16 @@
   }
 
   .admin-tutor-row .admin-row-actions {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    justify-content: flex-start;
   }
 
   .admin-session-count {
     justify-self: start;
+  }
+
+  .admin-compact-select {
+    width: 150px;
   }
 
   .admin-tutor-summary p {

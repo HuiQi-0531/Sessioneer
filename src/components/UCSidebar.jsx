@@ -12,13 +12,13 @@ const UCSidebar = ({ activePage }) => {
     activeUnit,
     allUnits,
     setActiveUnitId,
-    isLoading,
     activeViewRole,
-    setActiveViewRole
+    setActiveViewRole,
+    isLoading
   } = useActiveUnit();
-  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const readCurrentUser = () => {
     const savedUser = localStorage.getItem('currentUser');
@@ -76,25 +76,31 @@ const UCSidebar = ({ activePage }) => {
 
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
+  const getUnitIdentity = (unit) => [
+    unit?.unitCode,
+    unit?.semester,
+    unit?.year
+  ].map(value => String(value || '').toLowerCase()).join('|');
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
+  const coordinatorUnitIdentities = new Set(coordinatorUnits.map(getUnitIdentity));
+  const otherTutorUnits = Array.from(new Map(
+    allUnits
+      .filter(unit =>
+        unitHasTutorAccess(unit)
+        && unit.isActive
+        && !coordinatorUnitIdentities.has(getUnitIdentity(unit))
+      )
+      .map(unit => [unit.id, unit])
+  ).values());
 
   // Active Unit widget only ever shows/selects current-semester units.
   // Past/future units stay reachable via "Manage units" -> Unit Setup.
   const activeCoordinatorUnits = coordinatorUnits.filter(unit => unit.isActive);
+  const selectableUnitCount = activeCoordinatorUnits.length + otherTutorUnits.length;
 
   const displayActiveUnit = (activeUnit?.roles?.includes('coordinator') && activeUnit.isActive)
     ? activeUnit
     : activeCoordinatorUnits[0] || null;
-
-  // Units where this person is only a tutor/super tutor (not coordinator) -
-  // shown in the same picker so switching unit can also switch view.
-  const otherTutorUnits = Array.from(
-    new Map(
-      allUnits
-        .filter(unit => unitHasTutorAccess(unit) && !unit.roles?.includes('coordinator') && unit.isActive)
-        .map(unit => [unit.id, unit])
-    ).values()
-  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -108,6 +114,7 @@ const UCSidebar = ({ activePage }) => {
 
   const handleSelectUnit = (unitId) => {
     setActiveUnitId(unitId);
+    setActiveViewRole('coordinator');
     setShowDropdown(false);
   };
 
@@ -123,7 +130,8 @@ const UCSidebar = ({ activePage }) => {
   // units for Edit/Duplicate/Delete, so we must not fight it while there.
   useEffect(() => {
     if (activePage === 'unit-setup') return;
-    if (activeViewRole !== 'coordinator' || !activeUnit) return;
+    if (activeViewRole !== 'coordinator') return;
+    if (!activeUnit) return;
 
     const invalidRole = !activeUnit.roles?.includes('coordinator');
     const invalidSemester = !activeUnit.isActive;
@@ -131,7 +139,7 @@ const UCSidebar = ({ activePage }) => {
     if ((invalidRole || invalidSemester) && activeCoordinatorUnits.length > 0) {
       setActiveUnitId(activeCoordinatorUnits[0].id);
     }
-  }, [activeUnit, activeViewRole, activeCoordinatorUnits, activePage, setActiveUnitId]);
+  }, [activeUnit, activeCoordinatorUnits, activePage, activeViewRole, setActiveUnitId]);
 
   const navItem = (label, path, key, showDot = false) => {
   const content = (
@@ -170,7 +178,7 @@ const UCSidebar = ({ activePage }) => {
         <button
           className="ucs-active-unit-btn"
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || (activeCoordinatorUnits.length === 0 && otherTutorUnits.length === 0)}
+          disabled={isLoading || selectableUnitCount === 0}
         >
           <div className="ucs-active-unit-text">
             <p className="uc-active-label">Active Unit</p>
@@ -181,13 +189,15 @@ const UCSidebar = ({ activePage }) => {
                   ? displayActiveUnit.unitCode
                   : coordinatorUnits.length > 0
                     ? 'No active unit'
-                    : 'No unit yet'}
+                    : otherTutorUnits.length > 0
+                      ? 'Tutor units available'
+                      : 'No unit yet'}
             </p>
             {displayActiveUnit && (
               <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
             )}
           </div>
-          {(activeCoordinatorUnits.length > 0 || otherTutorUnits.length > 0) && <span className="ucs-dropdown-arrow">&#9662;</span>}
+          {selectableUnitCount > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
         </button>
 
         {showDropdown && (
@@ -205,17 +215,17 @@ const UCSidebar = ({ activePage }) => {
 
             {otherTutorUnits.length > 0 && (
               <>
-                <div className="ucs-dropdown-section-label">As a tutor</div>
+                {activeCoordinatorUnits.length > 0 && (
+                  <div className="ucs-dropdown-section-label">Tutor access</div>
+                )}
                 {otherTutorUnits.map(unit => (
                   <button
-                    key={unit.id}
+                    key={`tutor-${unit.id}`}
                     className="ucs-dropdown-item"
                     onClick={() => handleSwitchToTutorUnit(unit.id)}
                   >
                     <span className="ucs-dropdown-code">{unit.unitCode}</span>
-                    <span className="ucs-dropdown-meta">
-                      {unit.roles?.includes('super_tutor') ? 'Super Tutor' : 'Tutor'}
-                    </span>
+                    <span className="ucs-dropdown-meta">{unit.semester}, {unit.year} · Tutor</span>
                   </button>
                 ))}
               </>

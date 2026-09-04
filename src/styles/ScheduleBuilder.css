@@ -239,6 +239,7 @@
 .sb-priority-badge.standard { background-color: var(--color-bg-subtle); color: var(--color-text-muted); }
 .sb-priority-badge.backup { background-color: var(--color-warning-bg); color: var(--color-warning-hover); }
 .sb-priority-badge.risk { background-color: var(--color-danger-bg); color: var(--color-danger-text); }
+.sb-priority-badge.coordinator { background-color: var(--color-primary-light); color: var(--color-primary); }
 
 .sb-candidate-warnings {
   margin-top: 6px;

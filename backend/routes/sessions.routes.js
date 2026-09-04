@@ -208,11 +208,11 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
-    if (req.user.role === 'coordinator') {
-      const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
-      if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
-    } else {
-      const isLinkedTutor = await isTutorLinkedToUnit(req.user.id, unitId);
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    const hasCoordinatorAccess = Boolean(ownedUnitId);
+    const isLinkedTutor = await isTutorLinkedToUnit(req.user.id, unitId);
+
+    if (!hasCoordinatorAccess) {
       if (!isLinkedTutor) {
         return res.status(403).json({ error: 'You are not linked to this unit' });
       }
@@ -252,7 +252,7 @@ router.get('/', verifyToken, async (req, res) => {
     );
 
     const assigned = result.rows.map(formatSessionRow);
-    if (req.user.role !== 'coordinator') {
+    if (!hasCoordinatorAccess && isLinkedTutor) {
       const covering = (await getActiveCoverSessions(req.user.id))
         .filter(s => s.unit_id === unitId) // this route is scoped to one unit
         .map(formatCoveringSessionRow);
@@ -568,6 +568,23 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [unitId, TUTOR_LIKE_ROLES]
     );
 
+    const coordinatorResult = await pool.query(
+      `
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name,
+             u.email, u.maximum_hours, 'coordinator' AS membership_role,
+             NULL::text AS priority_tag, false AS starred, false AS flagged
+      FROM users u
+      WHERE u.id = $1
+      `,
+      [req.user.id]
+    );
+
+    const candidateMap = new Map();
+    tutorsResult.rows.forEach(tutor => candidateMap.set(tutor.id, tutor));
+    if (coordinatorResult.rows[0]) {
+      candidateMap.set(coordinatorResult.rows[0].id, coordinatorResult.rows[0]);
+    }
+
     const sessionNeedsSuperTutor = requiresSuperTutor(session.session_type);
 
     const availResult = await pool.query(
@@ -592,14 +609,15 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [sessionId]
     );
 
-    const candidates = tutorsResult.rows.map(tutor => {
+    const candidates = Array.from(candidateMap.values()).map(tutor => {
+      const isCoordinatorCandidate = tutor.membership_role === 'coordinator';
       const tutorAvail = availResult.rows.filter(a => a.tutor_id === tutor.id);
       const slotPreferences = coveredSlots.map(slot => {
         const match = tutorAvail.find(a => timeToSlot(a.start_time) === slot);
         return match ? match.preference : null;
       });
 
-      const hasAnyAvailabilityData = tutorAvail.length > 0;
+      const hasAnyAvailabilityData = isCoordinatorCandidate || tutorAvail.length > 0;
       const hasAvoid = slotPreferences.includes('avoid');
       const allPreferred = slotPreferences.length > 0 && slotPreferences.every(p => p === 'preferred');
       const allKnown = slotPreferences.every(p => p !== null);
@@ -624,7 +642,7 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       const overMaxHours = tutor.maximum_hours != null && hoursIfAssigned > tutor.maximum_hours;
 
       const isSuperTutor = tutor.membership_role === 'super_tutor';
-      const notEligibleForType = sessionNeedsSuperTutor && !isSuperTutor;
+      const notEligibleForType = !isCoordinatorCandidate && sessionNeedsSuperTutor && !isSuperTutor;
 
       const hardBlocked = conflict || overMaxHours || notEligibleForType;
       const warnings = [];
@@ -636,7 +654,8 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       }
       if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
       if (hasAvoid) warnings.push('Marked "avoid" for this time');
-      if (!hasAnyAvailabilityData) warnings.push('No availability submitted');
+      if (isCoordinatorCandidate) warnings.push('Unit coordinator assignment; availability not required');
+      if (!isCoordinatorCandidate && !hasAnyAvailabilityData) warnings.push('No availability submitted');
       if ((tutor.priority_tag || 'Standard') === 'Risk') warnings.push('Flagged as risk');
 
       let availabilityScore = 0;
@@ -646,9 +665,10 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         else if (p === 'avoid') availabilityScore -= 2;
       });
 
+      const priorityTag = isCoordinatorCandidate ? 'Coordinator' : (tutor.priority_tag || 'Standard');
       const priorityBonus = {
-        Preferred: 2, Standard: 0, Backup: -1, Risk: -1
-      }[tutor.priority_tag || 'Standard'] || 0;
+        Preferred: 2, Standard: 0, Backup: -1, Risk: -1, Coordinator: 0
+      }[priorityTag] || 0;
 
       const score = availabilityScore + priorityBonus;
 
@@ -658,7 +678,8 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
         email: tutor.email,
         maximumHours: tutor.maximum_hours,
         isSuperTutor,
-        priorityTag: tutor.priority_tag || 'Standard',
+        roleLabel: isCoordinatorCandidate ? 'Unit Coordinator' : (isSuperTutor ? 'Super Tutor' : 'Tutor'),
+        priorityTag,
         starred: tutor.starred || false,
         flagged: tutor.flagged || false,
         hoursIfAssigned,
@@ -730,22 +751,24 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       return res.status(409).json({ error: `This session already has its required ${requiredTutors} tutor(s) assigned` });
     }
 
+    const isCoordinatorSelfAssignment = tutorId === req.user.id && Boolean(ownedUnitId);
     const tutorResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.maximum_hours,
-             bool_or(um.role = 'super_tutor') AS is_super_tutor
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name,
+             u.email, u.maximum_hours,
+             COALESCE(bool_or(um.role = 'super_tutor'), false) AS is_super_tutor
       FROM users u
       LEFT JOIN unit_memberships um
         ON um.user_id = u.id AND um.unit_id = $2 AND um.role = ANY($3)
-      WHERE u.id = $1 AND (u.role = 'tutor' OR um.id IS NOT NULL)
-      GROUP BY u.id, u.name, u.last_name, u.maximum_hours
+      WHERE u.id = $1 AND ($4::boolean OR u.role = 'tutor' OR um.id IS NOT NULL)
+      GROUP BY u.id, u.name, u.last_name, u.email, u.maximum_hours
       `,
-      [tutorId, unitId, TUTOR_LIKE_ROLES]
+      [tutorId, unitId, TUTOR_LIKE_ROLES, isCoordinatorSelfAssignment]
     );
-    if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Tutor not found' });
+    if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Staff member not found' });
     const tutor = tutorResult.rows[0];
 
-    if (requiresSuperTutor(session.session_type) && !tutor.is_super_tutor) {
+    if (!isCoordinatorSelfAssignment && requiresSuperTutor(session.session_type) && !tutor.is_super_tutor) {
       return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
     }
 
@@ -784,21 +807,23 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     await pool.query(
       `
       INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed, tutor_reject_reason)
-      VALUES ($1, $2, NULL, NULL)
+      VALUES ($1, $2, $3, NULL)
       ON CONFLICT (session_id, tutor_id)
-      DO UPDATE SET tutor_confirmed = NULL, tutor_reject_reason = NULL
+      DO UPDATE SET tutor_confirmed = $3, tutor_reject_reason = NULL
       `,
-      [sessionId, tutorId]
+      [sessionId, tutorId, isCoordinatorSelfAssignment ? true : null]
     );
 
-    await pool.query(
-      `
-      INSERT INTO unit_memberships (unit_id, user_id, role)
-      VALUES ($1, $2, 'tutor')
-      ON CONFLICT (unit_id, user_id, role) DO NOTHING
-      `,
-      [unitId, tutorId]
-    );
+    if (!isCoordinatorSelfAssignment) {
+      await pool.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        VALUES ($1, $2, 'tutor')
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [unitId, tutorId]
+      );
+    }
 
     const withName = await pool.query(
       `
@@ -829,11 +854,13 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     await createNotification({
       userId: tutorId,
       type: 'session_assigned',
-      title: 'New session assignment',
-      content: `You've been assigned to a ${session.day} session in ${unitCode}. Please confirm or decline it.`,
+      title: isCoordinatorSelfAssignment ? 'Session assigned to you' : 'New session assignment',
+      content: isCoordinatorSelfAssignment
+        ? `You assigned yourself to a ${session.day} session in ${unitCode}.`
+        : `You've been assigned to a ${session.day} session in ${unitCode}. Please confirm or decline it.`,
       unitId,
       sessionId,
-      actionUrl: `/tutor-schedule/${unitId}`
+      actionUrl: isCoordinatorSelfAssignment ? `/schedule-builder/${unitId}` : `/tutor-schedule/${unitId}`
     });
 
     res.json(formatSessionRow(withName.rows[0]));

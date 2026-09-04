@@ -24,9 +24,9 @@ const normaliseViewRole = (role) => (role === 'super_tutor' ? 'tutor' : role);
 
 const getDefaultRole = (unit, preferredRole, fallbackRole) => {
   const roles = (unit?.roles || []).map(normaliseViewRole);
-  if (fallbackRole === 'coordinator' && preferredRole === 'tutor') return 'tutor';
   if (preferredRole && roles.includes(preferredRole)) return preferredRole;
   if (fallbackRole && roles.includes(fallbackRole)) return fallbackRole;
+  if (fallbackRole === 'coordinator' && preferredRole === 'tutor') return 'tutor';
   return roles[0] || null;
 };
 

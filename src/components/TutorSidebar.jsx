@@ -12,12 +12,12 @@ const TutorSidebar = ({ activePage }) => {
     activeUnit,
     allUnits,
     setActiveUnitId,
-    isLoading,
-    setActiveViewRole
+    setActiveViewRole,
+    isLoading
   } = useActiveUnit();
-  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const readCurrentUser = () => {
     const savedUser = localStorage.getItem('currentUser');
@@ -75,22 +75,33 @@ useEffect(() => {
 
   const displayName = getDisplayName(currentUser);
   const avatarLetter = getAvatarLetter(currentUser);
+  const getUnitIdentity = (unit) => [
+    unit?.unitCode,
+    unit?.semester,
+    unit?.year
+  ].map(value => String(value || '').toLowerCase()).join('|');
+  const coordinatorUnitIdentities = new Set(
+    allUnits
+      .filter(unit => unit.roles?.includes('coordinator'))
+      .map(getUnitIdentity)
+  );
   // Tutors only ever see units from the current semester in the sidebar --
   // inactive (past/future semester) units are dropped entirely here rather
   // than shown greyed out, unlike the UC dashboard's "Show inactive" toggle.
-  const tutorUnits = allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive);
+  const tutorUnits = allUnits.filter(unit =>
+    unitHasTutorAccess(unit)
+    && unit.isActive
+    && !coordinatorUnitIdentities.has(getUnitIdentity(unit))
+  );
+  const otherCoordinatorUnits = Array.from(new Map(
+    allUnits
+      .filter(unit => unit.roles?.includes('coordinator') && !unitHasTutorAccess(unit) && unit.isActive)
+      .map(unit => [unit.id, unit])
+  ).values());
+  const selectableUnitCount = tutorUnits.length + otherCoordinatorUnits.length;
   const displayActiveUnit = unitHasTutorAccess(activeUnit) && activeUnit?.isActive
     ? activeUnit
     : tutorUnits[0] || null;
-  // Units where this person is a coordinator - shown in the same picker so
-  // switching unit can also switch view back to the UC side.
-  const otherCoordinatorUnits = Array.from(
-    new Map(
-      allUnits
-        .filter(unit => unit.roles?.includes('coordinator') && unit.isActive)
-        .map(unit => [unit.id, unit])
-    ).values()
-  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -104,6 +115,7 @@ useEffect(() => {
 
   const handleSelectUnit = (unitId) => {
     setActiveUnitId(unitId);
+    setActiveViewRole('tutor');
     setShowDropdown(false);
   };
 
@@ -113,6 +125,13 @@ useEffect(() => {
     setShowDropdown(false);
     navigate('/uc-dashboard');
   };
+
+  useEffect(() => {
+    if ((activeUnit && unitHasTutorAccess(activeUnit) && activeUnit.isActive) || tutorUnits.length === 0) {
+      return;
+    }
+    setActiveUnitId(tutorUnits[0].id);
+  }, [activeUnit, tutorUnits, setActiveUnitId]);
 
   const navItem = (label, path, key, showDot = false) => {
   const content = (
@@ -151,7 +170,7 @@ useEffect(() => {
         <button
           className="ucs-active-unit-btn"
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isLoading || (tutorUnits.length === 0 && otherCoordinatorUnits.length === 0)}
+          disabled={isLoading || selectableUnitCount === 0}
           type="button"
         >
           <div className="ucs-active-unit-text">
@@ -163,7 +182,7 @@ useEffect(() => {
               <p className="uc-unit-semester">{displayActiveUnit.semester}, {displayActiveUnit.year}</p>
             )}
           </div>
-          {(tutorUnits.length > 0 || otherCoordinatorUnits.length > 0) && <span className="ucs-dropdown-arrow">&#9662;</span>}
+          {selectableUnitCount > 0 && <span className="ucs-dropdown-arrow">&#9662;</span>}
         </button>
 
         {showDropdown && (
@@ -182,20 +201,23 @@ useEffect(() => {
 
             {otherCoordinatorUnits.length > 0 && (
               <>
-                <div className="ucs-dropdown-section-label">As Unit Coordinator</div>
+                {tutorUnits.length > 0 && (
+                  <div className="ucs-dropdown-section-label">Coordinator access</div>
+                )}
                 {otherCoordinatorUnits.map(unit => (
                   <button
-                    key={unit.id}
+                    key={`coordinator-${unit.id}`}
                     className="ucs-dropdown-item"
                     onClick={() => handleSwitchToCoordinatorUnit(unit.id)}
                     type="button"
                   >
                     <span className="ucs-dropdown-code">{unit.unitCode}</span>
-                    <span className="ucs-dropdown-meta">UC</span>
+                    <span className="ucs-dropdown-meta">{unit.semester}, {unit.year} · UC</span>
                   </button>
                 ))}
               </>
             )}
+
           </div>
         )}
       </div>

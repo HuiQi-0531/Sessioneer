@@ -44,6 +44,7 @@ const AdminUnits = () => {
   const [tutorUnit, setTutorUnit] = useState(null);
   const [unitTutors, setUnitTutors] = useState([]);
   const [tutorEmail, setTutorEmail] = useState('');
+  const [tutorRole, setTutorRole] = useState('tutor');
   const [tutorError, setTutorError] = useState('');
   const [isTutorLoading, setIsTutorLoading] = useState(false);
 
@@ -158,6 +159,7 @@ const AdminUnits = () => {
     setTutorUnit(unit);
     setUnitTutors([]);
     setTutorEmail('');
+    setTutorRole('tutor');
     setTutorError('');
     setIsTutorLoading(true);
 
@@ -176,6 +178,7 @@ const AdminUnits = () => {
     setTutorUnit(null);
     setUnitTutors([]);
     setTutorEmail('');
+    setTutorRole('tutor');
     setTutorError('');
   };
 
@@ -199,11 +202,12 @@ const AdminUnits = () => {
     setIsTutorLoading(true);
 
     try {
-      const addedTutor = await adminAPI.addUnitTutor(tutorUnit.id, email);
+      const addedTutor = await adminAPI.addUnitTutor(tutorUnit.id, email, tutorRole);
       setUnitTutors(prevTutors => {
-        const exists = prevTutors.some(tutor => tutor.id === addedTutor.id);
-        if (exists) return prevTutors;
-        const nextTutors = [...prevTutors, addedTutor].sort((a, b) => (
+        const nextTutors = [
+          ...prevTutors.filter(tutor => tutor.id !== addedTutor.id),
+          addedTutor
+        ].sort((a, b) => (
           `${a.firstName || ''} ${a.lastName || ''} ${a.email || ''}`.localeCompare(`${b.firstName || ''} ${b.lastName || ''} ${b.email || ''}`)
         ));
         refreshTutorCount(tutorUnit.id, nextTutors.length);
@@ -212,6 +216,24 @@ const AdminUnits = () => {
       setTutorEmail('');
     } catch (err) {
       setTutorError(err.message || 'Failed to add tutor');
+    } finally {
+      setIsTutorLoading(false);
+    }
+  };
+
+  const changeTutorRole = async (tutor, nextRole) => {
+    if (!tutorUnit || (tutor.membershipRole || 'tutor') === nextRole) return;
+
+    setTutorError('');
+    setIsTutorLoading(true);
+
+    try {
+      const updatedTutor = await adminAPI.updateUnitTutorRole(tutorUnit.id, tutor.id, nextRole);
+      setUnitTutors(prevTutors => prevTutors.map(item => (
+        item.id === updatedTutor.id ? updatedTutor : item
+      )));
+    } catch (err) {
+      setTutorError(err.message || 'Failed to update tutor access');
     } finally {
       setIsTutorLoading(false);
     }
@@ -396,6 +418,17 @@ const AdminUnits = () => {
                   disabled={isTutorLoading}
                 />
               </label>
+              <label className="admin-tutor-role-field">
+                Access
+                <select
+                  value={tutorRole}
+                  onChange={(event) => setTutorRole(event.target.value)}
+                  disabled={isTutorLoading}
+                >
+                  <option value="tutor">Tutor</option>
+                  <option value="super_tutor">Super Tutor</option>
+                </select>
+              </label>
               <button type="submit" className="admin-primary-btn" disabled={isTutorLoading}>
                 Add Tutor
               </button>
@@ -413,41 +446,56 @@ const AdminUnits = () => {
               ) : unitTutors.length === 0 ? (
                 <div className="admin-empty-cell compact">No tutors added to this unit yet.</div>
               ) : (
-                unitTutors.map(tutor => (
-                  <div className="admin-list-row admin-tutor-row" key={tutor.id}>
-                    <div className="admin-user-cell">
-                      <span className="admin-avatar small">
-                        {tutor.avatarUrl ? (
-                          <img src={tutor.avatarUrl} alt="" />
-                        ) : (
-                          (tutor.firstName || tutor.email || '?').charAt(0).toUpperCase()
-                        )}
-                      </span>
-                      <div className="admin-strong-cell">
-                        <div className="admin-tutor-name-line">
-                          <strong>{[tutor.firstName, tutor.lastName].filter(Boolean).join(' ') || tutor.email}</strong>
-                          <span className={`admin-pill role-${tutor.role}`}>
-                            {tutor.role === 'coordinator' ? 'Coordinator' : 'Tutor'}
-                          </span>
+                unitTutors.map(tutor => {
+                  const membershipRole = tutor.membershipRole || 'tutor';
+                  const membershipLabel = membershipRole === 'super_tutor' ? 'Super Tutor' : 'Tutor';
+
+                  return (
+                    <div className="admin-list-row admin-tutor-row" key={tutor.id}>
+                      <div className="admin-user-cell">
+                        <span className="admin-avatar small">
+                          {tutor.avatarUrl ? (
+                            <img src={tutor.avatarUrl} alt="" />
+                          ) : (
+                            (tutor.firstName || tutor.email || '?').charAt(0).toUpperCase()
+                          )}
+                        </span>
+                        <div className="admin-strong-cell">
+                          <div className="admin-tutor-name-line">
+                            <strong>{[tutor.firstName, tutor.lastName].filter(Boolean).join(' ') || tutor.email}</strong>
+                            <span className={`admin-pill role-${membershipRole}`}>
+                              {membershipLabel}
+                            </span>
+                          </div>
+                          <span>{tutor.email}</span>
                         </div>
-                        <span>{tutor.email}</span>
                       </div>
-                    </div>
-                    <div className="admin-row-actions">
                       <span className="admin-session-count">
                         {tutor.assignedSessionCount} assigned session{tutor.assignedSessionCount === 1 ? '' : 's'}
                       </span>
-                      <button
-                        type="button"
-                        className="admin-outline-danger-btn"
-                        onClick={() => removeTutorFromUnit(tutor)}
-                        disabled={isTutorLoading}
-                      >
-                        Remove
-                      </button>
+                      <div className="admin-row-actions">
+                        <select
+                          className="admin-compact-select"
+                          value={membershipRole}
+                          onChange={(event) => changeTutorRole(tutor, event.target.value)}
+                          disabled={isTutorLoading}
+                          aria-label={`Change ${tutor.email} tutor access`}
+                        >
+                          <option value="tutor">Tutor</option>
+                          <option value="super_tutor">Super Tutor</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="admin-outline-danger-btn"
+                          onClick={() => removeTutorFromUnit(tutor)}
+                          disabled={isTutorLoading}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

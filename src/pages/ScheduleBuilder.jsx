@@ -465,7 +465,7 @@ const ScheduleBuilder = () => {
                                onClick={(e) => { e.stopPropagation(); openAssignModal(session); }}
                                disabled={isLocked}
                              >
-                               Assign Tutor
+                               Assign Staff
                              </button>
                            </td>
                          </tr>
@@ -613,7 +613,7 @@ const ScheduleBuilder = () => {
           <div className="sb-modal-content" onClick={e => e.stopPropagation()}>
             <button className="sb-modal-close" onClick={closeModal}>&times;</button>
             <div className="sb-modal-header">
-              <h2>Assign a Tutor</h2>
+              <h2>Assign teaching staff</h2>
             </div>
             <p className="sb-modal-session-info">
               {modalSession.sessionCode ? `${modalSession.sessionCode} · ` : ''}
@@ -628,10 +628,11 @@ const ScheduleBuilder = () => {
             {modalError && <p className="sb-warning-text" style={{ marginBottom: 16 }}>{modalError}</p>}
 
             {isLoadingCandidates ? (
-              <div className="sb-loading">Loading tutors...</div>
+              <div className="sb-loading">Loading staff...</div>
             ) : (
               candidates.map((candidate, index) => {
                 const isTopPick = index === 0 && !candidate.hardBlocked && !candidate.isAssignedToThisSession;
+                const priorityClass = String(candidate.priorityTag || 'standard').toLowerCase().replace(/\s+/g, '-');
                 return (
                   <div
                     key={candidate.id}
@@ -646,7 +647,7 @@ const ScheduleBuilder = () => {
                         {candidate.flagged && (
                           <span className="sb-candidate-flag" title="Flagged tutor">⚑</span>
                         )}
-                        <span className={`sb-priority-badge ${candidate.priorityTag.toLowerCase()}`}>
+                        <span className={`sb-priority-badge ${priorityClass}`}>
                           {candidate.priorityTag}
                         </span>
                         {isTopPick && <span className="sb-priority-badge preferred">Top Pick</span>}

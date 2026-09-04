@@ -11,6 +11,13 @@ const router = express.Router();
 
 const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor']);
 const VALID_ACCOUNT_STATUSES = new Set(['active', 'pending', 'disabled']);
+const VALID_MEMBERSHIP_ROLES = new Set(['coordinator', 'tutor', 'super_tutor']);
+const TUTOR_MEMBERSHIP_ROLES = ['tutor', 'super_tutor'];
+const MEMBERSHIP_ROLE_LABELS = {
+  coordinator: 'unit coordinator',
+  tutor: 'tutor',
+  super_tutor: 'super tutor'
+};
 
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -85,6 +92,18 @@ const normaliseRole = (role) => {
   return '';
 };
 
+const normaliseMembershipRole = (role) => {
+  const value = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+  if (value === 'unit_coordinator' || value === 'uc') return 'coordinator';
+  if (value === 'supertutor') return 'super_tutor';
+  if (VALID_MEMBERSHIP_ROLES.has(value)) return value;
+
+  return '';
+};
+
+const isTutorMembershipRole = (role) => TUTOR_MEMBERSHIP_ROLES.includes(role);
+
 const normaliseAccountStatus = (status) => {
   const value = String(status || 'active').trim().toLowerCase();
   return VALID_ACCOUNT_STATUSES.has(value) ? value : '';
@@ -129,6 +148,8 @@ const formatAdminUnitTutor = (tutor) => ({
   ...formatUserNameFields(tutor),
   email: tutor.email,
   role: tutor.role,
+  membershipRole: tutor.membership_role || 'tutor',
+  isSuperTutor: tutor.membership_role === 'super_tutor',
   avatarUrl: tutor.avatar_url || null,
   assignedSessionCount: Number(tutor.assigned_session_count || 0)
 });
@@ -389,7 +410,7 @@ router.get('/users', async (req, res) => {
         (
           SELECT COUNT(DISTINCT unit_id)
           FROM unit_memberships
-          WHERE user_id = u.id AND role = 'tutor'
+          WHERE user_id = u.id AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
           SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
@@ -523,7 +544,7 @@ router.put('/users/:id', async (req, res) => {
         (
           SELECT COUNT(DISTINCT unit_id)
           FROM unit_memberships
-          WHERE user_id = $1 AND role = 'tutor'
+          WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
           SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
@@ -589,6 +610,16 @@ router.get('/users/:id/units', async (req, res) => {
 
     const result = await pool.query(
       `
+      WITH coordinator_unit_ids AS (
+        SELECT id AS unit_id
+        FROM units
+        WHERE unit_coordinator_id = $1
+        UNION
+        SELECT unit_id
+        FROM unit_memberships
+        WHERE user_id = $1
+          AND role = 'coordinator'
+      )
       SELECT
         un.id AS unit_id,
         un.unit_code,
@@ -611,6 +642,10 @@ router.get('/users/:id/units', async (req, res) => {
         SELECT unit_id, role AS access_role, FALSE AS is_primary_coordinator
         FROM unit_memberships
         WHERE user_id = $1
+          AND NOT (
+            role IN ('tutor', 'super_tutor')
+            AND unit_id IN (SELECT unit_id FROM coordinator_unit_ids)
+          )
       ) access
       JOIN units un ON un.id = access.unit_id
       ORDER BY un.year DESC, un.semester DESC, un.unit_code, access.access_role
@@ -628,9 +663,9 @@ router.get('/users/:id/units', async (req, res) => {
 router.post('/users/:id/units', async (req, res) => {
   try {
     const unitId = req.body.unitId;
-    const role = normaliseRole(req.body.role);
+    const role = normaliseMembershipRole(req.body.role);
 
-    if (!unitId || !['coordinator', 'tutor'].includes(role)) {
+    if (!unitId || !VALID_MEMBERSHIP_ROLES.has(role)) {
       return res.status(400).json({ error: 'Unit and access role are required' });
     }
 
@@ -656,6 +691,52 @@ router.post('/users/:id/units', async (req, res) => {
       return res.status(404).json({ error: 'Unit not found' });
     }
 
+    if (isTutorMembershipRole(role)) {
+      const coordinatorAccess = await pool.query(
+        `
+        SELECT 1
+        FROM units
+        WHERE id = $1
+          AND unit_coordinator_id = $2
+        UNION
+        SELECT 1
+        FROM unit_memberships
+        WHERE unit_id = $1
+          AND user_id = $2
+          AND role = 'coordinator'
+        LIMIT 1
+        `,
+        [unitId, req.params.id]
+      );
+
+      if (coordinatorAccess.rows.length > 0) {
+        return res.status(409).json({ error: 'This user already has coordinator access for this unit.' });
+      }
+
+      await pool.query(
+        `
+        DELETE FROM unit_memberships
+        WHERE unit_id = $1
+          AND user_id = $2
+          AND role IN ('tutor', 'super_tutor')
+          AND role <> $3
+        `,
+        [unitId, req.params.id, role]
+      );
+    }
+
+    if (role === 'coordinator') {
+      await pool.query(
+        `
+        DELETE FROM unit_memberships
+        WHERE unit_id = $1
+          AND user_id = $2
+          AND role IN ('tutor', 'super_tutor')
+        `,
+        [unitId, req.params.id]
+      );
+    }
+
     await pool.query(
       `
       INSERT INTO unit_memberships (unit_id, user_id, role)
@@ -668,7 +749,7 @@ router.post('/users/:id/units', async (req, res) => {
     const unit = unitResult.rows[0];
     const user = userResult.rows[0];
     const userName = [user.name, user.last_name].filter(Boolean).join(' ') || user.email;
-    const roleLabel = role === 'coordinator' ? 'unit coordinator' : 'tutor';
+    const roleLabel = MEMBERSHIP_ROLE_LABELS[role] || role;
 
     await createNotification({
       userId: req.params.id,
@@ -716,9 +797,9 @@ router.post('/users/:id/units', async (req, res) => {
 
 router.delete('/users/:id/units/:unitId/:role', async (req, res) => {
   try {
-    const role = normaliseRole(req.params.role);
+    const role = normaliseMembershipRole(req.params.role);
 
-    if (!['coordinator', 'tutor'].includes(role)) {
+    if (!VALID_MEMBERSHIP_ROLES.has(role)) {
       return res.status(400).json({ error: 'Invalid access role' });
     }
 
@@ -733,7 +814,7 @@ router.delete('/users/:id/units/:unitId/:role', async (req, res) => {
       }
     }
 
-    if (role === 'tutor') {
+    if (isTutorMembershipRole(role)) {
       const assignedSessions = await pool.query(
         'SELECT COUNT(*)::int AS count FROM sessions WHERE unit_id = $1 AND assigned_tutor_id = $2',
         [req.params.unitId, req.params.id]
@@ -810,7 +891,7 @@ router.get('/units', async (req, res) => {
         (
           SELECT COUNT(DISTINCT user_id)
           FROM unit_memberships
-          WHERE unit_id = un.id AND role = 'tutor'
+          WHERE unit_id = un.id AND role IN ('tutor', 'super_tutor')
         ) AS tutor_count,
         (
           SELECT COUNT(*)
@@ -990,7 +1071,7 @@ router.put('/units/:id', async (req, res) => {
              )
         ) AS coordinators,
         (SELECT COUNT(DISTINCT user_id) FROM unit_memberships WHERE unit_id = un.id AND role = 'coordinator') AS coordinator_count,
-        (SELECT COUNT(DISTINCT user_id) FROM unit_memberships WHERE unit_id = un.id AND role = 'tutor') AS tutor_count,
+        (SELECT COUNT(DISTINCT user_id) FROM unit_memberships WHERE unit_id = un.id AND role IN ('tutor', 'super_tutor')) AS tutor_count,
         (SELECT COUNT(*) FROM sessions WHERE unit_id = un.id) AS session_count
       FROM units un
       LEFT JOIN users main_uc ON main_uc.id = un.unit_coordinator_id
@@ -1023,6 +1104,7 @@ router.get('/units/:id/tutors', async (req, res) => {
         u.last_name,
         u.email,
         u.role,
+        um.role AS membership_role,
         u.avatar_url,
         (
           SELECT COUNT(*)
@@ -1033,8 +1115,9 @@ router.get('/units/:id/tutors', async (req, res) => {
       FROM unit_memberships um
       JOIN users u ON u.id = um.user_id
       WHERE um.unit_id = $1
-        AND um.role = 'tutor'
-      ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
+        AND um.role IN ('tutor', 'super_tutor')
+      ORDER BY CASE WHEN um.role = 'super_tutor' THEN 0 ELSE 1 END,
+               LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
       `,
       [id]
     );
@@ -1050,9 +1133,10 @@ router.post('/units/:id/tutors', async (req, res) => {
   try {
     const { id } = req.params;
     const tutorEmail = String(req.body.email || '').trim().toLowerCase();
+    const membershipRole = normaliseMembershipRole(req.body.role || 'tutor');
 
-    if (!tutorEmail) {
-      return res.status(400).json({ error: 'Tutor email is required' });
+    if (!tutorEmail || !isTutorMembershipRole(membershipRole)) {
+      return res.status(400).json({ error: 'Tutor email and access role are required' });
     }
 
     const unit = await pool.query('SELECT id, unit_code FROM units WHERE id = $1', [id]);
@@ -1070,18 +1154,31 @@ router.post('/units/:id/tutors', async (req, res) => {
 
     await pool.query(
       `
+      DELETE FROM unit_memberships
+      WHERE unit_id = $1
+        AND user_id = $2
+        AND role IN ('tutor', 'super_tutor')
+        AND role <> $3
+      `,
+      [id, tutor.id, membershipRole]
+    );
+
+    await pool.query(
+      `
       INSERT INTO unit_memberships (unit_id, user_id, role)
-      VALUES ($1, $2, 'tutor')
+      VALUES ($1, $2, $3)
       ON CONFLICT (unit_id, user_id, role) DO NOTHING
       `,
-      [id, tutor.id]
+      [id, tutor.id, membershipRole]
     );
+
+    const roleLabel = MEMBERSHIP_ROLE_LABELS[membershipRole] || 'tutor';
 
     await createNotification({
       userId: tutor.id,
       type: 'tutor_unit_added',
       title: 'Added to a unit',
-      content: `You have been added as a tutor for ${unit.rows[0].unit_code}.`,
+      content: `You have been added as a ${roleLabel} for ${unit.rows[0].unit_code}.`,
       relatedUnitId: id
     });
 
@@ -1093,6 +1190,7 @@ router.post('/units/:id/tutors', async (req, res) => {
         u.last_name,
         u.email,
         u.role,
+        $3::text AS membership_role,
         u.avatar_url,
         (
           SELECT COUNT(*)
@@ -1103,13 +1201,89 @@ router.post('/units/:id/tutors', async (req, res) => {
       FROM users u
       WHERE u.id = $2
       `,
-      [id, tutor.id]
+      [id, tutor.id, membershipRole]
     );
 
     res.status(201).json(formatAdminUnitTutor(refreshed.rows[0]));
   } catch (error) {
     console.error('Admin unit tutor add error:', error);
     res.status(500).json({ error: 'Failed to add tutor to unit' });
+  }
+});
+
+router.patch('/units/:id/tutors/:userId/role', async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    const membershipRole = normaliseMembershipRole(req.body.role);
+
+    if (!isTutorMembershipRole(membershipRole)) {
+      return res.status(400).json({ error: 'A valid tutor access role is required' });
+    }
+
+    const unit = await pool.query('SELECT id FROM units WHERE id = $1', [id]);
+    if (unit.rows.length === 0) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    const userResult = await pool.query(
+      'SELECT id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (userResult.rows[0].role === 'admin') {
+      return res.status(400).json({ error: 'Admin accounts cannot be added as tutors' });
+    }
+
+    await pool.query(
+      `
+      DELETE FROM unit_memberships
+      WHERE unit_id = $1
+        AND user_id = $2
+        AND role IN ('tutor', 'super_tutor')
+        AND role <> $3
+      `,
+      [id, userId, membershipRole]
+    );
+
+    await pool.query(
+      `
+      INSERT INTO unit_memberships (unit_id, user_id, role)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (unit_id, user_id, role) DO NOTHING
+      `,
+      [id, userId, membershipRole]
+    );
+
+    const refreshed = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.name,
+        u.last_name,
+        u.email,
+        u.role,
+        $3::text AS membership_role,
+        u.avatar_url,
+        (
+          SELECT COUNT(*)
+          FROM sessions s
+          WHERE s.unit_id = $1
+            AND s.assigned_tutor_id = u.id
+        ) AS assigned_session_count
+      FROM users u
+      WHERE u.id = $2
+      `,
+      [id, userId, membershipRole]
+    );
+
+    res.json(formatAdminUnitTutor(refreshed.rows[0]));
+  } catch (error) {
+    console.error('Admin unit tutor role update error:', error);
+    res.status(500).json({ error: 'Failed to update tutor access role' });
   }
 });
 
@@ -1138,7 +1312,7 @@ router.delete('/units/:id/tutors/:userId', async (req, res) => {
       DELETE FROM unit_memberships
       WHERE unit_id = $1
         AND user_id = $2
-        AND role = 'tutor'
+        AND role IN ('tutor', 'super_tutor')
       RETURNING unit_id
       `,
       [id, userId]

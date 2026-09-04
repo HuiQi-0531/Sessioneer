@@ -16,8 +16,11 @@ const ACCOUNT_STATUS_OPTIONS = [
 
 const MEMBERSHIP_ROLE_OPTIONS = [
   { value: 'tutor', label: 'Tutor' },
+  { value: 'super_tutor', label: 'Super Tutor' },
   { value: 'coordinator', label: 'Unit Coordinator' }
 ];
+
+const TUTOR_ACCESS_ROLES = new Set(['tutor', 'super_tutor']);
 
 const emptyForm = {
   firstName: '',
@@ -263,7 +266,13 @@ const AdminUsers = () => {
       const result = await adminAPI.addUserUnit(unitModalUser.id, unitForm.unitId, unitForm.role);
       if (result.access) {
         setUserUnits(prev => {
-          const withoutDuplicate = prev.filter(item => !(item.unitId === result.access.unitId && item.role === result.access.role));
+          const withoutDuplicate = prev.filter(item => {
+            if (item.unitId !== result.access.unitId) return true;
+            if (item.role === result.access.role) return false;
+            if (result.access.role === 'coordinator' && TUTOR_ACCESS_ROLES.has(item.role)) return false;
+            return true;
+          });
+
           return [...withoutDuplicate, result.access].sort((a, b) => a.unitCode.localeCompare(b.unitCode));
         });
       }
@@ -553,7 +562,11 @@ const AdminUsers = () => {
 
               {!isUnitLoading && groupedUnitAccess.map(accessGroup => {
                 const coordinatorAccess = accessGroup.roles.find(access => access.role === 'coordinator');
-                const tutorAccess = accessGroup.roles.find(access => access.role === 'tutor');
+                const tutorAccess = coordinatorAccess
+                  ? null
+                  : accessGroup.roles.find(access => access.role === 'super_tutor') ||
+                    accessGroup.roles.find(access => access.role === 'tutor');
+                const tutorAccessLabel = tutorAccess?.role === 'super_tutor' ? 'Super Tutor' : 'Tutor';
 
                 return (
                   <div className="admin-user-unit-row" key={accessGroup.unitId}>
@@ -565,7 +578,11 @@ const AdminUsers = () => {
 
                     <div className="admin-access-badge-group">
                       {coordinatorAccess && <span className="admin-pill role-coordinator">Unit Coordinator</span>}
-                      {tutorAccess && <span className="admin-pill role-tutor">Tutor</span>}
+                      {tutorAccess && (
+                        <span className={`admin-pill role-${tutorAccess.role}`}>
+                          {tutorAccessLabel}
+                        </span>
+                      )}
                     </div>
 
                     <div className="admin-access-badge-group">
@@ -599,7 +616,7 @@ const AdminUsers = () => {
                           onClick={() => removeUnitAccess(tutorAccess)}
                           disabled={isUnitSaving}
                         >
-                          Remove Tutor
+                          Remove {tutorAccessLabel}
                         </button>
                       )}
                     </div>

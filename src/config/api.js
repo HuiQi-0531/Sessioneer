@@ -1564,14 +1564,25 @@ export const adminAPI = {
     return result;
   },
 
-  addUnitTutor: async (unitId, email) => {
+  addUnitTutor: async (unitId, email, role = 'tutor') => {
     const response = await fetch(`${API_URL}/admin/units/${unitId}/tutors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, role })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to add tutor');
+    return result;
+  },
+
+  updateUnitTutorRole: async (unitId, userId, role) => {
+    const response = await fetch(`${API_URL}/admin/units/${unitId}/tutors/${userId}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ role })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to update tutor access role');
     return result;
   },
 
