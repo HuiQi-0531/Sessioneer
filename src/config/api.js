@@ -1753,3 +1753,14 @@ export const notificationsAPI = {
     return data;
   }
 };
+export const botAPI = {
+  chat: async (message, history = []) => {
+    const response = await fetch(`${API_URL}/bot/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ message, history })
+    });
+    if (!response.ok) throw new Error('Failed to reach bot');
+    return response.json();
+  }
+};

@@ -23,6 +23,7 @@ const tutorApplicationsRoutes = require('./routes/tutorApplications.routes');
 const coverRoutes = require('./routes/cover.routes');
 const jobsRoutes = require('./routes/jobs.routes');
 const adminRoutes = require('./routes/admin.routes');
+const botRoutes = require('./routes/bot.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -717,6 +718,7 @@ app.use('/', coverRoutes);          // /cover-requests, /uc/cover-requests
 app.use('/availability', availabilityRoutes);
 app.use('/jobs', jobsRoutes);
 app.use('/admin', adminRoutes);
+app.use('/bot', botRoutes);
 
 // Handle 404
 app.use((req, res) => {
