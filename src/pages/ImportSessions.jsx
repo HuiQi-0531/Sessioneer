@@ -39,8 +39,7 @@ const ImportSessions = () => {
   const [importResult, setImportResult] = useState(null);
 
   const [existingSessions, setExistingSessions] = useState([]);
-  const [showExisting, setShowExisting] = useState(false);
-
+  const [showExisting, setShowExisting] = useState(true);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const infoIconRef = useRef(null);
@@ -230,44 +229,30 @@ const ImportSessions = () => {
 
       <main className="uc-main-content">
         <header className="uc-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1>Upload Session{activeUnit ? ` - ${activeUnit.unitCode}` : ''}</h1>
-            <div style={{ position: 'relative' }}>
-              <button
-                ref={infoIconRef}
-                type="button"
-                onClick={toggleInfoTooltip}
-                style={{
-                  width: 22, height: 22, borderRadius: '50%',
-                  border: '1px solid #999', background: '#fff', color: '#555',
-                  fontSize: 13, fontStyle: 'italic', fontWeight: 'bold',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-                aria-label="How to import a session CSV"
-              >
-                i
-              </button>
-              {showInfoTooltip && (
-                <div
-                  ref={tooltipRef}
-                  style={{
-                    position: 'fixed', top: tooltipPos.top, left: tooltipPos.left,
-                    background: '#fff', border: '1px solid #ddd', borderRadius: 6,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: '10px 14px',
-                    fontSize: 13, color: '#333', width: 260, zIndex: 9999, textAlign: 'left'
-                  }}
-                >
-                  <p style={{ margin: '2px 0' }}>1. Upload a CSV timetable export.</p>
-                  <p style={{ margin: '2px 0' }}>2. The system auto-detects tables and splits mixed session types.</p>
-                  <p style={{ margin: '2px 0' }}>3. Check the column mapping for each table before importing.</p>
-                  <p style={{ margin: '2px 0' }}>4. Existing sessions in this unit are shown above — expand to check for clashes before choosing Replace or Add.</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <h1>Upload Session{activeUnit ? ` - ${activeUnit.unitCode}` : ''}</h1>
         </header>
 
         <div className="is-content">
+          <div className="is-info-row">
+            <button
+              ref={infoIconRef}
+              type="button"
+              onClick={toggleInfoTooltip}
+              className="is-info-btn"
+              aria-label="How to import a session CSV"
+            >
+              <span className="is-info-icon">i</span>
+              How this works
+            </button>
+            {showInfoTooltip && (
+              <div ref={tooltipRef} className="is-info-tooltip">
+                <p>1. Upload a CSV timetable export.</p>
+                <p>2. The system auto-detects tables and splits mixed session types.</p>
+                <p>3. Check the column mapping for each table before importing.</p>
+                <p>4. Existing sessions in this unit are shown above — expand to check for clashes before choosing Replace or Add.</p>
+              </div>
+            )}
+          </div>
           {step === 'upload' && (
             <div
               className="is-upload-card"
@@ -301,43 +286,51 @@ const ImportSessions = () => {
           {step === 'mapping' && (
             <>
               {existingSessions.length > 0 && (
-                <div className="is-block-card">
-                  <button
+                  <div className="is-existing-card">
+                    <button
                     type="button"
                     onClick={() => setShowExisting(prev => !prev)}
-                    style={{
-                      width: '100%', display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', border: 'none', background: 'none',
-                      cursor: 'pointer', padding: 0, fontSize: 14, fontWeight: 600
-                    }}
+                    className="is-existing-toggle"
                   >
-                    <span>Existing sessions in this unit ({existingSessions.length})</span>
-                    <span>{showExisting ? '▲' : '▼'}</span>
+                    <span className="is-existing-title">
+                      Existing sessions in this unit
+                      <span className="is-existing-count">{existingSessions.length}</span>
+                    </span>
+                    <span className="is-existing-chevron">{showExisting ? '▲' : '▼'}</span>
                   </button>
                   {showExisting && (
-                    <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto' }}>
-                      <table className="is-preview-table">
-                        <thead>
-                          <tr>
-                            <th>Code</th>
-                            <th>Day</th>
-                            <th>Time</th>
-                            <th>Location</th>
-                            <th>Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {existingSessions.map(s => (
-                            <tr key={s.id}>
-                              <td>{s.sessionCode || '-'}</td>
-                              <td>{s.day}</td>
-                              <td>{s.startTime?.slice(0, 5)} - {s.endTime?.slice(0, 5)}</td>
-                              <td>{s.location || '-'}</td>
-                              <td>{s.sessionType || '-'}</td>
+                    <div className="is-existing-body">
+                      <div className="is-preview-table-scroll">
+                        <table className="is-preview-table">
+                          <colgroup>
+                            <col style={{ width: '20%' }} />
+                            <col style={{ width: '15%' }} />
+                            <col style={{ width: '25%' }} />
+                            <col style={{ width: '25%' }} />
+                            <col style={{ width: '15%' }} />
+                          </colgroup>
+                          <thead>
+                            <tr>
+                              <th>Code</th>
+                              <th>Day</th>
+                              <th>Time</th>
+                              <th>Location</th>
+                              <th>Type</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {existingSessions.map(s => (
+                              <tr key={s.id}>
+                                <td>{s.sessionCode || '-'}</td>
+                                <td>{s.day}</td>
+                                <td>{s.startTime?.slice(0, 5)} - {s.endTime?.slice(0, 5)}</td>
+                                <td>{s.location || '-'}</td>
+                                <td>{s.sessionType || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -379,29 +372,35 @@ const ImportSessions = () => {
                       </div>
                     ))}
                   </div>
-
-                  <table className="is-preview-table">
-                    <thead>
-                      <tr>
+                  <div className="is-preview-table-scroll">
+                    <table className="is-preview-table">
+                      <colgroup>
                         {SYSTEM_FIELDS.map(field => (
-                          <th key={field.key}>{field.label}</th>
+                          <col key={field.key} style={{ width: `${100 / SYSTEM_FIELDS.length}%` }} />
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {block.rows.map((row, rowIndex) => (
-                        <tr key={rowIndex}>
+                      </colgroup>
+                      <thead>
+                        <tr>
                           {SYSTEM_FIELDS.map(field => (
-                            <td key={field.key}>
-                              {field.key === 'sessionType'
-                                ? (resolveRowValue(block, mappings[blockIndex], row, 'sessionType') || sessionTypeOverrides[blockIndex] || '-')
-                                : (resolveRowValue(block, mappings[blockIndex], row, field.key) || '-')}
-                            </td>
+                            <th key={field.key}>{field.label}</th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {block.rows.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            {SYSTEM_FIELDS.map(field => (
+                              <td key={field.key}>
+                                {field.key === 'sessionType'
+                                  ? (resolveRowValue(block, mappings[blockIndex], row, 'sessionType') || sessionTypeOverrides[blockIndex] || '-')
+                                  : (resolveRowValue(block, mappings[blockIndex], row, field.key) || '-')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
 

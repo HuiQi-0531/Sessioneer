@@ -4,6 +4,7 @@ import { sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import DateRangeCalendar from '../components/DateRangeCalendar';
 import '../styles/UCRequests.css';
 import '../styles/Sessions.css';
 
@@ -22,6 +23,17 @@ const emptyForm = {
   requiredTutors: 1,
   sessionCode: '',
   status: 'Confirmed'
+};
+
+const DAY_NAME_MAP = {
+  mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday'
+};
+
+const normaliseDayForForm = (rawDay) => {
+  if (!rawDay) return '';
+  const trimmed = rawDay.trim();
+  const key = trimmed.slice(0, 3).toLowerCase();
+  return DAY_NAME_MAP[key] || trimmed;
 };
 
 const Sessions = () => {
@@ -123,7 +135,7 @@ const Sessions = () => {
   const openEditForm = (session) => {
     setEditingSessionId(session.id);
     setFormData({
-      day: session.day || '',
+      day: normaliseDayForForm(session.day),
       startTime: session.startTime ? session.startTime.slice(0, 5) : '',
       endTime: session.endTime ? session.endTime.slice(0, 5) : '',
       location: session.location || '',
@@ -434,12 +446,7 @@ const displayedSessions = React.useMemo(() => {
                   ref={uploadInfoIconRef}
                   type="button"
                   onClick={toggleUploadInfo}
-                  style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    border: '1px solid #999', background: '#fff', color: '#555',
-                    fontSize: 12, fontStyle: 'italic', fontWeight: 'bold',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
+                  className="ss-info-btn"
                   aria-label="Difference between Upload Session and Add Session"
                 >
                   i
@@ -472,104 +479,6 @@ const displayedSessions = React.useMemo(() => {
             <p className="ss-cover-success">{coverSuccess}</p>
           )}
 
-          {showForm && (
-            <div className="ss-form-card">
-              <h3>{editingSessionId ? 'Edit Session' : 'Add Session'}</h3>
-
-              {error && <p className="ss-error">{error}</p>}
-
-              <form onSubmit={handleSubmit}>
-                <div className="ss-form-grid">
-                  <div className="ss-field">
-                    <label>Day<span className="ss-required">*</span></label>
-                    <select name="day" value={formData.day} onChange={handleChange} required>
-                      <option value="">-- Select day --</option>
-                      <option value="Monday">Monday</option>
-                      <option value="Tuesday">Tuesday</option>
-                      <option value="Wednesday">Wednesday</option>
-                      <option value="Thursday">Thursday</option>
-                      <option value="Friday">Friday</option>
-                    </select>
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Start Time<span className="ss-required">*</span></label>
-                    <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} required />
-                  </div>
-
-                  <div className="ss-field">
-                    <label>End Time<span className="ss-required">*</span></label>
-                    <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} required />
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Location<span className="ss-required">*</span></label>
-                    <input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. GP-P-419" required />
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Campus<span className="ss-required">*</span></label>
-                    <select name="campus" value={formData.campus} onChange={handleChange} required>
-                      <option value="">-- Select --</option>
-                      <option value="GP">Gardens Point (GP)</option>
-                      <option value="KG">Kelvin Grove (KG)</option>
-                      <option value="ONL">Online (ONL)</option>
-                    </select>
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Type<span className="ss-required">*</span></label>
-                    <select name="sessionType" value={formData.sessionType} onChange={handleChange} required>
-                      <option value="">-- Select --</option>
-                      <option value="Lecture">Lecture</option>
-                      <option value="Tutorial">Tutorial</option>
-                      <option value="Workshop">Workshop</option>
-                      <option value="Practical">Practical</option>
-                      <option value="Consultation">Consultation</option>
-                    </select>
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Capacity<span className="ss-required">*</span></label>
-                    <input type="number" name="capacity" value={formData.capacity} onChange={handleChange} min="1" placeholder="e.g. 25" required />
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Tutor<span className="ss-required">*</span></label>
-                    <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" required />
-                    {!requiredTutorsTouched && formData.capacity && suggestedTutorCount(parseInt(formData.capacity, 10)) > 1 && (
-                      <p className="ss-field-hint">Auto-suggested from capacity - edit if needed</p>
-                    )}
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Session Code <span className="ss-field-hint" style={{ fontWeight: 400 }}>(optional — auto-generated if left blank)</span></label>
-                    <input type="text" name="sessionCode" value={formData.sessionCode} onChange={handleChange} placeholder="e.g. TUT01" />
-                  </div>
-
-                  <div className="ss-field">
-                    <label>Status<span className="ss-required">*</span></label>
-                    <select name="status" value={formData.status} onChange={handleChange} required>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Tentative">Tentative</option>
-                      <option value="Draft">Draft</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="ss-form-buttons">
-                  <button type="submit" className="ss-btn ss-btn-primary" disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving...' : 'Save'}
-                  </button>
-                  <button type="button" className="ss-btn ss-btn-secondary" onClick={closeForm}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
           {isLoadingSessions ? (
             <div className="ss-empty-state"><p>Loading sessions...</p></div>
           ) : sessions.length === 0 ? (
@@ -590,7 +499,7 @@ const displayedSessions = React.useMemo(() => {
               </colgroup>
               <thead>
                 <tr>
-                  <th>Code</th>
+                  <th>No.</th>
                   <th>Day</th>
                   <th>Time</th>
                   <th>Location</th>
@@ -725,11 +634,20 @@ const displayedSessions = React.useMemo(() => {
                     </td>
                     <td>
                       <div className="ss-row-actions">
-                        <button className="ss-icon-btn" onClick={() => openEditForm(session)} aria-label="Edit session">
-                          Edit
+                        <button className="ss-icon-btn" onClick={() => openEditForm(session)} aria-label="Edit session" title="Edit session">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
                         </button>
-                        <button className="ss-icon-btn delete" onClick={() => setDeleteTarget(session)} aria-label="Delete session">
-                          Delete
+                        <button className="ss-icon-btn delete" onClick={() => setDeleteTarget(session)} aria-label="Delete session" title="Delete session">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18" />
+                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -772,39 +690,43 @@ const displayedSessions = React.useMemo(() => {
                       Select all ({tutorSessions.length})
                     </label>
                   </div>
-                  <ul className="ss-cover-session-list ss-cover-session-list-checkable">
-                    {tutorSessions.map(s => (
-                      <li key={s.id}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={coverSelectedIds.has(s.id)}
-                            onChange={() => toggleCoverSession(s.id)}
-                          />
-                          {s.sessionCode ? `${s.sessionCode} · ` : ''}
-                          {s.day}, {formatTimeRange(s.startTime, s.endTime)}
-                          {s.location ? ` at ${s.location}` : ''}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="ss-cover-two-col">
+                    <div className="ss-cover-col-left">
+                      <ul className="ss-cover-session-list ss-cover-session-list-checkable">
+                        {tutorSessions.map(s => (
+                          <li key={s.id}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={coverSelectedIds.has(s.id)}
+                                onChange={() => toggleCoverSession(s.id)}
+                              />
+                              {s.sessionCode ? `${s.sessionCode} · ` : ''}
+                              {s.day}, {formatTimeRange(s.startTime, s.endTime)}
+                              {s.location ? ` at ${s.location}` : ''}
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
 
-              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Covering from</label>
-                      <input type="date" value={coverStartDate} onChange={(e) => setCoverStartDate(e.target.value)} />
+                      <textarea
+                        placeholder="Reason (optional) — e.g. Alex is on leave this week"
+                        value={coverReason}
+                        onChange={(e) => setCoverReason(e.target.value)}
+                      />
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Until</label>
-                      <input type="date" value={coverEndDate} onChange={(e) => setCoverEndDate(e.target.value)} min={coverStartDate || undefined} />
+
+                    <div className="ss-cover-col-right">
+                      <DateRangeCalendar
+                        startDate={coverStartDate}
+                        endDate={coverEndDate}
+                        onChange={(start, end) => {
+                          setCoverStartDate(start);
+                          setCoverEndDate(end);
+                        }}
+                      />
                     </div>
-                  </div>       
-                    
-                  <textarea
-                    placeholder="Reason (optional) — e.g. Alex is on leave this week"
-                    value={coverReason}
-                    onChange={(e) => setCoverReason(e.target.value)}
-                  />
+                  </div>
                 </>
               )
             )}
@@ -839,6 +761,107 @@ const displayedSessions = React.useMemo(() => {
           </div>
         </div>
       )}
+
+      {showForm && (
+        <div className="ss-modal-overlay" onClick={closeForm}>
+          <div className="ss-modal-content ss-form-modal" onClick={e => e.stopPropagation()}>
+            <h3>{editingSessionId ? 'Edit Session' : 'Add Session'}</h3>
+
+            {error && <p className="ss-error">{error}</p>}
+
+            <form onSubmit={handleSubmit}>
+              <div className="ss-form-grid">
+                <div className="ss-field">
+                  <label>Day<span className="ss-required">*</span></label>
+                  <select name="day" value={formData.day} onChange={handleChange} required>
+                    <option value="">-- Select day --</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                  </select>
+                </div>
+
+                <div className="ss-field">
+                  <label>Start Time<span className="ss-required">*</span></label>
+                  <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} required />
+                </div>
+
+                <div className="ss-field">
+                  <label>End Time<span className="ss-required">*</span></label>
+                  <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} required />
+                </div>
+
+                <div className="ss-field">
+                  <label>Location<span className="ss-required">*</span></label>
+                  <input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. GP-P-419" required />
+                </div>
+
+                <div className="ss-field">
+                  <label>Campus<span className="ss-required">*</span></label>
+                  <select name="campus" value={formData.campus} onChange={handleChange} required>
+                    <option value="">-- Select --</option>
+                    <option value="GP">Gardens Point (GP)</option>
+                    <option value="KG">Kelvin Grove (KG)</option>
+                    <option value="ONL">Online (ONL)</option>
+                  </select>
+                </div>
+
+                <div className="ss-field">
+                  <label>Type<span className="ss-required">*</span></label>
+                  <select name="sessionType" value={formData.sessionType} onChange={handleChange} required>
+                    <option value="">-- Select --</option>
+                    <option value="Lecture">Lecture</option>
+                    <option value="Tutorial">Tutorial</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Practical">Practical</option>
+                    <option value="Consultation">Consultation</option>
+                  </select>
+                </div>
+
+                <div className="ss-field">
+                  <label>Capacity<span className="ss-required">*</span></label>
+                  <input type="number" name="capacity" value={formData.capacity} onChange={handleChange} min="1" placeholder="e.g. 25" required />
+                </div>
+
+                <div className="ss-field">
+                  <label>Tutor<span className="ss-required">*</span></label>
+                  <input type="number" name="requiredTutors" value={formData.requiredTutors} onChange={handleChange} min="1" placeholder="e.g. 1" required />
+                  {!requiredTutorsTouched && formData.capacity && suggestedTutorCount(parseInt(formData.capacity, 10)) > 1 && (
+                    <p className="ss-field-hint">Auto-suggested from capacity - edit if needed</p>
+                  )}
+                </div>
+
+                <div className="ss-field">
+                  <label>Session Code <span className="ss-field-hint" style={{ fontWeight: 400 }}>(optional — auto-generated if left blank)</span></label>
+                  <input type="text" name="sessionCode" value={formData.sessionCode} onChange={handleChange} placeholder="e.g. TUT01" />
+                </div>
+
+                <div className="ss-field">
+                  <label>Status<span className="ss-required">*</span></label>
+                  <select name="status" value={formData.status} onChange={handleChange} required>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Tentative">Tentative</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="ss-form-buttons">
+                <button type="submit" className="ss-btn ss-btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" className="ss-btn ss-btn-secondary" onClick={closeForm}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
