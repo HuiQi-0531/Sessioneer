@@ -22,7 +22,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.phone_number, u.work_experience,
+        u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url, u.phone_number, u.work_experience,
         u.maximum_hours, u.contract_type, um.role AS membership_role,
         m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
@@ -39,6 +39,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       id: t.id,
       name: t.name,
       email: t.email,
+      avatarUrl: t.avatar_url,
       phoneNumber: t.phone_number,
       workExperience: t.work_experience,
       maximumHours: t.maximum_hours,

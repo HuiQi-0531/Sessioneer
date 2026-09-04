@@ -4,6 +4,7 @@ import { tutorsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
+import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/Tutors.css';
 
@@ -82,12 +83,14 @@ const Tutors = () => {
     e.stopPropagation();
     const nextValue = !tutor.earlyAccess;
     setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: nextValue } : t)));
+    setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, earlyAccess: nextValue } : prev));
     try {
       await tutorsAPI.setEarlyAccess(activeUnit.id, tutor.id, nextValue);
     } catch (err) {
       console.error('Error updating early access:', err);
       // Roll back on failure
       setTutors(prev => prev.map(t => (t.id === tutor.id ? { ...t, earlyAccess: !nextValue } : t)));
+      setSelectedTutor(prev => (prev && prev.id === tutor.id ? { ...prev, earlyAccess: !nextValue } : prev));
       alert(err.message || 'Failed to update early access.');
     }
   };
@@ -369,10 +372,19 @@ const Tutors = () => {
               {filteredTutors.map(tutor => (
                 <div key={tutor.id} className="tt-card" onClick={() => openProfile(tutor)}>
                   <div className="tt-card-top">
-                    <span className="tt-card-name">
-                      {tutor.name}
-                      {tutor.isSuperTutor && <span className="tt-badge super-tutor" style={{ marginLeft: 8 }}>Super Tutor</span>}
-                    </span>
+                    <div className="tt-card-name-group">
+                      <div className="tt-card-avatar">
+                        {tutor.avatarUrl ? (
+                          <img src={tutor.avatarUrl} alt={getDisplayName(tutor)} />
+                        ) : (
+                          getAvatarLetter(tutor)
+                        )}
+                      </div>
+                      <span className="tt-card-name">
+                        {tutor.name}
+                        {tutor.isSuperTutor && <span className="tt-badge super-tutor" style={{ marginLeft: 8 }}>Super Tutor</span>}
+                      </span>
+                    </div>
                     <div className="tt-card-actions">
                       <button
                         type="button"
@@ -405,14 +417,6 @@ const Tutors = () => {
                       <span key={tag} className="tt-badge tag">{tag}</span>
                     ))}
                   </div>
-                  <label className="tt-early-access-toggle" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={!!tutor.earlyAccess}
-                      onChange={(e) => handleToggleEarlyAccess(tutor, e)}
-                    />
-                    Early schedule access
-                  </label>
                 </div>
               ))}
             </div>
@@ -426,7 +430,13 @@ const Tutors = () => {
             <button className="tt-modal-close" onClick={closeProfile}>&times;</button>
 
             <div className="tt-modal-header">
-              <div className="tt-modal-avatar">{selectedTutor.name.charAt(0).toUpperCase()}</div>
+              <div className="tt-modal-avatar">
+                {selectedTutor.avatarUrl ? (
+                  <img src={selectedTutor.avatarUrl} alt={getDisplayName(selectedTutor)} />
+                ) : (
+                  getAvatarLetter(selectedTutor)
+                )}
+              </div>
               <div>
                 <div className="tt-modal-name">{selectedTutor.name}</div>
                 <div className="tt-modal-role">{selectedTutor.isSuperTutor ? 'Super Tutor' : 'Tutor'}</div>
@@ -476,6 +486,15 @@ const Tutors = () => {
               </div>
               <p className="tt-readonly-note">These fields are set by the tutor and can't be edited here.</p>
             </div>
+
+            <label className="tt-early-access-toggle">
+              <input
+                type="checkbox"
+                checked={!!selectedTutor.earlyAccess}
+                onChange={(e) => handleToggleEarlyAccess(selectedTutor, e)}
+              />
+              Early schedule access
+            </label>
 
             <div className="tt-field">
               <label>Priority</label>
