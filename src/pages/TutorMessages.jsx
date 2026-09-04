@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { getSocket } from '../utils/socket';
+import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { getAvatarLetter, getDisplayName } from '../utils/userName';
@@ -14,6 +15,12 @@ const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
 const TutorMessages = () => {
   const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
+
+
+  const messageUnits = React.useMemo(
+    () => allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive),
+    [allUnits]
+  );
 
   const [selectedUnitId, setSelectedUnitId] = useState(null);
   const [contacts, setContacts] = useState([]);
@@ -367,8 +374,8 @@ const TutorMessages = () => {
         <UCPageHeader title="Messages" />
 
         <div className="msg-container">
-          <div className="msg-units-col">
-            {allUnits.map(unit => (
+                    <div className="msg-units-col">
+            {messageUnits.map(unit => (
               <div
                 key={unit.id}
                 className={`msg-unit-item ${selectedUnitId === unit.id ? 'active' : ''}`}

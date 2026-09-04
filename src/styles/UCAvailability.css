@@ -516,13 +516,13 @@
 }
 
 .uca-card--fullscreen .uca-grid-scroller {
-  max-height: calc(100vh - 200px);
+  max-height: none;
 }
 
 /* ── Grid table ── */
 .uca-grid {
   border-collapse: collapse;
-  width: auto;
+  width: 100%;
   min-width: 100%;
   table-layout: auto;
 }

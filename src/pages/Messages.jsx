@@ -15,7 +15,12 @@ const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const Messages = () => {
   const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
 
-  const [selectedUnitId, setSelectedUnitId] = useState(null);
+const messageUnits = React.useMemo(
+  () => allUnits.filter(unit => unit.roles?.includes('coordinator') && unit.isActive),
+  [allUnits]
+);
+
+const [selectedUnitId, setSelectedUnitId] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
   const [groupUnreadCount, setGroupUnreadCount] = useState(0);
@@ -370,7 +375,7 @@ const Messages = () => {
 
         <div className="msg-container">
           <div className="msg-units-col">
-            {allUnits.map(unit => (
+            {messageUnits.map(unit => (
               <div
                 key={unit.id}
                 className={`msg-unit-item ${selectedUnitId === unit.id ? 'active' : ''}`}

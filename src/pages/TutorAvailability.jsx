@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { Info } from 'lucide-react';
 import { availabilityAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { unitHasTutorAccess } from '../utils/roles';
@@ -428,24 +429,9 @@ const TutorAvailability = () => {
         ref={infoIconRef}
         className="info-icon-btn"
         onClick={toggleTooltip}
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: '50%',
-          border: '1px solid #999',
-          background: '#fff',
-          color: '#555',
-          fontSize: 13,
-          fontStyle: 'italic',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
         aria-label="How to use the availability grid"
       >
-        i
+        <Info size={14} strokeWidth={2.5} />
       </button>
 
       {showInfoTooltip && (
