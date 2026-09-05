@@ -57,10 +57,16 @@ const Sessions = () => {
   const [requiredTutorsTouched, setRequiredTutorsTouched] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [tutorSortDirection, setTutorSortDirection] = useState(null);
-  const [showTutorSortMenu, setShowTutorSortMenu] = useState(false);
-  const [tutorSortMenuPos, setTutorSortMenuPos] = useState({ top: 0, left: 0 });
-  const tutorSortButtonRef = useRef(null);  
+
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    days: [],
+    types: [],
+    campuses: [],
+    unassignedOnly: false,
+    sortField: 'none',
+    sortDirection: 'asc'
+  });
 
   // Cover-request broadcast: instead of ticking rows in the main table, the
   // UC opens a small modal, picks WHICH tutor can't make it, then ticks
@@ -98,19 +104,18 @@ const Sessions = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
 
-  const tutorSortMenuRef = useRef(null);
+  const filterPanelRef = useRef(null);
 
   useEffect(() => {
-    if (!showTutorSortMenu) return;
-
+    if (!showFilters) return;
     const handleClickOutside = (event) => {
-      if (tutorSortMenuRef.current && !tutorSortMenuRef.current.contains(event.target)) {
-        setShowTutorSortMenu(false);
+      if (filterPanelRef.current && !filterPanelRef.current.contains(event.target)) {
+        setShowFilters(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showTutorSortMenu]);
+  }, [showFilters]);
 
   const loadSessions = async (unitId) => {
     setIsLoadingSessions(true);
@@ -284,27 +289,69 @@ const Sessions = () => {
     return `${shorten(start)} - ${shorten(end)}`;
   };
 
-  const applyTutorSort = (direction) => {
-    setTutorSortDirection(direction);
-    setShowTutorSortMenu(false);
+  const toggleDayFilter = (day) => {
+    setFilters(prev => ({
+      ...prev,
+      days: prev.days.includes(day) ? prev.days.filter(d => d !== day) : [...prev.days, day]
+    }));
   };
 
-const displayedSessions = React.useMemo(() => {
-  if (!tutorSortDirection) return sessions;
+  const toggleTypeFilter = (type) => {
+    setFilters(prev => ({
+      ...prev,
+      types: prev.types.includes(type) ? prev.types.filter(t => t !== type) : [...prev.types, type]
+    }));
+  };
 
-  return [...sessions].sort((a, b) => {
-    const nameA = a.assignedTutorName || '';
-    const nameB = b.assignedTutorName || '';
+  const toggleCampusFilter = (campus) => {
+    setFilters(prev => ({
+      ...prev,
+      campuses: prev.campuses.includes(campus) ? prev.campuses.filter(c => c !== campus) : [...prev.campuses, campus]
+    }));
+  };
 
-    if (!nameA && !nameB) return 0;
-    if (!nameA) return 1;
-    if (!nameB) return -1;
+  const chooseSortField = (field) => {
+    setFilters(prev => ({ ...prev, sortField: field, sortDirection: 'asc' }));
+  };
 
-    return tutorSortDirection === 'asc'
-      ? nameA.localeCompare(nameB)
-      : nameB.localeCompare(nameA);
-  });
-}, [sessions, tutorSortDirection]);
+  const chooseSortDirection = (direction) => {
+    setFilters(prev => ({ ...prev, sortDirection: direction }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ days: [], types: [], campuses: [], unassignedOnly: false, sortField: 'none', sortDirection: 'asc' });
+  };
+
+  const activeFilterCount =
+    filters.days.length + filters.types.length + filters.campuses.length +
+    (filters.unassignedOnly ? 1 : 0) + (filters.sortField !== 'none' ? 1 : 0);
+
+  const displayedSessions = React.useMemo(() => {
+    let result = sessions
+      .filter(s => filters.days.length === 0 || filters.days.includes(s.day))
+      .filter(s => filters.types.length === 0 || filters.types.includes(s.sessionType))
+      .filter(s => filters.campuses.length === 0 || filters.campuses.includes(s.campus))
+      .filter(s => !filters.unassignedOnly || !s.assignedTutorId);
+
+    if (filters.sortField === 'code') {
+      result = [...result].sort((a, b) => {
+        const codeA = a.sessionCode || '';
+        const codeB = b.sessionCode || '';
+        return filters.sortDirection === 'asc' ? codeA.localeCompare(codeB) : codeB.localeCompare(codeA);
+      });
+    } else if (filters.sortField === 'tutor') {
+      result = [...result].sort((a, b) => {
+        const nameA = a.assignedTutorName || '';
+        const nameB = b.assignedTutorName || '';
+        if (!nameA && !nameB) return 0;
+        if (!nameA) return 1;
+        if (!nameB) return -1;
+        return filters.sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      });
+    }
+
+    return result;
+  }, [sessions, filters]);
 
   // Every tutor who currently has at least one session, for the "who's out" dropdown.
   const tutorsWithSessions = Array.from(
@@ -441,6 +488,119 @@ const displayedSessions = React.useMemo(() => {
             </button>
 
             <div className="ss-top-actions">
+              <div className="ss-filter-wrap" ref={filterPanelRef}>
+                <button
+                  type="button"
+                  className={`ss-filter-btn ${activeFilterCount > 0 ? 'active' : ''}`}
+                  onClick={() => setShowFilters(prev => !prev)}
+                >
+                  Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </button>
+                {showFilters && (
+                  <div className="ss-filter-panel">
+                    <div className="ss-filter-group">
+                      <div className="ss-filter-group-title">Day</div>
+                      <div className="ss-filter-chip-row">
+                        {['MON', 'TUE', 'WED', 'THU', 'FRI'].map(day => (
+                          <button
+                            key={day}
+                            type="button"
+                            className={`ss-filter-chip ${filters.days.includes(day) ? 'selected' : ''}`}
+                            onClick={() => toggleDayFilter(day)}
+                          >
+                            {day}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="ss-filter-group">
+                      <div className="ss-filter-group-title">Type</div>
+                      <div className="ss-filter-chip-row">
+                        {['Lecture', 'Tutorial', 'Workshop', 'Practical', 'Consultation'].map(type => (
+                          <button
+                            key={type}
+                            type="button"
+                            className={`ss-filter-chip ${filters.types.includes(type) ? 'selected' : ''}`}
+                            onClick={() => toggleTypeFilter(type)}
+                          >
+                            {type}
+                      </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="ss-filter-group">
+                      <div className="ss-filter-group-title">Campus</div>
+                      <div className="ss-filter-chip-row">
+                        {['GP', 'KG', 'ONL'].map(campus => (
+                          <button
+                            key={campus}
+                            type="button"
+                            className={`ss-filter-chip ${filters.campuses.includes(campus) ? 'selected' : ''}`}
+                            onClick={() => toggleCampusFilter(campus)}
+                          >
+                            {campus}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="ss-filter-group">
+                      <label className="ss-filter-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={filters.unassignedOnly}
+                          onChange={(e) => setFilters(prev => ({ ...prev, unassignedOnly: e.target.checked }))}
+                        />
+                        Unassigned only
+                     </label>
+                    </div>
+
+                    <div className="ss-filter-group">
+                      <div className="ss-filter-group-title">Sort by</div>
+                      <div className="ss-filter-chip-row">
+                        {[
+                          { key: 'none', label: 'None' },
+                          { key: 'code', label: 'No.' },
+                          { key: 'tutor', label: 'Tutor' }
+                        ].map(opt => (
+                      <button
+                            key={opt.key}
+                            type="button"
+                            className={`ss-filter-chip ${filters.sortField === opt.key ? 'selected' : ''}`}
+                            onClick={() => chooseSortField(opt.key)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {filters.sortField !== 'none' && (
+                        <div className="ss-filter-chip-row ss-filter-sort-direction">
+                          <button
+                            type="button"
+                            className={`ss-filter-chip ${filters.sortDirection === 'asc' ? 'selected' : ''}`}
+                            onClick={() => chooseSortDirection('asc')}
+                          >
+                            A to Z
+                          </button>
+                          <button
+                            type="button"
+                            className={`ss-filter-chip ${filters.sortDirection === 'desc' ? 'selected' : ''}`}
+                            onClick={() => chooseSortDirection('desc')}
+                          >
+                            Z to A
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <button type="button" className="ss-filter-clear-btn" onClick={clearFilters}>
+                      Clear filters
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                 <button
                   ref={uploadInfoIconRef}
@@ -466,6 +626,7 @@ const displayedSessions = React.useMemo(() => {
                   </div>
                 )}
               </div>
+
               <button className="ss-btn ss-btn-secondary" onClick={() => navigate('/sessions/import')}>
                 Upload Session
               </button>             
@@ -506,112 +667,7 @@ const displayedSessions = React.useMemo(() => {
                   <th>Campus</th>
                   <th>Type</th>
                   <th>Capacity</th>
-                  <th ref={tutorSortMenuRef} style={{ position: 'relative' }}>
-                    <span>Tutor</span>
-                    <button
-                      type="button"
-                      ref={tutorSortButtonRef}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!showTutorSortMenu && tutorSortButtonRef.current) {
-                          const rect = tutorSortButtonRef.current.getBoundingClientRect();
-                          setTutorSortMenuPos({ top: rect.bottom + 4, left: rect.left });
-                        }
-                        setShowTutorSortMenu(prev => !prev);
-                      }}
-                      style={{
-                        marginLeft: 6,
-                        border: '1px solid #ccc',
-                        borderRadius: 4,
-                        background: '#fff',
-                        cursor: 'pointer',
-                        fontSize: 14,
-                        padding: '2px 6px',
-                        color: tutorSortDirection ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                        verticalAlign: 'middle',
-                      }}
-                      aria-label="Sort by tutor"
-                    >
-                      ▾
-                    </button>
-
-                    {showTutorSortMenu && (
-                    <div
-                      style={{
-                        position: 'fixed',
-                        top: tutorSortMenuPos.top,
-                        left: tutorSortMenuPos.left,
-                        background: '#fff',
-                        border: '1px solid #ddd',
-                        borderRadius: 6,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                        padding: 6,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 2,
-                        zIndex: 9999,
-                        minWidth: 130,
-                        textAlign: 'left',
-                      }}
-                    >
-                      
-                        <button
-                          type="button"
-                          onClick={() => applyTutorSort('asc')}
-                          style={{
-                            border: 'none',
-                            background: tutorSortDirection === 'asc' ? '#f0edff' : 'none',
-                            textAlign: 'left',
-                            padding: '6px 10px',
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textTransform: 'none',
-                            color: '#333',
-                          }}
-                        >
-                          Ascending (A-Z)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applyTutorSort('desc')}
-                          style={{
-                            border: 'none',
-                            background: tutorSortDirection === 'desc' ? '#f0edff' : 'none',
-                            textAlign: 'left',
-                            padding: '6px 10px',
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textTransform: 'none',
-                            color: '#333',
-                          }}
-                        >
-                          Descending (Z-A)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applyTutorSort(null)}
-                          style={{
-                            border: 'none',
-                            background: 'none',
-                            textAlign: 'left',
-                            padding: '6px 10px',
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textTransform: 'none',
-                            color: '#333',
-                          }}
-                        >
-                          Clear sort
-                        </button>
-                      </div>
-                    )}
-                  </th>
+                  <th>Tutor</th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
