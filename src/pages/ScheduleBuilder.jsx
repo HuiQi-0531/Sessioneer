@@ -430,7 +430,7 @@ const ScheduleBuilder = () => {
                     </colgroup>
                     <thead>
                       <tr>
-                        <th>Code</th>
+                        <th>No.</th>
                         <th>Day</th>
                         <th>Time</th>
                         <th>Location</th>
@@ -494,7 +494,7 @@ const ScheduleBuilder = () => {
                     </colgroup>
                     <thead>
                       <tr>
-                        <th>Code</th>
+                        <th>No.</th>
                         <th>Day</th>
                         <th>Time</th>
                         <th>Location</th>

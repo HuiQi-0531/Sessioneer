@@ -41,7 +41,6 @@ const ImportSessions = () => {
   const [existingSessions, setExistingSessions] = useState([]);
   const [showExisting, setShowExisting] = useState(true);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const infoIconRef = useRef(null);
   const tooltipRef = useRef(null);
 
@@ -84,10 +83,6 @@ const ImportSessions = () => {
   };
 
   const toggleInfoTooltip = () => {
-    if (!showInfoTooltip && infoIconRef.current) {
-      const rect = infoIconRef.current.getBoundingClientRect();
-      setTooltipPos({ top: rect.bottom + 6, left: rect.right - 260 });
-    }
     setShowInfoTooltip(prev => !prev);
   };
 
@@ -245,11 +240,7 @@ const ImportSessions = () => {
               How this works
             </button>
             {showInfoTooltip && (
-              <div
-                ref={tooltipRef}
-                className="is-info-tooltip"
-                style={{ top: tooltipPos.top, left: tooltipPos.left }}
-              >
+              <div ref={tooltipRef} className="is-info-tooltip">
                 <p>1. Upload a CSV timetable export.</p>
                 <p>2. The system auto-detects tables and splits mixed session types.</p>
                 <p>3. Check the column mapping for each table before importing.</p>

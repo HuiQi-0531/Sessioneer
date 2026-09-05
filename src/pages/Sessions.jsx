@@ -36,6 +36,24 @@ const normaliseDayForForm = (rawDay) => {
   return DAY_NAME_MAP[key] || trimmed;
 };
 
+const GRID_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+const GRID_DAY_LABELS = { MON: 'Monday', TUE: 'Tuesday', WED: 'Wednesday', THU: 'Thursday', FRI: 'Friday' };
+const GRID_START_HOUR = 8;
+const GRID_END_HOUR = 21;
+const GRID_HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => {
+  const hour = GRID_START_HOUR + i;
+  if (hour === 12) return '12pm';
+  if (hour > 12) return `${hour - 12}pm`;
+  return `${hour}am`;
+});
+
+const normaliseDayToAbbrev = (rawDay) => {
+  if (!rawDay) return '';
+  return rawDay.trim().slice(0, 3).toUpperCase();
+};
+
+const statusToGridClass = (status) => (status || '').toLowerCase();
+
 const Sessions = () => {
   const { unitId: unitIdFromUrl } = useParams();
   const navigate = useNavigate();
@@ -50,6 +68,7 @@ const Sessions = () => {
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [view, setView] = useState('list'); // 'list' | 'grid'
     // Tracks whether the UC has manually typed into the "Tutor" field this
   // time the form is open. While false, changing Capacity auto-fills a
   // suggested tutor count; once the UC touches it directly, we stop
@@ -353,6 +372,96 @@ const Sessions = () => {
     return result;
   }, [sessions, filters]);
 
+  const hourFromTime = (timeStr) => parseInt(timeStr.split(':')[0], 10);
+
+  const gridSessions = displayedSessions.filter(s =>
+    GRID_DAYS.includes(normaliseDayToAbbrev(s.day)) &&
+    hourFromTime(s.startTime) >= GRID_START_HOUR &&
+    hourFromTime(s.endTime) <= GRID_END_HOUR
+  );
+  const hiddenFromGridCount = displayedSessions.length - gridSessions.length;
+
+  const renderSessionsGrid = () => (
+    <div className="ss-grid-wrapper">
+      <div className="ss-grid" style={{ gridTemplateRows: `auto repeat(${GRID_HOUR_LABELS.length}, 44px)` }}>
+        <div className="ss-grid-corner" />
+        {GRID_DAYS.map(day => (
+          <div key={day} className="ss-grid-day-header">{GRID_DAY_LABELS[day]}</div>
+        ))}
+
+        {GRID_HOUR_LABELS.map((label, i) => (
+         <div key={label} className="ss-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
+        ))}
+
+        {GRID_DAYS.map(day => {
+          const dayIndex = GRID_DAYS.indexOf(day);
+          const dayGroups = [];
+          const daySessions = gridSessions
+            .filter(s => normaliseDayToAbbrev(s.day) === day)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+          daySessions.forEach(session => {
+            const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
+            const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
+            let placed = false;
+            for (const group of dayGroups) {
+              if (group.some(s => {
+                const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
+                const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
+                return startMin < sEnd && endMin > sStart;
+              })) {
+                group.push(session);
+                placed = true;
+                break;
+              }
+            }
+            if (!placed) dayGroups.push([session]);
+          });
+
+          return dayGroups.flatMap(group =>
+            group.map((session, colIdx) => {
+              const startHour = hourFromTime(session.startTime);
+              const endHour = hourFromTime(session.endTime);
+              const rowStart = (startHour - GRID_START_HOUR) + 2;
+              const rowEnd = (endHour - GRID_START_HOUR) + 2;
+              const colCount = group.length;
+              const widthPct = 100 / colCount;
+
+              return (
+                <button
+                  key={session.id}
+                  className={`ss-grid-block ${statusToGridClass(session.status)}`}
+                  style={{
+                    gridColumn: dayIndex + 2,
+                    gridRow: `${rowStart} / ${rowEnd}`,
+                    justifySelf: 'start',
+                    width: `${widthPct}%`,
+                    marginLeft: `${widthPct * colIdx}%`
+                  }}
+                  onClick={() => openEditForm(session)}
+                >
+                  <div className="ss-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                  <div className="ss-grid-block-type">
+                    {session.sessionCode ? session.sessionCode : (session.sessionType || 'Session')}
+                    {session.location ? ` · ${session.location}` : ''}
+                  </div>
+                  <div className="ss-grid-block-tutor">
+                    {session.assignedTutorName || 'Unassigned'}
+                  </div>
+                </button>
+              );
+            })
+          );
+        })}
+      </div>
+      {hiddenFromGridCount > 0 && (
+        <p className="ss-grid-note">
+          {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
+        </p>
+      )}
+    </div>
+  );
+
   // Every tutor who currently has at least one session, for the "who's out" dropdown.
   const tutorsWithSessions = Array.from(
     new Map(
@@ -488,118 +597,6 @@ const Sessions = () => {
             </button>
 
             <div className="ss-top-actions">
-              <div className="ss-filter-wrap" ref={filterPanelRef}>
-                <button
-                  type="button"
-                  className={`ss-filter-btn ${activeFilterCount > 0 ? 'active' : ''}`}
-                  onClick={() => setShowFilters(prev => !prev)}
-                >
-                  Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-                </button>
-                {showFilters && (
-                  <div className="ss-filter-panel">
-                    <div className="ss-filter-group">
-                      <div className="ss-filter-group-title">Day</div>
-                      <div className="ss-filter-chip-row">
-                        {['MON', 'TUE', 'WED', 'THU', 'FRI'].map(day => (
-                          <button
-                            key={day}
-                            type="button"
-                            className={`ss-filter-chip ${filters.days.includes(day) ? 'selected' : ''}`}
-                            onClick={() => toggleDayFilter(day)}
-                          >
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="ss-filter-group">
-                      <div className="ss-filter-group-title">Type</div>
-                      <div className="ss-filter-chip-row">
-                        {['Lecture', 'Tutorial', 'Workshop', 'Practical', 'Consultation'].map(type => (
-                          <button
-                            key={type}
-                            type="button"
-                            className={`ss-filter-chip ${filters.types.includes(type) ? 'selected' : ''}`}
-                            onClick={() => toggleTypeFilter(type)}
-                          >
-                            {type}
-                      </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="ss-filter-group">
-                      <div className="ss-filter-group-title">Campus</div>
-                      <div className="ss-filter-chip-row">
-                        {['GP', 'KG', 'ONL'].map(campus => (
-                          <button
-                            key={campus}
-                            type="button"
-                            className={`ss-filter-chip ${filters.campuses.includes(campus) ? 'selected' : ''}`}
-                            onClick={() => toggleCampusFilter(campus)}
-                          >
-                            {campus}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="ss-filter-group">
-                      <label className="ss-filter-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={filters.unassignedOnly}
-                          onChange={(e) => setFilters(prev => ({ ...prev, unassignedOnly: e.target.checked }))}
-                        />
-                        Unassigned only
-                     </label>
-                    </div>
-
-                    <div className="ss-filter-group">
-                      <div className="ss-filter-group-title">Sort by</div>
-                      <div className="ss-filter-chip-row">
-                        {[
-                          { key: 'none', label: 'None' },
-                          { key: 'code', label: 'No.' },
-                          { key: 'tutor', label: 'Tutor' }
-                        ].map(opt => (
-                      <button
-                            key={opt.key}
-                            type="button"
-                            className={`ss-filter-chip ${filters.sortField === opt.key ? 'selected' : ''}`}
-                            onClick={() => chooseSortField(opt.key)}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                      {filters.sortField !== 'none' && (
-                        <div className="ss-filter-chip-row ss-filter-sort-direction">
-                          <button
-                            type="button"
-                            className={`ss-filter-chip ${filters.sortDirection === 'asc' ? 'selected' : ''}`}
-                            onClick={() => chooseSortDirection('asc')}
-                          >
-                            A to Z
-                          </button>
-                          <button
-                            type="button"
-                            className={`ss-filter-chip ${filters.sortDirection === 'desc' ? 'selected' : ''}`}
-                            onClick={() => chooseSortDirection('desc')}
-                          >
-                            Z to A
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <button type="button" className="ss-filter-clear-btn" onClick={clearFilters}>
-                      Clear filters
-                    </button>
-                  </div>
-                )}
-              </div>
 
               <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                 <button
@@ -639,6 +636,143 @@ const Sessions = () => {
           {coverSuccess && !showCoverModal && (
             <p className="ss-cover-success">{coverSuccess}</p>
           )}
+
+          <div className="ss-view-toggle">
+            <button className={`ss-toggle-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>
+              List View
+            </button>
+            <button className={`ss-toggle-btn ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')}>
+              Grid View
+            </button>
+
+            <div className="ss-filter-wrap" ref={filterPanelRef}>
+              <button
+                type="button"
+                className={`ss-filter-btn ${activeFilterCount > 0 ? 'active' : ''}`}
+                onClick={() => setShowFilters(prev => !prev)}
+              >
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </button>
+              {showFilters && (
+                <div className="ss-filter-panel">
+                  <div className="ss-filter-group">
+                    <div className="ss-filter-group-title">Day</div>
+                    <div className="ss-filter-chip-row">
+                      {['MON', 'TUE', 'WED', 'THU', 'FRI'].map(day => (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`ss-filter-chip ${filters.days.includes(day) ? 'selected' : ''}`}
+                          onClick={() => toggleDayFilter(day)}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="ss-filter-group">
+                    <div className="ss-filter-group-title">Type</div>
+                    <div className="ss-filter-chip-row">
+                      {['Lecture', 'Tutorial', 'Workshop', 'Practical', 'Consultation'].map(type => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`ss-filter-chip ${filters.types.includes(type) ? 'selected' : ''}`}
+                          onClick={() => toggleTypeFilter(type)}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="ss-filter-group">
+                    <div className="ss-filter-group-title">Campus</div>
+                    <div className="ss-filter-chip-row">
+                      {['GP', 'KG', 'ONL'].map(campus => (
+                        <button
+                          key={campus}
+                          type="button"
+                          className={`ss-filter-chip ${filters.campuses.includes(campus) ? 'selected' : ''}`}
+                          onClick={() => toggleCampusFilter(campus)}
+                        >
+                          {campus}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="ss-filter-group">
+                    <label className="ss-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={filters.unassignedOnly}
+                        onChange={(e) => setFilters(prev => ({ ...prev, unassignedOnly: e.target.checked }))}
+                      />
+                      Unassigned only
+                    </label>
+                  </div>
+
+                  <div className="ss-filter-group">
+                    <div className="ss-filter-group-title">Sort by</div>
+                    <div className="ss-filter-chip-row">
+                      {[
+                        { key: 'none', label: 'None' },
+                        { key: 'code', label: 'No.' },
+                        { key: 'tutor', label: 'Tutor' }
+                      ].map(opt => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          className={`ss-filter-chip ${filters.sortField === opt.key ? 'selected' : ''}`}
+                          onClick={() => chooseSortField(opt.key)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {filters.sortField !== 'none' && (
+                      <div className="ss-filter-chip-row ss-filter-sort-direction">
+                        <button
+                          type="button"
+                          className={`ss-filter-chip ${filters.sortDirection === 'asc' ? 'selected' : ''}`}
+                          onClick={() => chooseSortDirection('asc')}
+                        >
+                          A to Z
+                        </button>
+                        <button
+                          type="button"
+                          className={`ss-filter-chip ${filters.sortDirection === 'desc' ? 'selected' : ''}`}
+                          onClick={() => chooseSortDirection('desc')}
+                        >
+                          Z to A
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button type="button" className="ss-filter-clear-btn" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {view === 'grid' && (
+            <div className="ss-grid-legend">
+              <span className="ss-legend-item"><span className="ss-legend-dot confirmed"></span>Confirmed</span>
+              <span className="ss-legend-item"><span className="ss-legend-dot tentative"></span>Tentative</span>
+              <span className="ss-legend-item"><span className="ss-legend-dot draft"></span>Draft</span>
+              <span className="ss-legend-item"><span className="ss-legend-dot cancelled"></span>Cancelled</span>
+            </div>
+          )}
+
+          {view === 'grid' && renderSessionsGrid()}
+
+          {view === 'list' && (
+          <>
 
           {isLoadingSessions ? (
             <div className="ss-empty-state"><p>Loading sessions...</p></div>
@@ -711,6 +845,8 @@ const Sessions = () => {
                 ))}
               </tbody>
             </table>
+          )}
+          </>
           )}
         </div>
       </main>
