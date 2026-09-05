@@ -245,7 +245,11 @@ const ImportSessions = () => {
               How this works
             </button>
             {showInfoTooltip && (
-              <div ref={tooltipRef} className="is-info-tooltip">
+              <div
+                ref={tooltipRef}
+                className="is-info-tooltip"
+                style={{ top: tooltipPos.top, left: tooltipPos.left }}
+              >
                 <p>1. Upload a CSV timetable export.</p>
                 <p>2. The system auto-detects tables and splits mixed session types.</p>
                 <p>3. Check the column mapping for each table before importing.</p>
