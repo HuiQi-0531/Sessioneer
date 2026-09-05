@@ -34,6 +34,7 @@ import AdminRequests from './pages/AdminRequests.jsx';
 import AdminSettings from './pages/AdminSettings.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { ActiveUnitProvider } from './context/ActiveUnitContext.jsx';
+import { ImportSessionProvider } from './context/ImportSessionContext.jsx';
 import './App.css'
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
     <Router>
       <div className="App">
         <ActiveUnitProvider>
+          <ImportSessionProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/tutor-dashboard" element={
@@ -154,6 +156,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Routes>
+        </ImportSessionProvider>
         </ActiveUnitProvider>
       </div>
     </Router>

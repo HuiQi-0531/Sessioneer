@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';import Papa from 'pap
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { useImportSession } from '../context/ImportSessionContext';
 import UCSidebar from '../components/UCSidebar';
 import { parseCsvIntoBlocks, guessColumnMapping } from '../utils/csvBlocks';
 import '../styles/UCRequests.css';
@@ -28,18 +29,21 @@ const ImportSessions = () => {
   const effectiveUnitId = unitId || activeUnit?.id;
 
   const fileInputRef = useRef(null);
-  const [step, setStep] = useState('upload'); // 'upload' | 'mapping' | 'result'
   const [error, setError] = useState('');
-  const [blocks, setBlocks] = useState([]);
-  const [mappings, setMappings] = useState([]); // one mapping object per block
-  const [sessionTypeOverrides, setSessionTypeOverrides] = useState([]);
+  const {
+    step, setStep,
+    blocks, setBlocks,
+    mappings, setMappings,
+    sessionTypeOverrides, setSessionTypeOverrides,
+    existingSessions, setExistingSessions,
+    showExisting, setShowExisting,
+    resetImportState
+  } = useImportSession();
 
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
-  const [existingSessions, setExistingSessions] = useState([]);
-  const [showExisting, setShowExisting] = useState(true);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const infoIconRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -213,6 +217,11 @@ const ImportSessions = () => {
   };
 
   const handleDone = () => {
+    navigate('/sessions');
+  };
+
+  const handleCancelImport = () => {
+    resetImportState();
     navigate('/sessions');
   };
 
@@ -404,6 +413,9 @@ const ImportSessions = () => {
               <div className="is-bottom-actions">
                 <button className="is-btn is-btn-secondary" onClick={() => setStep('upload')}>
                   Choose a different file
+                </button>
+                <button className="is-btn is-btn-secondary" onClick={handleCancelImport}>
+                  Cancel
                 </button>
                 <button className="is-btn is-btn-primary" onClick={handleConfirmImportClick} disabled={isImporting}>
                   {isImporting ? 'Importing...' : `Import ${totalRowCount} sessions`}
