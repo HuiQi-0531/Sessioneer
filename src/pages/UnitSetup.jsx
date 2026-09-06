@@ -133,103 +133,107 @@ const UnitSetup = () => {
       <main className="uc-main-content">
         <UCPageHeader title="Unit" />
 
-        <div className="us-content">
-          <div className="us-top-row">
-            <button className="us-create-btn" onClick={() => navigate('/unit-setup/create')}>
-              Create Unit
+<div className="us-content">
+  {isLoading ? (
+    <div className="us-empty-state"><p>Loading units...</p></div>
+  ) : coordinatorUnits.length === 0 ? (
+    <div className="us-toolbar">
+      <button className="us-create-btn" onClick={() => navigate('/unit-setup/create')}>
+        Create Unit
+      </button>
+      <div className="us-empty-state">
+        <p>No units yet. Click "Create Unit" to add your first one.</p>
+      </div>
+    </div>
+  ) : (
+    <>
+      <div className="us-toolbar">
+        <div className="us-search-row">
+          <input
+            type="text"
+            className="us-search-input"
+            placeholder="Search by unit code or name..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="us-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              &times;
             </button>
-          </div>
-
-          {isLoading ? (
-            <div className="us-empty-state"><p>Loading units...</p></div>
-          ) : coordinatorUnits.length === 0 ? (
-            <div className="us-empty-state">
-              <p>No units yet. Click "Create Unit" to add your first one.</p>
-            </div>
-          ) : (
-            <>
-              <div className="us-search-row">
-                <input
-                  type="text"
-                  className="us-search-input"
-                  placeholder="Search by unit code or name..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    className="us-search-clear"
-                    onClick={() => setSearchQuery('')}
-                    aria-label="Clear search"
-                  >
-                    &times;
-                  </button>
-                )}
-              </div>
-
-              <div className="us-tabs" role="tablist">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={unitTab === 'active'}
-                  className={`us-tab ${unitTab === 'active' ? 'active' : ''}`}
-                  onClick={() => setUnitTab('active')}
-                >
-                  Active Units
-                  <span className="us-tab-count">{activeUnits.length}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={unitTab === 'inactive'}
-                  className={`us-tab ${unitTab === 'inactive' ? 'active' : ''}`}
-                  onClick={() => setUnitTab('inactive')}
-                >
-                  Inactive Units
-                  <span className="us-tab-count">{inactiveUnits.length}</span>
-                </button>
-              </div>
-
-              <section className="us-group">
-                {unitTab === 'active' ? (
-                  activeUnits.length === 0 ? (
-                    <div className="us-empty-state us-group-empty">
-                      <p>{searchQuery ? 'No active units match your search.' : 'No active units this semester.'}</p>
-                    </div>
-                  ) : (
-                    <div className="us-list">
-                      {activeUnits.map(renderUnitRow)}
-                    </div>
-                  )
-                ) : inactiveUnits.length === 0 ? (
-                  <div className="us-empty-state us-group-empty">
-                    <p>{searchQuery ? 'No inactive units match your search.' : 'No inactive units.'}</p>
-                  </div>
-                ) : (
-                  <div className="us-list">
-                    {inactiveUnits.map(renderUnitRow)}
-                  </div>
-                )}
-              </section>
-
-              <div className="us-actions-row">
-                <button className="us-action-btn edit" onClick={handleViewSessions} disabled={!selectedUnit}>
-                  Sessions
-                </button>
-                <button className="us-action-btn edit" onClick={handleEdit} disabled={!selectedUnit}>
-                  Edit
-                </button>
-                <button className="us-action-btn edit" onClick={handleDuplicateClick} disabled={!selectedUnit}>
-                  Duplicate
-                </button>
-                <button className="us-action-btn delete" onClick={handleDeleteClick} disabled={!selectedUnit}>
-                  Delete
-                </button>
-              </div>
-            </>
           )}
         </div>
+        <button className="us-create-btn" onClick={() => navigate('/unit-setup/create')}>
+          Create Unit
+        </button>
+      </div>
+
+      <div className="us-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={unitTab === 'active'}
+          className={`us-tab ${unitTab === 'active' ? 'active' : ''}`}
+          onClick={() => setUnitTab('active')}
+        >
+          Active Units
+          <span className="us-tab-count">{activeUnits.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={unitTab === 'inactive'}
+          className={`us-tab ${unitTab === 'inactive' ? 'active' : ''}`}
+          onClick={() => setUnitTab('inactive')}
+        >
+          Inactive Units
+          <span className="us-tab-count">{inactiveUnits.length}</span>
+        </button>
+      </div>
+
+      <section className="us-group">
+        {unitTab === 'active' ? (
+          activeUnits.length === 0 ? (
+            <div className="us-empty-state us-group-empty">
+              <p>{searchQuery ? 'No active units match your search.' : 'No active units this semester.'}</p>
+            </div>
+          ) : (
+            <div className="us-list">
+              {activeUnits.map(renderUnitRow)}
+            </div>
+          )
+        ) : inactiveUnits.length === 0 ? (
+          <div className="us-empty-state us-group-empty">
+            <p>{searchQuery ? 'No inactive units match your search.' : 'No inactive units.'}</p>
+          </div>
+        ) : (
+          <div className="us-list">
+            {inactiveUnits.map(renderUnitRow)}
+          </div>
+        )}
+      </section>
+
+      <div className="us-actions-row">
+        <button className="us-action-btn edit" onClick={handleViewSessions} disabled={!selectedUnit}>
+          Sessions
+        </button>
+        <button className="us-action-btn edit" onClick={handleEdit} disabled={!selectedUnit}>
+          Edit
+        </button>
+        <button className="us-action-btn edit" onClick={handleDuplicateClick} disabled={!selectedUnit}>
+          Duplicate
+        </button>
+        <button className="us-action-btn delete" onClick={handleDeleteClick} disabled={!selectedUnit}>
+          Delete
+        </button>
+      </div>
+    </>
+  )}
+</div>
       </main>
 
       {showDeleteModal && (

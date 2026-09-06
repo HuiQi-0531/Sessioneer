@@ -372,14 +372,17 @@
   height: 12px;
   border-radius: 3px;
   display: inline-block;
+  box-sizing: border-box;
 }
 
 .sb-legend-dot.assigned {
-  background-color: #22c55e;
+  background-color: #dcfce7;
+  border: 1px solid #86efac;
 }
 
 .sb-legend-dot.unassigned {
-  background-color: var(--color-danger);
+  background-color: var(--color-danger-bg);
+  border: 1px solid #fca5a5;
 }
 
 .sb-grid-wrapper {
@@ -441,18 +444,18 @@
 }
 
 .sb-grid-block.assigned {
-  background-color: #22c55e;
-  border: 1px solid #16a34a;
+  background-color: #dcfce7;
+  border: 1px solid #86efac;
 }
 
 .sb-grid-block.pending {
-  background-color: #f59e0b;
-  border: 1px solid #d97706;
+  background-color: var(--color-warning-bg);
+  border: 1px solid #fcd34d;
 }
 
 .sb-grid-block.unassigned {
-  background-color: #ef4444;
-  border: 1px solid #dc2626;
+  background-color: var(--color-danger-bg);
+  border: 1px solid #fca5a5;
 }
 
 .sb-grid-block.assigned .sb-grid-block-time,
@@ -530,7 +533,8 @@
 }
 
 .sb-legend-dot.pending {
-  background-color: #f59e0b;
+  background-color: var(--color-warning-bg);
+  border: 1px solid #fcd34d;
 }
 
 .is-btn-secondary {
