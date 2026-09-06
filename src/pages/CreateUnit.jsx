@@ -15,6 +15,7 @@ const buildSemesterOptions = () => {
   for (let year = currentYear - 1; year <= currentYear + 2; year++) {
     options.push({ value: `Semester 1|${year}`, label: `Semester 1, ${year}` });
     options.push({ value: `Semester 2|${year}`, label: `Semester 2, ${year}` });
+    options.push({ value: `Summer|${year}`, label: `Summer, ${year}` });
   }
   return options;
 };
@@ -44,6 +45,7 @@ const CreateUnit = () => {
   const [coordinators, setCoordinators] = useState([]);
   const [coordinatorError, setCoordinatorError] = useState('');
   const [isAddingCoordinator, setIsAddingCoordinator] = useState(false);
+  const [showCoordinatorSection, setShowCoordinatorSection] = useState(false);
 
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -72,6 +74,7 @@ const CreateUnit = () => {
             : ''
         });
         setCoordinators(unitCoordinators);
+        if (unitCoordinators.length > 0) setShowCoordinatorSection(true);
       } catch (err) {
         console.error('Error loading unit:', err);
         setError('Could not load this unit.');
@@ -272,112 +275,132 @@ const CreateUnit = () => {
                 {error && <p className="cu-error">{error}</p>}
 
                 <form onSubmit={handleSubmit}>
-                  <div className="cu-field">
-                    <label>Unit Code<span className="cu-required">*</span></label>
-                    <input
-                      type="text"
-                      name="unitCode"
-                      value={formData.unitCode}
-                      onChange={handleChange}
-                      placeholder="e.g. IFN501"
-                    />
+                  <div className="cu-field-row">
+                    <div className="cu-field">
+                      <label>Unit Code<span className="cu-required">*</span></label>
+                      <input
+                        type="text"
+                        name="unitCode"
+                        value={formData.unitCode}
+                        onChange={handleChange}
+                        placeholder="e.g. IFN501"
+                      />
+                    </div>
+
+                    <div className="cu-field">
+                      <label>Unit Name<span className="cu-required">*</span></label>
+                      <input
+                        type="text"
+                        name="unitName"
+                        value={formData.unitName}
+                        onChange={handleChange}
+                        placeholder="e.g. Digital Futures"
+                      />
+                    </div>
                   </div>
 
-                  <div className="cu-field">
-                    <label>Unit Name<span className="cu-required">*</span></label>
-                    <input
-                      type="text"
-                      name="unitName"
-                      value={formData.unitName}
-                      onChange={handleChange}
-                      placeholder="e.g. Digital Futures"
-                    />
-                  </div>
+                  <div className="cu-field-row">
+                    <div className="cu-field">
+                      <label>Semester<span className="cu-required">*</span></label>
+                      <select name="semesterYear" value={formData.semesterYear} onChange={handleChange}>
+                        <option value="">-- Select --</option>
+                        {SEMESTER_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div className="cu-field">
-                    <label>Semester<span className="cu-required">*</span></label>
-                    <select name="semesterYear" value={formData.semesterYear} onChange={handleChange}>
-                      <option value="">-- Select a semester --</option>
-                      {SEMESTER_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="cu-field">
+                      <label>Enrolment Size</label>
+                      <input
+                        type="number"
+                        name="enrolmentSize"
+                        value={formData.enrolmentSize}
+                        onChange={handleChange}
+                        placeholder="e.g. 300"
+                        min="0"
+                      />
+                    </div>
 
-                  <div className="cu-field">
-                    <label>Enrolment Size</label>
-                    <input
-                      type="number"
-                      name="enrolmentSize"
-                      value={formData.enrolmentSize}
-                      onChange={handleChange}
-                      placeholder="e.g. 300"
-                      min="0"
-                    />
-                  </div>
-
-                  <div className="cu-field">
-                    <label>Availability Deadline (optional)</label>
-                    <input
-                      type="date"
-                      name="availabilityDeadline"
-                      value={formData.availabilityDeadline}
-                      onChange={handleChange}
-                    />
+                    <div className="cu-field">
+                      <label>Availability Deadline</label>
+                      <input
+                        type="date"
+                        name="availabilityDeadline"
+                        value={formData.availabilityDeadline}
+                        onChange={handleChange}
+                      />
+                    </div>
                   </div>
 
                   <div className="cu-coordinator-section">
-                    <div>
-                      <h3>Unit Coordinators</h3>
-                      <p>
-                        Add existing Unit Coordinator accounts that should manage this unit too.
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      className="cu-coordinator-toggle"
+                      onClick={() => setShowCoordinatorSection(prev => !prev)}
+                      aria-expanded={showCoordinatorSection}
+                    >
+                      <span>
+                        <h3>Unit Coordinators</h3>
+                        <p>
+                          {isEditMode && coordinators.length > 0
+                            ? `${coordinators.length} added`
+                            : coordinatorEmails.length > 0
+                              ? `${coordinatorEmails.length} to add`
+                              : 'Optional \u2014 add others who can manage this unit'}
+                        </p>
+                      </span>
+                      <span className={`cu-coordinator-chevron ${showCoordinatorSection ? 'open' : ''}`}>&#9662;</span>
+                    </button>
 
-                    {isEditMode && coordinators.length > 0 && (
-                      <div className="cu-coordinator-list">
-                        {coordinators.map(coordinator => (
-                          <div className="cu-coordinator-item" key={coordinator.id}>
-                            <div>
-                              <strong>{coordinator.fullName || coordinator.email}</strong>
-                              <span>{coordinator.email}</span>
-                            </div>
-                            {coordinator.isMain && <em>Main</em>}
+                    {showCoordinatorSection && (
+                      <div className="cu-coordinator-body">
+                        {isEditMode && coordinators.length > 0 && (
+                          <div className="cu-coordinator-list">
+                            {coordinators.map(coordinator => (
+                              <div className="cu-coordinator-item" key={coordinator.id}>
+                                <div>
+                                  <strong>{coordinator.fullName || coordinator.email}</strong>
+                                  <span>{coordinator.email}</span>
+                                </div>
+                                {coordinator.isMain && <em>Main</em>}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
+
+                        {!isEditMode && coordinatorEmails.length > 0 && (
+                          <div className="cu-email-chip-list">
+                            {coordinatorEmails.map(email => (
+                              <span className="cu-email-chip" key={email}>
+                                {email}
+                                <button type="button" onClick={() => removeCoordinatorEmail(email)} aria-label={`Remove ${email}`}>
+                                  &times;
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="cu-add-coordinator-row">
+                          <input
+                            type="email"
+                            value={coordinatorEmailInput}
+                            onChange={(e) => setCoordinatorEmailInput(e.target.value)}
+                            placeholder="coordinator@example.com"
+                          />
+                          <button
+                            type="button"
+                            onClick={isEditMode ? handleAddCoordinator : addCoordinatorEmailToDraft}
+                            disabled={isEditMode && isAddingCoordinator}
+                          >
+                            {isEditMode && isAddingCoordinator ? 'Adding...' : 'Add'}
+                          </button>
+                        </div>
+
+                        {coordinatorError && <p className="cu-error cu-coordinator-error">{coordinatorError}</p>}
                       </div>
                     )}
-
-                    {!isEditMode && coordinatorEmails.length > 0 && (
-                      <div className="cu-email-chip-list">
-                        {coordinatorEmails.map(email => (
-                          <span className="cu-email-chip" key={email}>
-                            {email}
-                            <button type="button" onClick={() => removeCoordinatorEmail(email)} aria-label={`Remove ${email}`}>
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="cu-add-coordinator-row">
-                      <input
-                        type="email"
-                        value={coordinatorEmailInput}
-                        onChange={(e) => setCoordinatorEmailInput(e.target.value)}
-                        placeholder="coordinator@example.com"
-                      />
-                      <button
-                        type="button"
-                        onClick={isEditMode ? handleAddCoordinator : addCoordinatorEmailToDraft}
-                        disabled={isEditMode && isAddingCoordinator}
-                      >
-                        {isEditMode && isAddingCoordinator ? 'Adding...' : 'Add'}
-                      </button>
-                    </div>
-
-                    {coordinatorError && <p className="cu-error cu-coordinator-error">{coordinatorError}</p>}
                   </div>
 
                   <div className="cu-buttons-row">

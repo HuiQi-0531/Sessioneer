@@ -38,7 +38,7 @@
 
 .us-group {
   max-width: 480px;
-  margin: 0 auto 32px;
+  margin: 0 auto 24px;
 }
 
 .us-group-title {
@@ -49,6 +49,91 @@
   color: var(--color-text-muted);
   margin-bottom: 12px;
   text-align: left;
+}
+
+.us-tabs {
+  display: flex;
+  gap: 4px;
+  max-width: 480px;
+  margin: 0 auto 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.us-search-row {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto 16px;
+}
+
+.us-search-input {
+  width: 100%;
+  padding: 10px 34px 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+}
+
+.us-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.us-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.us-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.us-tab:hover {
+  color: var(--color-text);
+}
+
+.us-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.us-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+  background-color: var(--color-bg-subtle);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.us-tab.active .us-tab-count {
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
 }
 
 .us-group-empty {
@@ -81,10 +166,6 @@
 .us-unit-row.selected {
   border-color: var(--color-primary);
   background-color: #eef2ff;
-}
-
-.us-unit-row.inactive {
-  opacity: 0.5;
 }
 
 .us-unit-code {

@@ -7,11 +7,13 @@ import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
 import '../styles/UnitSetup.css';
 
-const SEMESTER_OPTIONS = ['Semester 1', 'Semester 2'];
+const SEMESTER_OPTIONS = ['Semester 1', 'Semester 2', 'Summer'];
 
 const UnitSetup = () => {
   const navigate = useNavigate();
   const { allUnits, activeUnit, activeUnitId, setActiveUnitId, refreshUnits, isLoading } = useActiveUnit();
+  const [unitTab, setUnitTab] = useState('active');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateForm, setDuplicateForm] = useState({ unitCode: '', unitName: '', semester: '', year: '' });
@@ -19,8 +21,16 @@ const UnitSetup = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
 
   const coordinatorUnits = allUnits.filter(unit => unit.roles?.includes('coordinator'));
-  const activeUnits = coordinatorUnits.filter(unit => unit.isActive);
-  const inactiveUnits = coordinatorUnits.filter(unit => !unit.isActive);
+  const matchesSearch = (unit) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      unit.unitCode?.toLowerCase().includes(query) ||
+      unit.unitName?.toLowerCase().includes(query)
+    );
+  };
+  const activeUnits = coordinatorUnits.filter(unit => unit.isActive && matchesSearch(unit));
+  const inactiveUnits = coordinatorUnits.filter(unit => !unit.isActive && matchesSearch(unit));
   const selectedUnit = activeUnit?.roles?.includes('coordinator')
     ? activeUnit
     : coordinatorUnits.find(unit => unit.id === activeUnitId) || null;
@@ -106,14 +116,13 @@ const UnitSetup = () => {
   const renderUnitRow = (unit) => (
     <div
       key={unit.id}
-      className={`us-unit-row ${selectedUnit?.id === unit.id ? 'selected' : ''} ${!unit.isActive ? 'inactive' : ''}`}
+      className={`us-unit-row ${selectedUnit?.id === unit.id ? 'selected' : ''}`}
       onClick={() => handleSelectUnit(unit)}
     >
       <div>
         <div className="us-unit-code">{unit.unitCode}</div>
         <div className="us-unit-meta">{unit.unitName} - {unit.semester}, {unit.year}</div>
       </div>
-      {!unit.isActive && <span className="us-inactive-badge">INACTIVE</span>}
     </div>
   );
 
@@ -139,24 +148,63 @@ const UnitSetup = () => {
             </div>
           ) : (
             <>
-              <section className="us-group">
-                <h3 className="us-group-title">Active Units</h3>
-                {activeUnits.length === 0 ? (
-                  <div className="us-empty-state us-group-empty">
-                    <p>No active units this semester.</p>
-                  </div>
-                ) : (
-                  <div className="us-list">
-                    {activeUnits.map(renderUnitRow)}
-                  </div>
+              <div className="us-search-row">
+                <input
+                  type="text"
+                  className="us-search-input"
+                  placeholder="Search by unit code or name..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="us-search-clear"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    &times;
+                  </button>
                 )}
-              </section>
+              </div>
+
+              <div className="us-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={unitTab === 'active'}
+                  className={`us-tab ${unitTab === 'active' ? 'active' : ''}`}
+                  onClick={() => setUnitTab('active')}
+                >
+                  Active Units
+                  <span className="us-tab-count">{activeUnits.length}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={unitTab === 'inactive'}
+                  className={`us-tab ${unitTab === 'inactive' ? 'active' : ''}`}
+                  onClick={() => setUnitTab('inactive')}
+                >
+                  Inactive Units
+                  <span className="us-tab-count">{inactiveUnits.length}</span>
+                </button>
+              </div>
 
               <section className="us-group">
-                <h3 className="us-group-title">Inactive Units</h3>
-                {inactiveUnits.length === 0 ? (
+                {unitTab === 'active' ? (
+                  activeUnits.length === 0 ? (
+                    <div className="us-empty-state us-group-empty">
+                      <p>{searchQuery ? 'No active units match your search.' : 'No active units this semester.'}</p>
+                    </div>
+                  ) : (
+                    <div className="us-list">
+                      {activeUnits.map(renderUnitRow)}
+                    </div>
+                  )
+                ) : inactiveUnits.length === 0 ? (
                   <div className="us-empty-state us-group-empty">
-                    <p>No inactive units.</p>
+                    <p>{searchQuery ? 'No inactive units match your search.' : 'No inactive units.'}</p>
                   </div>
                 ) : (
                   <div className="us-list">

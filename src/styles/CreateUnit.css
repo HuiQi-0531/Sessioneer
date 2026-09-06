@@ -9,12 +9,24 @@
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 28px 32px;
-  max-width: 440px;
+  max-width: 620px;
   width: 100%;
 }
 
 .cu-form-card h2 {
   margin-bottom: 20px;
+}
+
+.cu-field-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.cu-field-row .cu-field {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .cu-field {
@@ -58,22 +70,49 @@
 .cu-coordinator-section {
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  padding: 16px;
   margin-top: 8px;
   background-color: var(--color-bg-subtle);
+  overflow: hidden;
 }
 
-.cu-coordinator-section h3 {
+.cu-coordinator-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cu-coordinator-toggle h3 {
   font-size: 15px;
   margin: 0 0 4px;
   color: var(--color-text);
 }
 
-.cu-coordinator-section p {
-  margin: 0 0 12px;
+.cu-coordinator-toggle p {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.cu-coordinator-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.cu-coordinator-chevron.open {
+  transform: rotate(180deg);
+}
+
+.cu-coordinator-body {
+  padding: 0 16px 16px;
 }
 
 .cu-coordinator-list {
