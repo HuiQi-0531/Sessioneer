@@ -127,82 +127,88 @@ const AdminApplications = () => {
       </div>
 
       <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Applicant</th>
-              <th>Unit</th>
-              <th>Details</th>
-              <th>Status</th>
-              <th>Submitted</th>
-              <th>Invite</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan="7" className="admin-empty-cell">Loading applications...</td>
-              </tr>
-            ) : filteredApplications.length === 0 ? (
-              <tr>
-                <td colSpan="7" className="admin-empty-cell">No applications match your filters.</td>
-              </tr>
+<table className="admin-table">
+  <thead>
+    <tr>
+      <th>Applicant</th>
+      <th>Unit</th>
+      <th>Details</th>
+      <th>Status</th>
+      <th>Invite</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {isLoading ? (
+      <tr>
+        <td colSpan="6" className="admin-empty-cell">Loading applications...</td>
+      </tr>
+    ) : filteredApplications.length === 0 ? (
+      <tr>
+        <td colSpan="6" className="admin-empty-cell">No applications match your filters.</td>
+      </tr>
+    ) : (
+      filteredApplications.map(application => (
+        <tr key={application.id}>
+          <td>
+            <div className="admin-strong-cell">
+              <strong>{application.fullName}</strong>
+              <span>{application.email}</span>
+            </div>
+          </td>
+          <td>
+            {application.unitCode || 'No unit'}
+            {application.unitName ? ` · ${application.unitName}` : ''}
+          </td>
+          <td>
+            <div className="admin-strong-cell">
+              <strong>{application.contractType || 'Not provided'}</strong>
+              <span>
+                {application.maximumHours != null
+                  ? `${application.maximumHours} hrs/week`
+                  : 'Hours not provided'}
+              </span>
+            </div>
+          </td>
+          <td>
+            <span className={`admin-pill ${getStatusClass(application.status)}`}>
+              {application.status}
+            </span>
+          </td>
+          <td>
+            {application.invitedAt ? (
+              <div className="admin-strong-cell">
+                <strong>
+                  {new Date(application.invitedAt).toLocaleDateString([], {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                  })}
+                </strong>
+                <span>{application.invitedByName || application.invitedByEmail || 'Unknown'}</span>
+              </div>
             ) : (
-              filteredApplications.map(application => (
-                <tr key={application.id}>
-                  <td>
-                    <div className="admin-strong-cell">
-                      <strong>{application.fullName}</strong>
-                      <span>{application.email}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="admin-strong-cell">
-                      <strong>{application.unitCode || 'No unit'}</strong>
-                      <span>{application.unitName || '-'}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="admin-strong-cell">
-                      <strong>{application.contractType || 'Not provided'}</strong>
-                      <span>
-                        {application.maximumHours != null
-                          ? `${application.maximumHours} hrs/week`
-                          : 'Hours not provided'}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`admin-pill ${getStatusClass(application.status)}`}>
-                      {application.status}
-                    </span>
-                  </td>
-                  <td>{formatDateTime(application.appliedAt)}</td>
-                  <td>
-                    <div className="admin-strong-cell">
-                      <strong>{application.invitedAt ? formatDateTime(application.invitedAt) : '-'}</strong>
-                      <span>{application.invitedByName || application.invitedByEmail || 'No invite yet'}</span>
-                    </div>
-                  </td>
-                  <td>
-                    {application.hasResume ? (
-                      <button
-                        className="admin-text-btn"
-                        onClick={() => handleDownloadResume(application)}
-                        disabled={resumeLoadingId === application.id}
-                      >
-                        {resumeLoadingId === application.id ? 'Opening...' : 'View resume'}
-                      </button>
-                    ) : (
-                      <span className="admin-muted">No resume</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+              <span className="admin-muted">No invite yet</span>
             )}
-          </tbody>
-        </table>
+          </td>
+          <td>
+            {application.hasResume ? (
+              <button
+                className="admin-text-btn"
+                onClick={() => handleDownloadResume(application)}
+                disabled={resumeLoadingId === application.id}
+              >
+                {resumeLoadingId === application.id ? 'Opening...' : 'View resume'}
+              </button>
+            ) : (
+              <span className="admin-muted">No resume</span>
+            )}
+          </td>
+        </tr>
+      ))
+    )}
+  </tbody>
+</table>
       </div>
     </AdminShell>
   );

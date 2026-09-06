@@ -245,12 +245,9 @@ const AdminSessions = () => {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Unit</th>
-              <th>Semester</th>
-              <th>Day</th>
-              <th>Time</th>
+              <th>Session</th>
+              <th>When</th>
               <th>Location</th>
-              <th>Type</th>
               <th>Capacity</th>
               <th>Tutor</th>
               <th>Status</th>
@@ -259,36 +256,45 @@ const AdminSessions = () => {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan="10" className="admin-empty-cell">Loading sessions...</td></tr>
+              <tr><td colSpan="7" className="admin-empty-cell">Loading sessions...</td></tr>
             ) : filteredSessions.length === 0 ? (
-              <tr><td colSpan="10" className="admin-empty-cell">No sessions found.</td></tr>
+              <tr><td colSpan="7" className="admin-empty-cell">No sessions found.</td></tr>
             ) : filteredSessions.map(session => (
               <tr key={session.id}>
                 <td>
                   <div className="admin-strong-cell">
-                    <strong>{session.unitCode}</strong>
-                    <span>{session.unitName}</span>
+                    <strong>
+                      {session.unitCode}
+                      {session.unitName ? ` · ${session.unitName}` : ''}
+                    </strong>
+                    <span>
+                      {[
+                        session.sessionType,
+                        [String(session.semester || '').replace('Semester ', 'Sem '), session.year]
+                          .filter(Boolean)
+                          .join(', ')
+                      ].filter(Boolean).join(' · ') || '-'}
+                    </span>
                   </div>
                 </td>
-                <td>{formatUnitTerm(session) || '-'}</td>
-                <td>{session.day}</td>
-                <td>{formatTimeRange(session)}</td>
-                <td>{session.location || '-'}{session.campus ? ` (${session.campus})` : ''}</td>
-                <td>{session.sessionType || '-'}</td>
                 <td>
-                  <div className="admin-unit-summary">
-                    <strong>{session.capacity || 0}</strong>
-                    <span>{session.requiredTutors || 1} tutor{Number(session.requiredTutors || 1) === 1 ? '' : 's'}</span>
-                  </div>
+                  {session.day ? `${session.day} ${formatTimeRange(session)}` : formatTimeRange(session)}
+                </td>
+                <td>
+                  {session.location || '-'}
+                  {session.campus ? ` (${session.campus})` : ''}
+                </td>
+                <td>
+                  <div className="admin-strong-cell">
+                  <strong>{session.capacity || 0}</strong>
+                  <span>{session.requiredTutors || 1} tutor{Number(session.requiredTutors || 1) === 1 ? '' : 's'}</span>
+                </div>
                 </td>
                 <td>{getTutorCell(session)}</td>
                 <td>
-                  <div className="admin-pill-row">
-                    <span className={`admin-pill ${(session.status || '').toLowerCase()}`}>{session.status || 'Draft'}</span>
-                    <span className={`admin-pill ${(session.tutorConfirmationState || '').toLowerCase().replace(/\s+/g, '-')}`}>
-                      {session.tutorConfirmationState}
-                    </span>
-                  </div>
+                  <span className={`admin-pill ${(session.tutorConfirmationState || '').toLowerCase().replace(/\s+/g, '-')}`}>
+                    {session.tutorConfirmationState}
+                  </span>
                 </td>
                 <td>
                   <div className="admin-row-actions">
