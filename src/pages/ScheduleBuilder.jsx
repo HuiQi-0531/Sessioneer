@@ -152,7 +152,7 @@ const ScheduleBuilder = () => {
   );
   const hiddenFromGridCount = sessions.length - gridSessions.length;
 
-  const renderThreeColorGrid = () => (
+const renderThreeColorGrid = () => (
     <div className="sb-grid-wrapper" ref={gridRef}>
       <div className="sb-grid" style={{ gridTemplateRows: `auto repeat(${HOUR_LABELS.length}, 44px)` }}>
         <div className="sb-grid-corner" />
@@ -193,6 +193,9 @@ const ScheduleBuilder = () => {
             group.map((session, colIdx) => {
               const startHour = hourFromTime(session.startTime);
               const endHour = hourFromTime(session.endTime);
+              const startMin = startHour * 60 + parseInt(session.startTime.split(':')[1], 10);
+              const endMin = endHour * 60 + parseInt(session.endTime.split(':')[1], 10);
+              const isShort = (endMin - startMin) <= 60;
               const rowStart = (startHour - GRID_START_HOUR) + 2;
               const rowEnd = (endHour - GRID_START_HOUR) + 2;
               const state = getSessionState(session);
@@ -202,7 +205,7 @@ const ScheduleBuilder = () => {
               return (
                 <button
                   key={session.id}
-                  className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}`}
+                  className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}${isShort ? ' is-short' : ''}`}
                   style={{
                     gridColumn: dayIndex + 2,
                     gridRow: `${rowStart} / ${rowEnd}`,
