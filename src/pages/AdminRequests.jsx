@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminShell from './AdminShell';
 import { adminAPI } from '../config/api';
 
-const getStatusClass = (status) => String(status || '').toLowerCase().replace(/\s+/g, '-');
+const getStatusClass = (status) =>
+  String(status || '').toLowerCase().replace(/[\s/]+/g, '-');
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -287,41 +288,39 @@ const AdminRequests = () => {
       </div>
 
       <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>Request</th>
+            <th>Tutor</th>
+            <th>Session</th>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th>Review</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading ? (
             <tr>
-              <th>Request</th>
-              <th>Unit</th>
-              <th>Tutor</th>
-              <th>Session</th>
-              <th>Status</th>
-              <th>Submitted</th>
-              <th>Review</th>
-              <th>Action</th>
+              <td colSpan="7" className="admin-empty-cell">Loading requests...</td>
             </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan="8" className="admin-empty-cell">Loading requests...</td>
-              </tr>
-            ) : filteredRequests.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="admin-empty-cell">No requests match your filters.</td>
-              </tr>
-            ) : (
-              filteredRequests.map(request => (
+          ) : filteredRequests.length === 0 ? (
+            <tr>
+              <td colSpan="7" className="admin-empty-cell">No requests match your filters.</td>
+            </tr>
+          ) : (
+            filteredRequests.map(request => {
+              const reviewAt = request.reviewedAt || request.claimedAt;
+              return (
                 <tr key={`${request.requestGroup}-${request.id}`}>
                   <td>
                     <div className="admin-strong-cell">
                       <strong>{request.requestType || request.requestGroup}</strong>
-                      <span>{request.reason || 'No reason provided'}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="admin-strong-cell">
-                      <strong>{request.unitCode || 'No unit'}</strong>
-                      <span>{request.unitName || '-'}</span>
+                      <span>
+                        {request.unitCode || 'No unit'}
+                        {request.unitName ? ` - ${request.unitName}` : ''}
+                      </span>
                     </div>
                   </td>
                   <td>
@@ -344,22 +343,55 @@ const AdminRequests = () => {
                       {String(request.priority || '').toLowerCase() === 'urgent' && (
                         <span className="admin-pill urgent">Urgent</span>
                       )}
-                      <span className="admin-pill neutral">{request.requestGroup}</span>
+                      <span className={`admin-pill ${getStatusClass(request.requestGroup)}`}>
+                        {request.requestGroup}
+                      </span>
                     </div>
                   </td>
-                  <td>{formatDateTime(request.submittedAt)}</td>
                   <td>
-                    <div className="admin-strong-cell">
-                      <strong>{request.reviewedAt ? formatDateTime(request.reviewedAt) : request.claimedAt ? formatDateTime(request.claimedAt) : '-'}</strong>
-                      <span>{request.coordinatorName || request.coordinatorEmail || 'No reviewer yet'}</span>
-                    </div>
+                    {request.submittedAt ? (
+                      <div className="admin-strong-cell">
+                        <strong>
+                          {new Date(request.submittedAt).toLocaleDateString([], {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </strong>
+                        <span>
+                          {new Date(request.submittedAt).toLocaleTimeString([], {
+                            hour: 'numeric',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="admin-muted">-</span>
+                    )}
+                  </td>
+                  <td>
+                    {reviewAt ? (
+                      <div className="admin-strong-cell">
+                        <strong>
+                          {new Date(reviewAt).toLocaleDateString([], {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </strong>
+                        <span>{request.coordinatorName || request.coordinatorEmail || 'Unknown'}</span>
+                      </div>
+                    ) : (
+                      <span className="admin-muted">No review yet</span>
+                    )}
                   </td>
                   <td>{renderActionButtons(request)}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              );
+            })
+          )}
+        </tbody>
+      </table>
       </div>
 
       {actionRequest && (
