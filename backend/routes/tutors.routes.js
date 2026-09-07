@@ -21,13 +21,22 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
 
     const result = await pool.query(
       `
+      WITH tutor_memberships AS (
+        SELECT DISTINCT ON (user_id)
+          user_id,
+          role AS membership_role
+        FROM unit_memberships
+        WHERE unit_id = $1
+          AND role = ANY($2)
+        ORDER BY user_id, CASE WHEN role = 'super_tutor' THEN 0 ELSE 1 END
+      )
       SELECT
         u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url, u.phone_number, u.work_experience,
-        u.maximum_hours, u.contract_type, um.role AS membership_role,
+        u.maximum_hours, u.contract_type, tm.membership_role,
         m.priority_tag, m.internal_notes, m.tags, m.early_access, m.starred, m.flagged
       FROM users u
-      JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = ANY($2)
+      JOIN tutor_memberships tm
+        ON tm.user_id = u.id
       LEFT JOIN tutor_unit_markers m
         ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name

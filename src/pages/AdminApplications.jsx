@@ -4,17 +4,6 @@ import { adminAPI } from '../config/api';
 
 const statusOptions = ['pending', 'invited', 'accepted', 'rejected'];
 
-const formatDateTime = (value) => {
-  if (!value) return '-';
-  return new Date(value).toLocaleString([], {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
-};
-
 const getStatusClass = (status) => String(status || 'pending').toLowerCase().replace(/\s+/g, '-');
 
 const AdminApplications = () => {

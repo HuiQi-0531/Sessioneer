@@ -10,6 +10,25 @@ import '../styles/Tutors.css';
 
 const PRIORITY_OPTIONS = ['Preferred', 'Standard', 'Backup', 'Risk'];
 
+const tutorRoleRank = (tutor) => (tutor?.role === 'super_tutor' || tutor?.isSuperTutor ? 2 : 1);
+
+const dedupeTutors = (items) => {
+  const byId = new Map();
+
+  (Array.isArray(items) ? items : []).forEach(tutor => {
+    const existing = byId.get(tutor.id);
+    if (!existing || tutorRoleRank(tutor) > tutorRoleRank(existing)) {
+      byId.set(tutor.id, {
+        ...tutor,
+        role: tutor.role === 'super_tutor' || tutor.isSuperTutor ? 'super_tutor' : (tutor.role || 'tutor'),
+        isSuperTutor: tutor.role === 'super_tutor' || !!tutor.isSuperTutor
+      });
+    }
+  });
+
+  return Array.from(byId.values());
+};
+
 const Tutors = () => {
   const { unitId: unitIdFromUrl } = useParams();
   const {
@@ -71,7 +90,7 @@ const Tutors = () => {
     setIsLoadingTutors(true);
     try {
       const data = await tutorsAPI.getAll(unitId);
-      setTutors(data);
+      setTutors(dedupeTutors(data));
     } catch (err) {
       console.error('Error loading tutors:', err);
     } finally {

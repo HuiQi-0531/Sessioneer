@@ -5,17 +5,6 @@ import { adminAPI } from '../config/api';
 const getStatusClass = (status) =>
   String(status || '').toLowerCase().replace(/[\s/]+/g, '-');
 
-const formatDateTime = (value) => {
-  if (!value) return '-';
-  return new Date(value).toLocaleString([], {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
-};
-
 const labelFromSessionValue = (value) => {
   if (!value) return '-';
   const parts = String(value).split('::');
