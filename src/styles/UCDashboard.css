@@ -105,9 +105,11 @@
   font-size: 13px;
   font-weight: 600;
   transition: all 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .ucd-quicklink-card:hover {
+  background-color: var(--color-primary-light);
   border-color: var(--color-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);

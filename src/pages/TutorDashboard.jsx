@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock, ListChecks, RefreshCw, MessageSquare, LayoutGrid } from 'lucide-react';
+import { CalendarDays, Clock, ListChecks, RefreshCw, MessageSquare, UserCog } from 'lucide-react';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -112,7 +112,7 @@ const TutorDashboard = () => {
               </div>
 
                             <section className="td-section">
-                <h3>Quick Links</h3>
+                <h3>Quick Actions</h3>
                 <div className="td-quicklinks-grid">
                   <Link to="/tutor-sessions" className="td-quicklink-card">
                     <ListChecks size={22} />
@@ -134,9 +134,9 @@ const TutorDashboard = () => {
                     <MessageSquare size={22} />
                     <span>Messages</span>
                   </Link>
-                  <Link to="/tutor-units" className="td-quicklink-card td-quicklink-highlight">
-                    <LayoutGrid size={22} />
-                    <span>View All Units</span>
+                  <Link to="/profile" className="td-quicklink-card">
+                    <UserCog size={22} />
+                    <span>Edit Profile</span>
                   </Link>
                 </div>
               </section>

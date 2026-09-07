@@ -118,7 +118,7 @@ const UCDashboard = () => {
               </div>
 
                             <section className="ucd-section">
-                <h3>Quick Links</h3>
+                <h3>Quick Actions</h3>
                 <div className="ucd-quicklinks-grid">
                   <Link to="/sessions" className="ucd-quicklink-card">
                     <ListChecks size={22} />
@@ -148,7 +148,7 @@ const UCDashboard = () => {
                     <MessageSquare size={22} />
                     <span>Messages</span>
                   </Link>
-                  <Link to="/unit-setup" className="ucd-quicklink-card ucd-quicklink-highlight">
+                  <Link to="/unit-setup" className="ucd-quicklink-card">
                     <LayoutGrid size={22} />
                     <span>View All Units</span>
                   </Link>

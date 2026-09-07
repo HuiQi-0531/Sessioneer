@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
+
 .uc-sidebar {
   top: 0;
   left: 0;
@@ -17,6 +19,23 @@
 .uc-logo-section {
   padding-top: 22px;
   padding-bottom: 22px;
+}
+
+.uc-logo {
+  width: 44px !important;
+  height: 44px !important;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.uc-brand-name {
+  font-family: 'Fraunces', serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
 }
 
 .uc-navigation {

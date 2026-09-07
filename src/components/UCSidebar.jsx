@@ -170,7 +170,21 @@ const UCSidebar = ({ activePage }) => {
   return (
     <aside className="uc-sidebar">
       <Link to="/uc-dashboard" className="uc-logo-section" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-        <div className="uc-logo"><span className="uc-logo-icon">S</span></div>
+        <div className="uc-logo">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="uc-logo-icon">
+            <path d="M12 4C9.5 4 7.5 4.8 6 6V19C7.5 17.8 9.5 17 12 17C14.5 17 16.5 17.8 18 19V6C16.5 4.8 14.5 4 12 4Z" 
+                  stroke="white" strokeWidth="1.4" strokeLinejoin="round"/>
+            <path d="M12 4V17" stroke="white" strokeWidth="1.4"/>
+            <circle cx="12" cy="10.5" r="3.6" fill="url(#clockBg)" stroke="white" strokeWidth="1.2"/>
+            <path d="M12 8.6V10.5L13.3 11.6" stroke="white" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+            <defs>
+              <radialGradient id="clockBg" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#8b5cf6"/>
+                <stop offset="100%" stopColor="#6366f1"/>
+              </radialGradient>
+            </defs>
+          </svg>
+        </div>
         <h2 className="uc-brand-name">Sessioneer</h2>
       </Link>
 
