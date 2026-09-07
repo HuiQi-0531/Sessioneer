@@ -558,10 +558,19 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
 
     const tutorsResult = await pool.query(
       `
-      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, um.role AS membership_role, m.priority_tag, m.starred, m.flagged
+      WITH tutor_memberships AS (
+        SELECT DISTINCT ON (user_id)
+          user_id,
+          role AS membership_role
+        FROM unit_memberships
+        WHERE unit_id = $1
+          AND role = ANY($2)
+        ORDER BY user_id, CASE WHEN role = 'super_tutor' THEN 0 ELSE 1 END
+      )
+      SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.maximum_hours, tm.membership_role, m.priority_tag, m.starred, m.flagged
       FROM users u
-      JOIN unit_memberships um
-        ON um.user_id = u.id AND um.unit_id = $1 AND um.role = ANY($2)
+      JOIN tutor_memberships tm
+        ON tm.user_id = u.id
       LEFT JOIN tutor_unit_markers m ON m.tutor_id = u.id AND m.unit_id = $1
       ORDER BY name
       `,
