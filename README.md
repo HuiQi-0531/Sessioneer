@@ -11,61 +11,78 @@ Group Members:
 
 # Sessioneer - Session Management System
 
-## Prerequisites
-- Node.js (v14+)
-- Docker Desktop
+## Installation
 
-## Quick Setup (5 minutes!)
+### Prerequisites
+Make sure you have the following installed before you start:
+- [Node.js](https://nodejs.org/) v14 or later (includes npm)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running, before you get to step 2)
+- [Git](https://git-scm.com/)
 
-### 1. Clone and Install
+### 1. Clone the repository
 ```bash
 git clone <repo-url>
 cd cap-proj
+```
 
-# Install frontend dependencies
+### 2. Install dependencies
+Install the frontend dependencies from the project root, then the backend dependencies:
+```bash
+# Frontend (run from the project root)
 npm install
 
-# Install backend dependencies
+# Backend
 cd backend
 npm install
 cd ..
 ```
 
-### 2. Start Database (Docker)
+### 3. Start the database (Docker)
+Sessioneer uses PostgreSQL, run via Docker Compose. From the project root:
 ```bash
-# Start PostgreSQL in Docker
 docker-compose up -d
+```
+This pulls the `postgres:14` image, starts a container named `sessioneer_postgres`, and automatically runs `backend/setup-db.sql` on first start to create all tables and seed sample data.
 
-# Verify it's running
+Confirm the container is healthy before continuing:
+```bash
 docker-compose ps
 ```
+You should see `sessioneer_postgres` listed with status `healthy`.
 
-The database automatically creates all tables and sample data!
-
-### 3. Configure Backend
+### 4. Configure the backend
 ```bash
 cd backend
 cp .env.example .env
-# No need to edit - default values work!
+cd ..
 ```
+The default `.env` values work out of the box for local development (the database URL already matches the port Docker Compose exposes). You only need to edit `.env` if you want to enable optional features:
+- `BREVO_API_KEY` / `EMAIL_FROM` — for password reset emails
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — for message/file attachments and avatars
+- `JWT_SECRET` / `CRON_SECRET` — replace with your own long random strings, especially outside local development
 
-### 4. Run Application
+### 5. Run the application
+Start the backend and frontend in two separate terminals:
 
-**Terminal 1 - Backend:**
+**Terminal 1 — Backend**
 ```bash
 cd backend
 npm start
 ```
 
-**Terminal 2 - Frontend:**
+**Terminal 2 — Frontend**
 ```bash
 npm start
 ```
 
-### 5. Access Application
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5001
-- Health Check: http://localhost:5001/health
+### 6. Access the application
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:5001 |
+| Health check | http://localhost:5001/health |
+
+If the health check returns `{"status":"ok"}`, the backend is correctly connected to the database.
 
 ## Useful Docker Commands
 
@@ -93,9 +110,9 @@ docker exec -it sessioneer_postgres psql -U sessioneer -d sessioneer_db
 
 ## Troubleshooting
 
-**Port 5432 already in use?**
-- Stop any local PostgreSQL (Postgres.app, etc.)
-- Or change port in `docker-compose.yml`: `"5433:5432"`
+**Port 5433 already in use?**
+- Stop any local PostgreSQL instance using that port, or
+- Change the host port in `docker-compose.yml` (e.g. `"5434:5432"`) and update `DATABASE_URL` in `backend/.env` to match.
 
 **Database not connecting?**
 - Check Docker is running: `docker ps`
@@ -103,5 +120,12 @@ docker exec -it sessioneer_postgres psql -U sessioneer -d sessioneer_db
 - Restart: `docker-compose restart`
 
 **"Failed to fetch requests"?**
-- Make sure backend is running on port 5001
-- Check `http://localhost:5001/health` shows status "ok"
+- Make sure the backend is running on port 5001
+- Check `http://localhost:5001/health` shows status `ok`
+
+**Port 3000 or 5001 already in use?**
+- Stop whatever else is using the port, or set `PORT` in `backend/.env` (backend) or run the frontend with `PORT=3001 npm start` (frontend).
+
+**`npm install` fails or the app won't start?**
+- Confirm your Node.js version with `node -v` (v14+ required)
+- Delete `node_modules` and `package-lock.json` in the affected folder (root or `backend`) and re-run `npm install`
