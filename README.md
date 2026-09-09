@@ -8,124 +8,90 @@ Group Members:
 - PHAN CHEN HUAN (n12167282)
 - GAN CHUN YANG (n12086215)
 
-
 # Sessioneer - Session Management System
 
-## Installation
+## Prerequisites
+- Node.js (v14+)
+- PostgreSQL (v14+), installed and running locally
 
-### Prerequisites
-Make sure you have the following installed before you start:
-- [Node.js](https://nodejs.org/) v14 or later (includes npm)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running, before you get to step 2)
-- [Git](https://git-scm.com/)
+## Quick Setup
 
-### 1. Clone the repository
+### 1. Clone and Install
 ```bash
 git clone <repo-url>
 cd cap-proj
-```
 
-### 2. Install dependencies
-Install the frontend dependencies from the project root, then the backend dependencies:
-```bash
-# Frontend (run from the project root)
+# Install frontend dependencies
 npm install
 
-# Backend
+# Install backend dependencies
 cd backend
 npm install
 cd ..
 ```
 
-### 3. Start the database (Docker)
-Sessioneer uses PostgreSQL, run via Docker Compose. From the project root:
-```bash
-docker-compose up -d
+### 2. Create the Database
+Open `psql` (or any Postgres client) and create a user and database:
+```sql
+CREATE USER sessioneer WITH PASSWORD 'your_password_here';
+CREATE DATABASE sessioneer_db OWNER sessioneer;
 ```
-This pulls the `postgres:14` image, starts a container named `sessioneer_postgres`, and automatically runs `backend/setup-db.sql` on first start to create all tables and seed sample data.
 
-Confirm the container is healthy before continuing:
+Then load the schema:
 ```bash
-docker-compose ps
+psql -U sessioneer -d sessioneer_db -f backend/setup-db.sql
 ```
-You should see `sessioneer_postgres` listed with status `healthy`.
+This creates the core tables. A few newer tables/columns (e.g. `unit_memberships`, `session_tutors`, `cover_requests`) aren't in this script — the backend adds them automatically the first time it starts (see step 4).
 
-### 4. Configure the backend
+### 3. Configure Backend
 ```bash
 cd backend
 cp .env.example .env
-cd ..
 ```
-The default `.env` values work out of the box for local development (the database URL already matches the port Docker Compose exposes). You only need to edit `.env` if you want to enable optional features:
-- `BREVO_API_KEY` / `EMAIL_FROM` — for password reset emails
-- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — for message/file attachments and avatars
-- `JWT_SECRET` / `CRON_SECRET` — replace with your own long random strings, especially outside local development
+Edit `.env` and point `DATABASE_URL` at your local database, e.g.:
+```
+DATABASE_URL=postgresql://sessioneer:your_password_here@localhost:5432/sessioneer_db
+```
+(Default local Postgres port is `5432` — change it if your install uses a different one.)
 
-### 5. Run the application
-Start the backend and frontend in two separate terminals:
+Also set `JWT_SECRET` to any long random string. The `BREVO_API_KEY`, `SUPABASE_*`, and `CRON_SECRET` variables are optional — they're only needed for password-reset emails, file attachment storage, and scheduled reminder jobs. The app runs fine locally with placeholder values for those.
 
-**Terminal 1 — Backend**
+### 4. Run Application
+
+**Terminal 1 - Backend:**
 ```bash
 cd backend
 npm start
 ```
+On first run you should see a series of `... schema OK` lines in the console — this is the backend automatically adding any tables/columns not already in `setup-db.sql`. You should also see `Database connected at: <timestamp>`.
 
-**Terminal 2 — Frontend**
+**Terminal 2 - Frontend:**
 ```bash
 npm start
 ```
+No frontend configuration is needed for local development — the app automatically talks to `http://localhost:5001` whenever it's running on `localhost`/`127.0.0.1`.
 
-### 6. Access the application
-| Service | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:5001 |
-| Health check | http://localhost:5001/health |
+### 5. Access Application
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5001
+- Health Check: http://localhost:5001/health
 
-If the health check returns `{"status":"ok"}`, the backend is correctly connected to the database.
-
-## Useful Docker Commands
-
-```bash
-# Stop database
-docker-compose down
-
-# Start database
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Reset database (deletes all data!)
-docker-compose down -v
-docker-compose up -d
-
-# Connect to database
-docker exec -it sessioneer_postgres psql -U sessioneer -d sessioneer_db
-```
-
-## Test Accounts
-- **Unit Coordinator:** sarah.kim@uni.edu
-- **Tutor:** elaine.lee@student.edu
+## Creating an Account
+There are no working pre-seeded logins — `setup-db.sql` inserts two sample users (`test1@gmail.com`, `test2@gmail.com`) with a placeholder password hash that can never pass login. Use the **Sign Up** page to create a real Unit Coordinator or Tutor account instead; registered passwords are hashed and verified correctly.
 
 ## Troubleshooting
 
-**Port 5433 already in use?**
-- Stop any local PostgreSQL instance using that port, or
-- Change the host port in `docker-compose.yml` (e.g. `"5434:5432"`) and update `DATABASE_URL` in `backend/.env` to match.
+**Port 5432 already in use / can't connect?**
+- Check Postgres is actually running: `pg_isready` (or check your OS service manager).
+- Confirm the port in `DATABASE_URL` matches what your Postgres instance is listening on.
 
 **Database not connecting?**
-- Check Docker is running: `docker ps`
-- Check logs: `docker-compose logs postgres`
-- Restart: `docker-compose restart`
+- Check the backend console output for `Database connection error:`.
+- Double check the username, password, and database name in `DATABASE_URL` match what you created in step 2.
 
 **"Failed to fetch requests"?**
-- Make sure the backend is running on port 5001
-- Check `http://localhost:5001/health` shows status `ok`
+- Make sure the backend is running on port 5001.
+- Check `http://localhost:5001/health` returns `"status": "ok"`.
 
-**Port 3000 or 5001 already in use?**
-- Stop whatever else is using the port, or set `PORT` in `backend/.env` (backend) or run the frontend with `PORT=3001 npm start` (frontend).
-
-**`npm install` fails or the app won't start?**
-- Confirm your Node.js version with `node -v` (v14+ required)
-- Delete `node_modules` and `package-lock.json` in the affected folder (root or `backend`) and re-run `npm install`
+**Login fails for sarah.kim@uni.edu / elaine.lee@student.edu?**
+- Expected — see "Creating an Account" above. These accounts have a dummy password hash and cannot log in as shipped.
