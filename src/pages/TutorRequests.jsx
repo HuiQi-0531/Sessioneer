@@ -61,6 +61,7 @@ const TutorRequests = () => {
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
   const [suggestionAction, setSuggestionAction] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [activeTab, setActiveTab] = useState('cover'); 
 
   const [unitSessions, setUnitSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
@@ -430,110 +431,138 @@ const TutorRequests = () => {
 
       <main className="main-content">
         <UCPageHeader title="Request & Swap" />
-
-        <section className="requests-section">
-          <div className="requests-header">
-            <div>
-              <h2 className="section-title">Cover Requests</h2>
-              <p className="section-count">Sessions other tutors can't make — first come, first served.</p>
-            </div>
+          <div className="requests-tabs">
+            <button
+              className={`requests-tab ${activeTab === 'cover' ? 'active' : ''}`}
+              onClick={() => setActiveTab('cover')}
+            >
+              Cover Requests
+              {coverRequests.length > 0 && <span className="requests-tab-count">{coverRequests.length}</span>}
+            </button>
+            <button
+              className={`requests-tab ${activeTab === 'pending' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pending')}
+            >
+              Pending Status
+              {activeRequests.length > 0 && <span className="requests-tab-count">{activeRequests.length}</span>}
+            </button>
+            <button
+              className={`requests-tab ${activeTab === 'confirmed' ? 'active' : ''}`}
+              onClick={() => setActiveTab('confirmed')}
+            >
+              Confirmation Status
+            </button>
           </div>
 
-          {coverMessage && (
-            <p className={coverMessage.type === 'success' ? 'cvr-success' : 'cvr-error'}>{coverMessage.text}</p>
-          )}
-
-          {isLoadingCover ? (
-            <div className="empty-state"><p className="empty-title">Loading...</p></div>
-          ) : coverRequests.length === 0 ? (
-            <div className="empty-state">
-              <p className="empty-title">Nothing needs cover right now</p>
-              <p className="empty-subtitle">Check back later, or you'll be notified when one opens up</p>
-            </div>
-          ) : (
-            <div className="cvr-list">
-              {coverRequests.map(request => (
-                <div key={request.id} className="cvr-card">
-                  <div className="cvr-card-main">
-                    <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
-                    {request.sessionCode && (
-                      <div className="cvr-card-code">{request.sessionCode}</div>
-                    )}
-                    <div className="cvr-card-time">{request.day}, {request.startTime.slice(0, 5)} - {request.endTime.slice(0, 5)}</div>
-                    {request.startDate && request.endDate && (
-                      <div className="cvr-card-daterange">
-                        {formatShortDate(request.startDate)} - {formatShortDate(request.endDate)}
-                        {request.occurrenceCount ? ` · ${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'}` : ''}
-                      </div>
-                    )}               
-                    <div className="cvr-card-details">
-                      {request.location ? `${request.location} · ` : ''}{request.sessionType || 'Session'}
-                    </div>
-                    {request.originalTutorName && (
-                      <div className="cvr-card-original">Originally {request.originalTutorName}</div>
-                    )}
-                    {request.reason && (
-                      <div className="cvr-card-reason">"{request.reason}"</div>
-                    )}
-                  </div>
-                  <button
-                    className="cvr-claim-btn"
-                    onClick={() => handleClaimCover(request)}
-                    disabled={claimingId === request.id}
-                  >
-                    {claimingId === request.id ? 'Claiming...' : 'Claim This Session'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="requests-section">
-          <div className="requests-header">
-            <div>
-              <div className="section-title-row">
-                <h2 className="section-title">Pending Status</h2>
-                <div className="status-legend">
-                  <div className="legend-item"><span className="legend-dot changed"></span>Changed</div>
-                  <div className="legend-item"><span className="legend-dot swap"></span>Swap</div>
-                  <div className="legend-item"><span className="legend-dot pending"></span>Pending</div>
+            {activeTab === 'cover' && (
+            <section className="requests-section">
+              <div className="requests-header">
+                <div>
+                  <h2 className="section-title">Cover Requests</h2>
+                  <p className="section-count">Sessions other tutors can't make — first come, first served.</p>
                 </div>
               </div>
-              <p className="section-count">{activeRequests.length} pending review...</p>
-            </div>
-            <button className="add-request-btn" onClick={() => setShowModal(true)}>+ Request</button>
-          </div>
 
-          {activeRequests.length === 0 ? (
-            <div className="empty-state">
-              <p className="empty-title">No active requests</p>
-              <p className="empty-subtitle">Click "+ Request" to submit a swap or change request</p>
-            </div>
-          ) : (
-            <div className="requests-list">
-              {activeRequests.map(renderCard)}
-            </div>
+              {coverMessage && (
+                <p className={coverMessage.type === 'success' ? 'cvr-success' : 'cvr-error'}>{coverMessage.text}</p>
+              )}
+
+              {isLoadingCover ? (
+                <div className="empty-state"><p className="empty-title">Loading...</p></div>
+              ) : coverRequests.length === 0 ? (
+                <div className="empty-state">
+                  <p className="empty-title">Nothing needs cover right now</p>
+                  <p className="empty-subtitle">Check back later, or you'll be notified when one opens up</p>
+                </div>
+              ) : (
+                <div className="cvr-list">
+                  {coverRequests.map(request => (
+                    <div key={request.id} className="cvr-card">
+                      <div className="cvr-card-main">
+                        <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
+                        {request.sessionCode && (
+                          <div className="cvr-card-code">{request.sessionCode}</div>
+                        )}
+                        <div className="cvr-card-time">{request.day}, {request.startTime.slice(0, 5)} - {request.endTime.slice(0, 5)}</div>
+                        {request.startDate && request.endDate && (
+                          <div className="cvr-card-daterange">
+                            {formatShortDate(request.startDate)} - {formatShortDate(request.endDate)}
+                            {request.occurrenceCount ? ` · ${request.occurrenceCount} session${request.occurrenceCount === 1 ? '' : 's'}` : ''}
+                          </div>
+                        )}
+                        <div className="cvr-card-details">
+                          {request.location ? `${request.location} · ` : ''}{request.sessionType || 'Session'}
+                        </div>
+                        {request.originalTutorName && (
+                          <div className="cvr-card-original">Originally {request.originalTutorName}</div>
+                        )}
+                        {request.reason && (
+                          <div className="cvr-card-reason">"{request.reason}"</div>
+                        )}
+                      </div>
+                      <button
+                        className="cvr-claim-btn"
+                        onClick={() => handleClaimCover(request)}
+                        disabled={claimingId === request.id}
+                      >
+                        {claimingId === request.id ? 'Claiming...' : 'Claim This Session'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
-        </section>
 
-        <section className="requests-section">
-          <div className="requests-header">
-            <h2 className="section-title">Confirmation Status</h2>
-          </div>
+          {activeTab === 'pending' && (
+            <section className="requests-section">
+              <div className="requests-header">
+                <div>
+                  <div className="section-title-row">
+                    <h2 className="section-title">Pending Status</h2>
+                    <div className="status-legend">
+                      <div className="legend-item"><span className="legend-dot changed"></span>Changed</div>
+                      <div className="legend-item"><span className="legend-dot swap"></span>Swap</div>
+                      <div className="legend-item"><span className="legend-dot pending"></span>Pending</div>
+                    </div>
+                  </div>
+                  <p className="section-count">{activeRequests.length} pending review...</p>
+                </div>
+                <button className="add-request-btn" onClick={() => setShowModal(true)}>+ Request</button>
+              </div>
 
-          {processedRequests.length === 0 ? (
-            <div className="empty-state">
-              <p className="empty-title">No confirmed requests yet</p>
-              <p className="empty-subtitle">Accepted and rejected requests will appear here</p>
-            </div>
-          ) : (
-            <div className="requests-list">
-              {processedRequests.map(renderCard)}
-            </div>
+              {activeRequests.length === 0 ? (
+                <div className="empty-state">
+                  <p className="empty-title">No active requests</p>
+                  <p className="empty-subtitle">Click "+ Request" to submit a swap or change request</p>
+                </div>
+              ) : (
+                <div className="requests-list">
+                  {activeRequests.map(renderCard)}
+                </div>
+              )}
+            </section>
           )}
-        </section>
-      </main>
+
+          {activeTab === 'confirmed' && (
+            <section className="requests-section">
+              <div className="requests-header">
+                <h2 className="section-title">Confirmation Status</h2>
+              </div>
+
+              {processedRequests.length === 0 ? (
+                <div className="empty-state">
+                  <p className="empty-title">No confirmed requests yet</p>
+                  <p className="empty-subtitle">Accepted and rejected requests will appear here</p>
+                </div>
+              ) : (
+                <div className="requests-list">
+                  {processedRequests.map(renderCard)}
+                </div>
+              )}
+            </section>
+          )}
+        </main>
 
       {showModal && (
         <div className="modal-overlay" onClick={handleCancel}>

@@ -1,3 +1,57 @@
+/* ===== TABS ===== */
+.requests-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 24px 40px 16px 40px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.requests-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.requests-tab:hover {
+  color: var(--color-text);
+}
+
+.requests-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.requests-tab-count {
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.requests-tab.active .requests-tab-count {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .requests-tabs {
+    margin: 16px 20px;
+    overflow-x: auto;
+  }
+}
+
 /* ===== SECTIONS ===== */
 .requests-section {
   background: var(--color-surface);
