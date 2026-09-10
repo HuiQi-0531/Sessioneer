@@ -80,9 +80,14 @@ router.get('/', verifyToken, async (req, res) => {
     const availabilityScope = hasCoordinatorAccess
       ? `tutor_id IN (
           SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role IN ('tutor', 'super_tutor')
-        )`
-      : 'tutor_id = $1';
-    const availabilityParams = hasCoordinatorAccess ? [unit_id] : [req.user.id];
+        ) AND unit_id = $2`
+      : 'tutor_id = $1 AND unit_id = $2';
+    const availabilityParams = hasCoordinatorAccess ? [unit_id, unit_id] : [req.user.id, unit_id];
+    const availabilityScopeAliased = hasCoordinatorAccess
+      ? `a.tutor_id IN (
+          SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role IN ('tutor', 'super_tutor')
+        ) AND a.unit_id = $2`
+      : 'a.tutor_id = $1 AND a.unit_id = $2';
 
     const [tutorResult, submittedResult, availResult] = await Promise.all([
       pool.query(
@@ -126,7 +131,7 @@ router.get('/', verifyToken, async (req, res) => {
         JOIN latest_submission latest
           ON latest.tutor_id = a.tutor_id
          AND latest.submitted_at IS NOT DISTINCT FROM a.submitted_at
-        WHERE a.is_submitted = TRUE
+        WHERE a.is_submitted = TRUE AND ${availabilityScopeAliased}
         ORDER BY a.tutor_id, a.day, a.start_time
         `,
         availabilityParams
