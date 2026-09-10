@@ -8,14 +8,13 @@ Group Members:
 - PHAN CHEN HUAN (n12167282)
 - GAN CHUN YANG (n12086215)
 
-
 # Sessioneer - Session Management System
 
 ## Prerequisites
 - Node.js (v14+)
-- Docker Desktop
+- PostgreSQL (v14+), installed and running locally
 
-## Quick Setup (5 minutes!)
+## Quick Setup
 
 ### 1. Clone and Install
 ```bash
@@ -31,23 +30,31 @@ npm install
 cd ..
 ```
 
-### 2. Start Database (Docker)
-```bash
-# Start PostgreSQL in Docker
-docker-compose up -d
-
-# Verify it's running
-docker-compose ps
+### 2. Create the Database
+Open `psql` (or any Postgres client) and create a user and database:
+```sql
+CREATE USER sessioneer WITH PASSWORD 'your_password_here';
+CREATE DATABASE sessioneer_db OWNER sessioneer;
 ```
 
-The database automatically creates all tables and sample data!
+Then load the schema:
+```bash
+psql -U sessioneer -d sessioneer_db -f backend/setup-db.sql
+```
+This creates the core tables. A few newer tables/columns (e.g. `unit_memberships`, `session_tutors`, `cover_requests`) aren't in this script — the backend adds them automatically the first time it starts (see step 4).
 
 ### 3. Configure Backend
 ```bash
 cd backend
 cp .env.example .env
-# No need to edit - default values work!
 ```
+Edit `.env` and point `DATABASE_URL` at your local database, e.g.:
+```
+DATABASE_URL=postgresql://sessioneer:your_password_here@localhost:5432/sessioneer_db
+```
+(Default local Postgres port is `5432` — change it if your install uses a different one.)
+
+Also set `JWT_SECRET` to any long random string. The `BREVO_API_KEY`, `SUPABASE_*`, and `CRON_SECRET` variables are optional — they're only needed for password-reset emails, file attachment storage, and scheduled reminder jobs. The app runs fine locally with placeholder values for those.
 
 ### 4. Run Application
 
@@ -56,52 +63,35 @@ cp .env.example .env
 cd backend
 npm start
 ```
+On first run you should see a series of `... schema OK` lines in the console — this is the backend automatically adding any tables/columns not already in `setup-db.sql`. You should also see `Database connected at: <timestamp>`.
 
 **Terminal 2 - Frontend:**
 ```bash
 npm start
 ```
+No frontend configuration is needed for local development — the app automatically talks to `http://localhost:5001` whenever it's running on `localhost`/`127.0.0.1`.
 
 ### 5. Access Application
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:5001
 - Health Check: http://localhost:5001/health
 
-## Useful Docker Commands
-
-```bash
-# Stop database
-docker-compose down
-
-# Start database
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Reset database (deletes all data!)
-docker-compose down -v
-docker-compose up -d
-
-# Connect to database
-docker exec -it sessioneer_postgres psql -U sessioneer -d sessioneer_db
-```
-
-## Test Accounts
-- **Unit Coordinator:** sarah.kim@uni.edu
-- **Tutor:** elaine.lee@student.edu
+## Creating an Account
+There are no working pre-seeded logins — `setup-db.sql` inserts two sample users (`test1@gmail.com`, `test2@gmail.com`) with a placeholder password hash that can never pass login. Use the **Sign Up** page to create a real Unit Coordinator or Tutor account instead; registered passwords are hashed and verified correctly.
 
 ## Troubleshooting
 
-**Port 5432 already in use?**
-- Stop any local PostgreSQL (Postgres.app, etc.)
-- Or change port in `docker-compose.yml`: `"5433:5432"`
+**Port 5432 already in use / can't connect?**
+- Check Postgres is actually running: `pg_isready` (or check your OS service manager).
+- Confirm the port in `DATABASE_URL` matches what your Postgres instance is listening on.
 
 **Database not connecting?**
-- Check Docker is running: `docker ps`
-- Check logs: `docker-compose logs postgres`
-- Restart: `docker-compose restart`
+- Check the backend console output for `Database connection error:`.
+- Double check the username, password, and database name in `DATABASE_URL` match what you created in step 2.
 
 **"Failed to fetch requests"?**
-- Make sure backend is running on port 5001
-- Check `http://localhost:5001/health` shows status "ok"
+- Make sure the backend is running on port 5001.
+- Check `http://localhost:5001/health` returns `"status": "ok"`.
+
+**Login fails for sarah.kim@uni.edu / elaine.lee@student.edu?**
+- Expected — see "Creating an Account" above. These accounts have a dummy password hash and cannot log in as shipped.

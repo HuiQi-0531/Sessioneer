@@ -1098,13 +1098,22 @@ router.get('/units/:id/tutors', async (req, res) => {
 
     const result = await pool.query(
       `
+      WITH tutor_memberships AS (
+        SELECT DISTINCT ON (user_id)
+          user_id,
+          role AS membership_role
+        FROM unit_memberships
+        WHERE unit_id = $1
+          AND role IN ('tutor', 'super_tutor')
+        ORDER BY user_id, CASE WHEN role = 'super_tutor' THEN 0 ELSE 1 END
+      )
       SELECT
         u.id,
         u.name,
         u.last_name,
         u.email,
         u.role,
-        um.role AS membership_role,
+        tm.membership_role,
         u.avatar_url,
         (
           SELECT COUNT(*)
@@ -1112,11 +1121,9 @@ router.get('/units/:id/tutors', async (req, res) => {
           WHERE s.unit_id = $1
             AND s.assigned_tutor_id = u.id
         ) AS assigned_session_count
-      FROM unit_memberships um
-      JOIN users u ON u.id = um.user_id
-      WHERE um.unit_id = $1
-        AND um.role IN ('tutor', 'super_tutor')
-      ORDER BY CASE WHEN um.role = 'super_tutor' THEN 0 ELSE 1 END,
+      FROM tutor_memberships tm
+      JOIN users u ON u.id = tm.user_id
+      ORDER BY CASE WHEN tm.membership_role = 'super_tutor' THEN 0 ELSE 1 END,
                LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
       `,
       [id]
