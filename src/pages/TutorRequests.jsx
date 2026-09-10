@@ -51,7 +51,7 @@ const INITIAL_FORM = {
 };
 
 const TutorRequests = () => {
-  const { allUnits, isLoading: unitsLoading } = useActiveUnit();
+  const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
 
   const [showModal, setShowModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -79,6 +79,9 @@ const TutorRequests = () => {
   // first-come-first-served basis. Lives here since it's still "requests
   // that involve my schedule", just initiated by the UC instead of by me.
   const [coverRequests, setCoverRequests] = useState([]);
+  const filteredCoverRequests = activeUnit
+    ? coverRequests.filter(r => r.unitCode === activeUnit.unitCode)
+    : [];
   const [isLoadingCover, setIsLoadingCover] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
   const [coverMessage, setCoverMessage] = useState(null);
@@ -437,7 +440,7 @@ const TutorRequests = () => {
               onClick={() => setActiveTab('cover')}
             >
               Cover Requests
-              {coverRequests.length > 0 && <span className="requests-tab-count">{coverRequests.length}</span>}
+              {filteredCoverRequests.length > 0 && <span className="requests-tab-count">{filteredCoverRequests.length}</span>}
             </button>
             <button
               className={`requests-tab ${activeTab === 'pending' ? 'active' : ''}`}
@@ -469,14 +472,14 @@ const TutorRequests = () => {
 
               {isLoadingCover ? (
                 <div className="empty-state"><p className="empty-title">Loading...</p></div>
-              ) : coverRequests.length === 0 ? (
+              ) : filteredCoverRequests.length === 0 ? (
                 <div className="empty-state">
                   <p className="empty-title">Nothing needs cover right now</p>
                   <p className="empty-subtitle">Check back later, or you'll be notified when one opens up</p>
                 </div>
               ) : (
                 <div className="cvr-list">
-                  {coverRequests.map(request => (
+                  {filteredCoverRequests.map(request => (
                     <div key={request.id} className="cvr-card">
                       <div className="cvr-card-main">
                         <div className="cvr-card-unit">{request.unitCode}{request.unitName ? ` — ${request.unitName}` : ''}</div>
