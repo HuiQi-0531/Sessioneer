@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo } from 'react';
 import { profileAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
@@ -7,6 +7,48 @@ import UCPageHeader from '../components/UCPageHeader';
 import { getAvatarLetter, getDisplayName } from '../utils/userName';
 import '../styles/UCRequests.css';
 import '../styles/Profile.css';
+
+const loadProfileLanyard = () => import('../components/ProfileLanyard');
+const ProfileLanyard = lazy(loadProfileLanyard);
+
+const ProfileLanyardFallback = () => (
+  <section className="pf-lanyard-panel" aria-label="QUT profile lanyard loading">
+    <div className="pf-lanyard-loader">
+      <div className="pf-lanyard-loader-mark" />
+      <span>Preparing 3D badge...</span>
+    </div>
+  </section>
+);
+
+class ProfileLanyardErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('Profile lanyard failed to render:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="pf-lanyard-panel" aria-label="QUT profile lanyard unavailable">
+          <div className="pf-lanyard-loader">
+            <div className="pf-lanyard-loader-mark is-error" />
+            <span>3D badge could not load on this browser.</span>
+          </div>
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const Profile = () => {
   const currentUser = useMemo(() => {
@@ -41,6 +83,7 @@ const Profile = () => {
 
   useEffect(() => {
     loadProfile();
+    loadProfileLanyard().catch(() => {});
   }, []);
 
   const loadProfile = async () => {
@@ -178,191 +221,199 @@ const Profile = () => {
         <UCPageHeader title="Profile & Settings" />
 
         <div className="pf-content">
-          <div className="pf-avatar-row">
-            <label className={`pf-avatar-upload ${isUploadingAvatar ? 'uploading' : ''}`}>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={handleAvatarUpload}
-                disabled={isUploadingAvatar}
-              />
-              {profile?.avatarUrl ? (
-                <img src={profile.avatarUrl} alt={getDisplayName(profile)} className="pf-avatar-img" />
-              ) : (
-                <span>{getAvatarLetter(profile)}</span>
-              )}
-              <span className="pf-avatar-overlay">{isUploadingAvatar ? 'Uploading...' : 'Change'}</span>
-            </label>
-            <div>
-              <div className="pf-avatar-name">{getDisplayName(profile)}</div>
-              <div className="pf-avatar-role">{isTutor ? 'Tutor' : 'Unit Coordinator'}</div>
-              <div className="pf-avatar-hint">Click the picture to upload a JPG, PNG, WEBP, or GIF.</div>
-            </div>
-          </div>
-
-          <div className="pf-card">
-            <h3>Profile Details</h3>
-
-            <div className="pf-field">
-              <label>Email</label>
-              <input type="email" value={profile?.email || ''} disabled />
-              <p className="pf-field-hint">Your email is your login and can't be changed here.</p>
-            </div>
-
-            <div className="pf-row">
-              <div className="pf-field">
-                <label>First name</label>
+          <div className="pf-settings-column">
+            <div className="pf-avatar-row">
+              <label className={`pf-avatar-upload ${isUploadingAvatar ? 'uploading' : ''}`}>
                 <input
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={handleAvatarUpload}
+                  disabled={isUploadingAvatar}
                 />
-              </div>
-              <div className="pf-field">
-                <label>Last name</label>
-                <input
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                />
+                {profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={getDisplayName(profile)} className="pf-avatar-img" />
+                ) : (
+                  <span>{getAvatarLetter(profile)}</span>
+                )}
+                <span className="pf-avatar-overlay">{isUploadingAvatar ? 'Uploading...' : 'Change'}</span>
+              </label>
+              <div>
+                <div className="pf-avatar-name">{getDisplayName(profile)}</div>
+                <div className="pf-avatar-role">{isTutor ? 'Tutor' : 'Unit Coordinator'}</div>
+                <div className="pf-avatar-hint">Click the picture to upload a JPG, PNG, WEBP, or GIF.</div>
               </div>
             </div>
 
-            <div className="pf-row">
-              <div className="pf-field">
-                <label>Phone number</label>
-                <input
-                  type="tel"
-                  value={formData.phoneNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                  placeholder="e.g. 0400 123 456"
-                />
-              </div>
-            </div>
+            <div className="pf-card">
+              <h3>Profile Details</h3>
 
-            {isTutor && (
-              <>
+              <div className="pf-field">
+                <label>Email</label>
+                <input type="email" value={profile?.email || ''} disabled />
+                <p className="pf-field-hint">Your email is your login and can't be changed here.</p>
+              </div>
+
+              <div className="pf-row">
                 <div className="pf-field">
-                  <label>Work experience</label>
+                  <label>First name</label>
                   <input
                     type="text"
-                    value={formData.workExperience}
-                    onChange={(e) => setFormData(prev => ({ ...prev, workExperience: e.target.value }))}
-                    placeholder="e.g. 2 years tutoring first-year programming units"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                   />
                 </div>
-                <div className="pf-row">
+                <div className="pf-field">
+                  <label>Last name</label>
+                  <input
+                    type="text"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="pf-row">
+                <div className="pf-field">
+                  <label>Phone number</label>
+                  <input
+                    type="tel"
+                    value={formData.phoneNumber}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                    placeholder="e.g. 0400 123 456"
+                  />
+                </div>
+              </div>
+
+              {isTutor && (
+                <>
                   <div className="pf-field">
-                    <label>Maximum hours / week</label>
+                    <label>Work experience</label>
                     <input
-                      type="number"
-                      min="0"
-                      value={formData.maximumHours}
-                      onChange={(e) => setFormData(prev => ({ ...prev, maximumHours: e.target.value }))}
-                      placeholder="e.g. 10"
+                      type="text"
+                      value={formData.workExperience}
+                      onChange={(e) => setFormData(prev => ({ ...prev, workExperience: e.target.value }))}
+                      placeholder="e.g. 2 years tutoring first-year programming units"
                     />
                   </div>
-                  <div className="pf-field">
-                    <label>Contract type</label>
-                    <select
-                      value={formData.contractType}
-                      onChange={(e) => setFormData(prev => ({ ...prev, contractType: e.target.value }))}
-                    >
-                      <option value="">-- Select --</option>
-                      <option value="Casual">Casual</option>
-                      <option value="Sessional">Sessional</option>
-                      <option value="Fixed-term">Fixed-term (Contract)</option>
-                    </select>
+                  <div className="pf-row">
+                    <div className="pf-field">
+                      <label>Maximum hours / week</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.maximumHours}
+                        onChange={(e) => setFormData(prev => ({ ...prev, maximumHours: e.target.value }))}
+                        placeholder="e.g. 10"
+                      />
+                    </div>
+                    <div className="pf-field">
+                      <label>Contract type</label>
+                      <select
+                        value={formData.contractType}
+                        onChange={(e) => setFormData(prev => ({ ...prev, contractType: e.target.value }))}
+                      >
+                        <option value="">-- Select --</option>
+                        <option value="Casual">Casual</option>
+                        <option value="Sessional">Sessional</option>
+                        <option value="Fixed-term">Fixed-term (Contract)</option>
+                      </select>
+                    </div>
                   </div>
+                </>
+              )}
+
+              <button className="pf-save-btn" onClick={handleProfileSave} disabled={isSavingProfile}>
+                {isSavingProfile ? 'Saving...' : 'Save Profile'}
+              </button>
+              {profileMessage && (
+                <p className={profileMessage.type === 'success' ? 'pf-success' : 'pf-error'}>{profileMessage.text}</p>
+              )}
+            </div>
+
+            <div className="pf-card">
+              <h3>Change Password</h3>
+
+              <div className="pf-field">
+                <label>Current password</label>
+                <input
+                  type="password"
+                  value={passwordData.currentPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                />
+              </div>
+              <div className="pf-row">
+                <div className="pf-field">
+                  <label>New password</label>
+                  <input
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  />
                 </div>
-              </>
-            )}
-
-            <button className="pf-save-btn" onClick={handleProfileSave} disabled={isSavingProfile}>
-              {isSavingProfile ? 'Saving...' : 'Save Profile'}
-            </button>
-            {profileMessage && (
-              <p className={profileMessage.type === 'success' ? 'pf-success' : 'pf-error'}>{profileMessage.text}</p>
-            )}
-          </div>
-
-          <div className="pf-card">
-            <h3>Change Password</h3>
-
-            <div className="pf-field">
-              <label>Current password</label>
-              <input
-                type="password"
-                value={passwordData.currentPassword}
-                onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-              />
-            </div>
-            <div className="pf-row">
-              <div className="pf-field">
-                <label>New password</label>
-                <input
-                  type="password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                />
+                <div className="pf-field">
+                  <label>Confirm new password</label>
+                  <input
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  />
+                </div>
               </div>
-              <div className="pf-field">
-                <label>Confirm new password</label>
-                <input
-                  type="password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                />
-              </div>
+
+              <button
+                className="pf-save-btn"
+                onClick={handlePasswordSave}
+                disabled={isSavingPassword || !passwordData.currentPassword || !passwordData.newPassword}
+              >
+                {isSavingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+              {passwordMessage && (
+                <p className={passwordMessage.type === 'success' ? 'pf-success' : 'pf-error'}>{passwordMessage.text}</p>
+              )}
             </div>
 
-            <button
-              className="pf-save-btn"
-              onClick={handlePasswordSave}
-              disabled={isSavingPassword || !passwordData.currentPassword || !passwordData.newPassword}
-            >
-              {isSavingPassword ? 'Updating...' : 'Update Password'}
-            </button>
-            {passwordMessage && (
-              <p className={passwordMessage.type === 'success' ? 'pf-success' : 'pf-error'}>{passwordMessage.text}</p>
-            )}
-          </div>
+            <div className="pf-card">
+              <h3>Notifications</h3>
 
-          <div className="pf-card">
-            <h3>Notifications</h3>
-
-            <div className="pf-toggle-row">
-              <div className="pf-toggle-info">
-                <div className="pf-toggle-label">Schedule & session updates</div>
-                <div className="pf-toggle-sublabel">New assignments, confirmations, and declines</div>
+              <div className="pf-toggle-row">
+                <div className="pf-toggle-info">
+                  <div className="pf-toggle-label">Schedule & session updates</div>
+                  <div className="pf-toggle-sublabel">New assignments, confirmations, and declines</div>
+                </div>
+                <label className="pf-switch">
+                  <input
+                    type="checkbox"
+                    checked={profile?.notifySessionUpdates ?? true}
+                    onChange={() => handleToggleNotification('notifySessionUpdates')}
+                    disabled={isSavingNotifications}
+                  />
+                  <span className="pf-switch-slider" />
+                </label>
               </div>
-              <label className="pf-switch">
-                <input
-                  type="checkbox"
-                  checked={profile?.notifySessionUpdates ?? true}
-                  onChange={() => handleToggleNotification('notifySessionUpdates')}
-                  disabled={isSavingNotifications}
-                />
-                <span className="pf-switch-slider" />
-              </label>
-            </div>
 
-            <div className="pf-toggle-row">
-              <div className="pf-toggle-info">
-                <div className="pf-toggle-label">Swap & change requests</div>
-                <div className="pf-toggle-sublabel">New requests and their approval status</div>
+              <div className="pf-toggle-row">
+                <div className="pf-toggle-info">
+                  <div className="pf-toggle-label">Swap & change requests</div>
+                  <div className="pf-toggle-sublabel">New requests and their approval status</div>
+                </div>
+                <label className="pf-switch">
+                  <input
+                    type="checkbox"
+                    checked={profile?.notifyRequestUpdates ?? true}
+                    onChange={() => handleToggleNotification('notifyRequestUpdates')}
+                    disabled={isSavingNotifications}
+                  />
+                  <span className="pf-switch-slider" />
+                </label>
               </div>
-              <label className="pf-switch">
-                <input
-                  type="checkbox"
-                  checked={profile?.notifyRequestUpdates ?? true}
-                  onChange={() => handleToggleNotification('notifyRequestUpdates')}
-                  disabled={isSavingNotifications}
-                />
-                <span className="pf-switch-slider" />
-              </label>
             </div>
           </div>
+
+          <ProfileLanyardErrorBoundary>
+            <Suspense fallback={<ProfileLanyardFallback />}>
+              <ProfileLanyard profile={profile} roleLabel={isTutor ? 'Tutor' : 'Unit Coordinator'} />
+            </Suspense>
+          </ProfileLanyardErrorBoundary>
         </div>
       </main>
     </div>

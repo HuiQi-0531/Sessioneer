@@ -1,6 +1,14 @@
 .pf-content {
   padding: 24px 32px;
-  max-width: 640px;
+  max-width: 1280px;
+  display: grid;
+  grid-template-columns: minmax(0, 640px) minmax(360px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.pf-settings-column {
+  min-width: 0;
 }
 
 .pf-avatar-row {
@@ -251,4 +259,59 @@
 
 .pf-switch input:checked + .pf-switch-slider::before {
   transform: translateX(18px);
+}
+
+.pf-lanyard-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pf-lanyard-loader-mark {
+  width: 42px;
+  height: 42px;
+  border: 4px solid rgba(0, 71, 186, 0.16);
+  border-top-color: #0047ba;
+  border-radius: 50%;
+  animation: pf-lanyard-spin 900ms linear infinite;
+}
+
+.pf-lanyard-loader-mark.is-error {
+  border-color: rgba(239, 68, 68, 0.22);
+  border-top-color: #ef4444;
+  animation: none;
+}
+
+@keyframes pf-lanyard-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .pf-content {
+    grid-template-columns: 1fr;
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pf-content {
+    padding: 20px 16px;
+  }
+
+  .pf-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }

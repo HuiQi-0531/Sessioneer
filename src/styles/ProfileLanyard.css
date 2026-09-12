@@ -1,0 +1,49 @@
+.pf-lanyard-panel {
+  position: sticky;
+  top: 24px;
+  min-height: 620px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(0, 71, 186, 0.15), transparent 30%),
+    linear-gradient(145deg, #f8fbff 0%, #eef5ff 52%, #f7fafc 100%);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.pf-lanyard-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(120deg, rgba(0, 71, 186, 0.08) 0 1px, transparent 1px 100%),
+    linear-gradient(300deg, rgba(7, 29, 73, 0.06) 0 1px, transparent 1px 100%);
+  background-size: 42px 42px;
+  opacity: 0.75;
+}
+
+.pf-lanyard-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.pf-lanyard-stage canvas {
+  touch-action: none;
+}
+
+@media (max-width: 1180px) {
+  .pf-lanyard-panel {
+    position: relative;
+    top: auto;
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 760px) {
+  .pf-lanyard-panel {
+    min-height: 460px;
+    border-radius: 14px;
+  }
+}
