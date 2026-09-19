@@ -72,8 +72,12 @@ const TutorRequests = () => {
   const [appealError, setAppealError] = useState('');
   const [isAppealing, setIsAppealing] = useState(false);
 
-  const activeRequests = requests.filter(r => isActive(r.status));
-  const processedRequests = requests.filter(r => isProcessed(r.status));
+  const activeRequests = activeUnit
+  ? requests.filter(r => isActive(r.status) && r.unitCode === activeUnit.unitCode)
+  : [];
+  const processedRequests = activeUnit
+  ? requests.filter(r => isProcessed(r.status) && r.unitCode === activeUnit.unitCode)
+  : [];
 
   // Cover requests: sessions other tutors can't make, broadcast on a
   // first-come-first-served basis. Lives here since it's still "requests
