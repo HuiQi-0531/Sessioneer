@@ -1,8 +1,7 @@
 /* ===== TABS ===== */
 .requests-tabs {
   display: flex;
-  gap: 4px;
-  margin: 24px 40px 16px 40px;
+  gap: 4px; 
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -19,6 +18,14 @@
   color: var(--color-text-subtle);
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
+}
+
+.requests-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 40px 16px 40px;
 }
 
 .requests-tab:hover {

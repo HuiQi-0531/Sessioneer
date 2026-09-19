@@ -438,27 +438,30 @@ const TutorRequests = () => {
 
       <main className="main-content">
         <UCPageHeader title="Request & Swap" />
-          <div className="requests-tabs">
-            <button
-              className={`requests-tab ${activeTab === 'cover' ? 'active' : ''}`}
-              onClick={() => setActiveTab('cover')}
-            >
-              Cover Requests
-              {filteredCoverRequests.length > 0 && <span className="requests-tab-count">{filteredCoverRequests.length}</span>}
-            </button>
-            <button
-              className={`requests-tab ${activeTab === 'pending' ? 'active' : ''}`}
-              onClick={() => setActiveTab('pending')}
-            >
-              Pending Status
-              {activeRequests.length > 0 && <span className="requests-tab-count">{activeRequests.length}</span>}
-            </button>
-            <button
-              className={`requests-tab ${activeTab === 'confirmed' ? 'active' : ''}`}
-              onClick={() => setActiveTab('confirmed')}
-            >
-              Confirmation Status
-            </button>
+          <div className="requests-tabs-row">
+            <div className="requests-tabs">
+              <button
+                className={`requests-tab ${activeTab === 'cover' ? 'active' : ''}`}
+                onClick={() => setActiveTab('cover')}
+              >
+                Cover Requests
+                {filteredCoverRequests.length > 0 && <span className="requests-tab-count">{filteredCoverRequests.length}</span>}
+              </button>
+              <button
+                className={`requests-tab ${activeTab === 'pending' ? 'active' : ''}`}
+                onClick={() => setActiveTab('pending')}
+              >
+                Pending Status
+                {activeRequests.length > 0 && <span className="requests-tab-count">{activeRequests.length}</span>}
+              </button>
+              <button
+                className={`requests-tab ${activeTab === 'confirmed' ? 'active' : ''}`}
+                onClick={() => setActiveTab('confirmed')}
+              >
+                Confirmation Status
+              </button>
+            </div>
+            <button className="add-request-btn" onClick={() => setShowModal(true)}>+ Request</button>
           </div>
 
             {activeTab === 'cover' && (
@@ -535,7 +538,6 @@ const TutorRequests = () => {
                   </div>
                   <p className="section-count">{activeRequests.length} pending review...</p>
                 </div>
-                <button className="add-request-btn" onClick={() => setShowModal(true)}>+ Request</button>
               </div>
 
               {activeRequests.length === 0 ? (
