@@ -6,6 +6,7 @@ backend/node_modules/
 
 # testing
 /coverage
+backend/coverage/
 
 # production
 /build
@@ -17,9 +18,11 @@ backend/node_modules/
 .env
 .env.local
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 backend/.env
+backend/.env.test
 
 # logs
 npm-debug.log*

@@ -176,6 +176,13 @@ pool.query(`
     ) THEN
       ALTER TABLE sessions ADD COLUMN tutor_reject_reason TEXT;
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'sessions' AND column_name = 'session_code'
+    ) THEN
+      ALTER TABLE sessions ADD COLUMN session_code VARCHAR(30);
+    END IF;
   END $$;
 `).then(() => {
   console.log('sessions schema OK');
@@ -204,7 +211,7 @@ pool.query(`
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('coordinator', 'tutor')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('coordinator', 'tutor', 'super_tutor')),
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(unit_id, user_id, role)
   );
@@ -553,8 +560,16 @@ pool.query(`
     invited_at TIMESTAMP,
     invite_token VARCHAR(255) UNIQUE,
     invite_token_expires_at TIMESTAMP,
+    maximum_hours INTEGER,
+    contract_type VARCHAR(50),
     created_user_id UUID REFERENCES users(id)
   );
+
+  ALTER TABLE tutor_applications
+    ADD COLUMN IF NOT EXISTS maximum_hours INTEGER;
+
+  ALTER TABLE tutor_applications
+    ADD COLUMN IF NOT EXISTS contract_type VARCHAR(50);
 `).then(() => {
   console.log('tutor_applications schema OK');
 }).catch(err => {
@@ -723,13 +738,18 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log('=================================');
-  console.log(`Backend server running`);
-  console.log(`URL: http://localhost:${PORT}`);
-  console.log(`Database: PostgreSQL (sessioneer_db)`);
-  console.log('=================================');
-  console.log('Server is now waiting for requests...');
-  console.log('Press Ctrl+C to stop');
-});
+// Start server only when this file is run directly. Tests import the app with
+// Supertest, so they should not open a real network port.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log('=================================');
+    console.log(`Backend server running`);
+    console.log(`URL: http://localhost:${PORT}`);
+    console.log(`Database: PostgreSQL (sessioneer_db)`);
+    console.log('=================================');
+    console.log('Server is now waiting for requests...');
+    console.log('Press Ctrl+C to stop');
+  });
+}
+
+module.exports = { app, server, io };
