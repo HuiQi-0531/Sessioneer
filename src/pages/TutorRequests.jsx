@@ -29,8 +29,6 @@ const formatShortDate = (dateStr) => {
 };
 
 const APPEAL_MARKER = '--- Appeal ---';
-// Appeals are stored as one combined string ("<original reason>\n\n--- Appeal ---\n<appeal text>").
-// Split that back apart so the UI can show "Reason" and "Appeal" as separate labeled sections.
 const splitReasonAndAppeal = (reasonText) => {
   if (!reasonText || !reasonText.includes(APPEAL_MARKER)) {
     return { reason: reasonText || '', appeal: null };
@@ -61,9 +59,10 @@ const TutorRequests = () => {
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
   const [suggestionAction, setSuggestionAction] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
-  const [activeTab, setActiveTab] = useState('cover'); 
+  const [activeTab, setActiveTab] = useState('cover');
 
   const [unitSessions, setUnitSessions] = useState([]);
+  const [swapTargetSessions, setSwapTargetSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
 
   const [showAppealModal, setShowAppealModal] = useState(false);
@@ -73,15 +72,12 @@ const TutorRequests = () => {
   const [isAppealing, setIsAppealing] = useState(false);
 
   const activeRequests = activeUnit
-  ? requests.filter(r => isActive(r.status) && r.unitCode === activeUnit.unitCode)
-  : [];
+    ? requests.filter(r => isActive(r.status) && r.unitCode === activeUnit.unitCode)
+    : [];
   const processedRequests = activeUnit
-  ? requests.filter(r => isProcessed(r.status) && r.unitCode === activeUnit.unitCode)
-  : [];
+    ? requests.filter(r => isProcessed(r.status) && r.unitCode === activeUnit.unitCode)
+    : [];
 
-  // Cover requests: sessions other tutors can't make, broadcast on a
-  // first-come-first-served basis. Lives here since it's still "requests
-  // that involve my schedule", just initiated by the UC instead of by me.
   const [coverRequests, setCoverRequests] = useState([]);
   const filteredCoverRequests = activeUnit
     ? coverRequests.filter(r => r.unitCode === activeUnit.unitCode)
@@ -119,7 +115,8 @@ const TutorRequests = () => {
         text: rangeText
           ? `You're now covering ${codePrefix}${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}, ${rangeText}${occurrenceText}.`
           : `You're now covering ${codePrefix}${request.unitCode} on ${request.day} ${request.startTime.slice(0, 5)}-${request.endTime.slice(0, 5)}.`
-      });      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
+      });
+      setCoverRequests(prev => prev.filter(r => r.id !== request.id));
     } catch (err) {
       if (err.status === 409) {
         setCoverMessage({ type: 'error', text: 'Too slow — someone else already claimed that session.' });
@@ -138,6 +135,7 @@ const TutorRequests = () => {
   useEffect(() => {
     if (!formData.selectedUnit) {
       setUnitSessions([]);
+      setSwapTargetSessions([]);
       return;
     }
     loadSessionsForUnit(formData.selectedUnit);
@@ -147,11 +145,17 @@ const TutorRequests = () => {
   const loadSessionsForUnit = async (unitId) => {
     setIsLoadingSessions(true);
     try {
-      const data = await sessionsAPI.getMyAssigned(unitId);
-      setUnitSessions(data);
+      const [mine, all] = await Promise.all([
+        sessionsAPI.getMyAssigned(unitId),
+        sessionsAPI.getAll(unitId).catch(() => [])
+      ]);
+      const targets = Array.isArray(all) ? all : (all?.sessions || []);
+      setUnitSessions(mine.filter(s => !s.isCovering));
+      setSwapTargetSessions(targets.filter(s => !s.isCovering));
     } catch (err) {
       console.error('Error loading your sessions for this unit:', err);
       setUnitSessions([]);
+      setSwapTargetSessions([]);
     } finally {
       setIsLoadingSessions(false);
     }
@@ -627,13 +631,24 @@ const TutorRequests = () => {
               </div>
               <div className="form-group">
                 <label>Preferred swap to <span className="helper-text">(optional)</span></label>
-                <select name="preferredSwapTo" value={formData.preferredSwapTo} onChange={handleInputChange}
-                  disabled={!formData.selectedUnit || isLoadingSessions} className="form-select">
+                <select
+                  name="preferredSwapTo"
+                  value={formData.preferredSwapTo}
+                  onChange={handleInputChange}
+                  disabled={!formData.selectedUnit || isLoadingSessions}
+                  className="form-select"
+                >
                   <option value="">
-                    {!formData.selectedUnit ? '— Select a unit first —' : '— Select a session —'}
+                    {!formData.selectedUnit ? '— Select a unit first —' : isLoadingSessions ? '— Loading —' : '— Select a session —'}
                   </option>
-                  {unitSessions.filter(s => sessionValue(s, selectedUnitObj?.unitCode) !== formData.currentSession)
-                    .map(s => <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>{sessionLabelWithCode(s)}</option>)}                </select>
+                  {swapTargetSessions
+                    .filter(s => sessionValue(s, selectedUnitObj?.unitCode) !== formData.currentSession)
+                    .map(s => (
+                      <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>
+                        {sessionLabelWithCode(s)}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Reason for request <span className="required">*</span></label>

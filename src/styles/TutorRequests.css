@@ -602,3 +602,85 @@
   padding: 0 !important;
   overflow-y: auto;
 }
+
+.form-select {
+  box-sizing: border-box;
+  height: 42px;
+}
+
+.preferred-select-wrap {
+  position: relative;
+}
+
+.preferred-select-button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 42px;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.preferred-select-button.is-disabled {
+  background-color: var(--color-bg);
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
+}
+
+.preferred-select-button span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preferred-select-caret {
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.preferred-select-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  max-height: 154px; /* 7 rows × 22px */
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  border: 1px solid #8c8c8c;
+  border-radius: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  z-index: 30;
+}
+
+.preferred-select-option {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 22px;
+  padding: 0 6px;
+  font: 13.33px/22px "Segoe UI", system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.preferred-select-option:hover,
+.preferred-select-option.selected {
+  background-color: #0078d4;
+  color: #fff;
+}
