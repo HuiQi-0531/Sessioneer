@@ -281,9 +281,10 @@ export const requestsAPI = {
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to update');
-    const result = await res.json();
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || 'Failed to update');
     clearRequestsCache();
+    clearSessionsCache();
     return result;
   },
 
@@ -401,40 +402,35 @@ export const ucAPI = {
     return ucAPI.getAllRequests();
   },
 
-  reviewRequest: async (
-    id,
-    status,
-    reviewNotes
-  ) => {
-
-    const response = await fetch(
-      `${API_URL}/uc/requests/${id}/review`,
-      {
-        method: 'PATCH',
-
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeader()
-        },
-
-        body: JSON.stringify({
-          status,
-          reviewNotes
-        })
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        'Failed to review request'
-      );
+reviewRequest: async (
+  id,
+  status,
+  reviewNotes
+) => {
+  const response = await fetch(
+    `${API_URL}/uc/requests/${id}/review`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader()
+      },
+      body: JSON.stringify({
+        status,
+        reviewNotes
+      })
     }
+  );
 
-    const data = await response.json();
-    clearRequestsCache();
-    return data;
-
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to review request');
   }
+
+  clearRequestsCache();
+  clearSessionsCache();
+  return data;
+}
 
 };
 export const availabilityAPI = {

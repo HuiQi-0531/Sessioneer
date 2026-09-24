@@ -102,6 +102,27 @@ pool.query(`
     ) THEN
       ALTER TABLE change_requests ADD COLUMN priority TEXT DEFAULT 'Normal';
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'change_requests' AND column_name = 'current_session_id'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN current_session_id UUID REFERENCES sessions(id);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'change_requests' AND column_name = 'preferred_session_id'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN preferred_session_id UUID REFERENCES sessions(id);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'change_requests' AND column_name = 'suggested_session_id'
+    ) THEN
+      ALTER TABLE change_requests ADD COLUMN suggested_session_id UUID REFERENCES sessions(id);
+    END IF;
   END $$;
 `).then(() => {
   console.log('change_requests schema OK');

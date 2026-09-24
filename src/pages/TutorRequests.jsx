@@ -186,28 +186,38 @@ const TutorRequests = () => {
   const selectedUnitObj = allUnits.find(u => u.id === formData.selectedUnit);
 
   const handleSubmit = async () => {
-    const errs = {};
-    if (!formData.selectedUnit) errs.selectedUnit = 'Please select a unit';
-    if (!formData.currentSession) errs.currentSession = 'Please select a current session';
-    if (!formData.reason.trim()) errs.reason = 'Please provide a reason';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setErrors({});
-    try {
-      await requestsAPI.create({
-        unitCode: selectedUnitObj?.unitCode,
-        requestType: formData.requestType,
-        priority: formData.priority,
-        currentSession: formData.currentSession,
-        preferredSwapTo: formData.preferredSwapTo,
-        reason: formData.reason,
-      });
-      await fetchRequests();
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-      setShowModal(false);
-      setFormData(INITIAL_FORM);
-    } catch (err) { alert('Failed to submit request. Please try again.'); }
-  };
+  const errs = {};
+  if (!formData.selectedUnit) errs.selectedUnit = 'Please select a unit';
+  if (!formData.currentSession) errs.currentSession = 'Please select a current session';
+  if (!formData.reason.trim()) errs.reason = 'Please provide a reason';
+  if (Object.keys(errs).length) { setErrors(errs); return; }
+  setErrors({});
+
+  const current = unitSessions.find(
+    (s) => sessionValue(s, selectedUnitObj?.unitCode) === formData.currentSession
+  );
+  const preferred = swapTargetSessions.find(
+    (s) => sessionValue(s, selectedUnitObj?.unitCode) === formData.preferredSwapTo
+  );
+
+  try {
+    await requestsAPI.create({
+      unitCode: selectedUnitObj?.unitCode,
+      requestType: formData.requestType,
+      priority: formData.priority,
+      currentSession: formData.currentSession,
+      preferredSwapTo: formData.preferredSwapTo,
+      currentSessionId: current?.id || null,
+      preferredSessionId: preferred?.id || null,
+      reason: formData.reason,
+    });
+    await fetchRequests();
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+    setShowModal(false);
+    setFormData(INITIAL_FORM);
+  } catch (err) { alert('Failed to submit request. Please try again.'); }
+};
 
   const handleCancel = () => { setShowModal(false); setErrors({}); setFormData(INITIAL_FORM); };
 

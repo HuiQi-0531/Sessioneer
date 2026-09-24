@@ -199,7 +199,10 @@ const UCRequests = () => {
       await fetchRequests();
       setShowApproveModal(false);
       setSelectedRequest(null);
-    } catch (error) { console.error('Error approving request:', error); }
+    } catch (error) {
+      console.error('Error approving request:', error);
+      alert(error.message || 'Failed to approve request');
+    }
   };
 
   const confirmReject = async () => {
@@ -393,7 +396,7 @@ const UCRequests = () => {
             <button className="uc-modal-close" onClick={() => setShowApproveModal(false)}>×</button>
             <div className="uc-modal-icon success">✓</div>
             <h2>Approve Request?</h2>
-            <p className="uc-modal-subtitle">This request will be approved and moved to confirmation status.</p>
+            <p className="uc-modal-subtitle">This will move the tutor to the preferred session and remove them from their current session. If the preferred session is already full, approval will fail.</p>
             <button className="uc-btn-done" onClick={confirmApprove}>Done</button>
           </div>
         </div>
