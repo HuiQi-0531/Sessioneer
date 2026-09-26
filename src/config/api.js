@@ -778,8 +778,8 @@ export const sessionsAPI = {
       method: 'DELETE',
       headers: authHeader()
     });
-    if (!response.ok) throw new Error('Failed to delete session');
     const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to delete session');
     clearSessionsCache(unitId);
     return data;
   },

@@ -441,6 +441,20 @@ router.delete('/:sessionId', verifyToken, requireRole('coordinator'), async (req
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
+    if (await isScheduleLocked(unitId)) {
+      return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
+    }
+
+    // Tutors who declined (tutor_confirmed = false) no longer hold the session,
+    // so only pending or confirmed tutors block deletion.
+    const activeTutors = await pool.query(
+      'SELECT 1 FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM false LIMIT 1',
+      [sessionId]
+    );
+    if (activeTutors.rows.length > 0) {
+      return res.status(409).json({ error: 'This session has assigned tutors. Remove them before deleting.' });
+    }
+
     const result = await pool.query(
       'DELETE FROM sessions WHERE id = $1 AND unit_id = $2 RETURNING id',
       [sessionId, unitId]
@@ -470,6 +484,24 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
     const { replace, sessions } = req.body;
     if (!Array.isArray(sessions) || sessions.length === 0) {
       return res.status(400).json({ error: 'No sessions provided to import' });
+    }
+
+    // Replacing wipes every session in the unit, so apply the same rules as
+    // deleting a single session: not while locked, not while tutors hold any.
+    if (replace) {
+      if (await isScheduleLocked(unitId)) {
+        return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to replace sessions.' });
+      }
+      const assignedResult = await client.query(
+        `SELECT 1 FROM session_tutors st
+         JOIN sessions s ON s.id = st.session_id
+         WHERE s.unit_id = $1 AND st.tutor_confirmed IS DISTINCT FROM false
+         LIMIT 1`,
+        [unitId]
+      );
+      if (assignedResult.rows.length > 0) {
+        return res.status(409).json({ error: 'Some sessions in this unit have assigned tutors. Remove them before replacing the timetable.' });
+      }
     }
 
     await client.query('BEGIN');

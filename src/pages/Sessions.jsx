@@ -299,7 +299,9 @@ const Sessions = () => {
       await loadSessions(activeUnit.id);
     } catch (err) {
       console.error('Error deleting session:', err);
-      alert('Failed to delete session. Please try again.');
+      // Show the backend's reason (e.g. assigned tutors, locked schedule)
+      // instead of a generic retry message.
+      alert(err.message || 'Failed to delete session. Please try again.');    
     }
   };
 

@@ -108,21 +108,21 @@ pool.query(`
       SELECT 1 FROM information_schema.columns
       WHERE table_name = 'change_requests' AND column_name = 'current_session_id'
     ) THEN
-      ALTER TABLE change_requests ADD COLUMN current_session_id UUID REFERENCES sessions(id);
+      ALTER TABLE change_requests ADD COLUMN current_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL;
     END IF;
 
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_name = 'change_requests' AND column_name = 'preferred_session_id'
     ) THEN
-      ALTER TABLE change_requests ADD COLUMN preferred_session_id UUID REFERENCES sessions(id);
+      ALTER TABLE change_requests ADD COLUMN preferred_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL;
     END IF;
 
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_name = 'change_requests' AND column_name = 'suggested_session_id'
     ) THEN
-      ALTER TABLE change_requests ADD COLUMN suggested_session_id UUID REFERENCES sessions(id);
+      ALTER TABLE change_requests ADD COLUMN suggested_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL;
     END IF;
   END $$;
 `).then(() => {
@@ -366,7 +366,7 @@ pool.query(`
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     related_unit_id UUID REFERENCES units(id),
-    related_session_id UUID REFERENCES sessions(id),
+     related_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
     action_url VARCHAR(255),
     is_read BOOLEAN DEFAULT FALSE,
     read_at TIMESTAMP,
