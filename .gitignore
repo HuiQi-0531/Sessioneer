@@ -37,3 +37,7 @@ backend/uploads/
 # Docker volumes
 postgres_data/
 .vercel
+
+# RBAC test run output
+backend/tests/rbac/results/
+backend/.env.test

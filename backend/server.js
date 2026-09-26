@@ -746,13 +746,18 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log('=================================');
-  console.log(`Backend server running`);
-  console.log(`URL: http://localhost:${PORT}`);
-  console.log(`Database: PostgreSQL (sessioneer_db)`);
-  console.log('=================================');
-  console.log('Server is now waiting for requests...');
-  console.log('Press Ctrl+C to stop');
-});
+// Start server only when this file is run directly. Tests import the app with
+// Supertest, so they should not open a real network port.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log('=================================');
+    console.log(`Backend server running`);
+    console.log(`URL: http://localhost:${PORT}`);
+    console.log(`Database: PostgreSQL (sessioneer_db)`);
+    console.log('=================================');
+    console.log('Server is now waiting for requests...');
+    console.log('Press Ctrl+C to stop');
+  });
+}
+
+module.exports = { app, server, io };
