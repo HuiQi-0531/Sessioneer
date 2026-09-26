@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     notification_type VARCHAR(50),
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
-    related_unit_id UUID REFERENCES units(id),
+    related_unit_id UUID REFERENCES units(id) ON DELETE SET NULL,
     related_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
     action_url VARCHAR(255),
     is_read BOOLEAN DEFAULT FALSE,
