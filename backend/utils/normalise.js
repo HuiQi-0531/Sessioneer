@@ -25,6 +25,7 @@ const normaliseTime = (rawTime) => {
   if (match) {
     let hour = parseInt(match[1], 10);
     const period = match[2];
+    if (hour < 1 || hour > 12) return null;
     if (period === 'pm' && hour !== 12) hour += 12;
     if (period === 'am' && hour === 12) hour = 0;
     return `${String(hour).padStart(2, '0')}:00:00`;
@@ -36,6 +37,7 @@ const normaliseTime = (rawTime) => {
     let hour = parseInt(match[1], 10);
     const minute = match[2];
     const period = match[3];
+    if (hour < 1 || hour > 12 || Number(minute) > 59) return null;
     if (period === 'pm' && hour !== 12) hour += 12;
     if (period === 'am' && hour === 12) hour = 0;
     return `${String(hour).padStart(2, '0')}:${minute}:00`;
@@ -46,7 +48,7 @@ const normaliseTime = (rawTime) => {
   if (match) {
     const hour = parseInt(match[1], 10);
     const minute = match[2];
-    if (hour >= 0 && hour <= 23) {
+    if (hour <= 23 && Number(minute) <= 59) {
       return `${String(hour).padStart(2, '0')}:${minute}:00`;
     }
   }
@@ -56,7 +58,7 @@ const normaliseTime = (rawTime) => {
   if (match) {
     const hour = parseInt(match[1], 10);
     const minute = match[2];
-    if (hour >= 0 && hour <= 23) {
+    if (hour <= 23 && Number(minute) <= 59) {
       return `${String(hour).padStart(2, '0')}:${minute}:00`;
     }
   }
