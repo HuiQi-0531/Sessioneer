@@ -3,9 +3,10 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { formatUserNameFields, joinUserName } = require('../utils/userNames');
-const { normaliseDay } = require('../utils/normalise');
+const { normaliseDay, sessionDurationHours, timeRangesOverlap } = require('../utils/normalise');
 const { createNotification } = require('../utils/notify');
 const { escapeHtml, sendEmail } = require('../utils/email');
+const { requiresSuperTutor } = require('../utils/roles');
 
 const router = express.Router();
 
@@ -183,8 +184,48 @@ const formatAdminSession = (session) => ({
   status: session.status || 'Draft',
   assignedTutorCount: Number(session.assigned_tutor_count || 0),
   assignedTutors: session.assigned_tutors || '',
-  tutorConfirmationState: session.tutor_confirmation_state || 'Unassigned'
+  tutorConfirmationState: session.tutor_confirmation_state || 'Unassigned',
+  scheduleLocked: !!session.schedule_locked
 });
+
+const getAdminSessionStaff = async (query, unitId) => {
+  const result = await query(`
+    SELECT u.id, u.name, u.last_name, u.email, u.maximum_hours,
+      CASE
+        WHEN u.id = un.unit_coordinator_id OR EXISTS (
+          SELECT 1 FROM unit_memberships um
+          WHERE um.unit_id = un.id AND um.user_id = u.id AND um.role = 'coordinator'
+        ) THEN 'coordinator'
+        WHEN EXISTS (
+          SELECT 1 FROM unit_memberships um
+          WHERE um.unit_id = un.id AND um.user_id = u.id AND um.role = 'super_tutor'
+        ) THEN 'super_tutor'
+        ELSE 'tutor'
+      END AS access_role
+    FROM users u
+    JOIN units un ON un.id = $1
+    WHERE u.role <> 'admin'
+      AND COALESCE(u.account_status, 'active') = 'active'
+      AND (
+        u.id = un.unit_coordinator_id OR EXISTS (
+          SELECT 1 FROM unit_memberships um
+          WHERE um.unit_id = un.id AND um.user_id = u.id
+            AND um.role IN ('coordinator', 'tutor', 'super_tutor')
+        )
+      )
+    ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
+  `, [unitId]);
+  return result.rows.map(staff => ({
+    id: staff.id,
+    name: joinUserName(staff.name, staff.last_name) || staff.email,
+    email: staff.email,
+    role: staff.access_role,
+    maximumHours: staff.maximum_hours == null ? null : Number(staff.maximum_hours)
+  }));
+};
+
+const sessionAssignmentError = (status, message) => Object.assign(new Error(message), { status });
+const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
 
 const formatAdminApplication = (application) => ({
   id: application.id,
@@ -632,7 +673,11 @@ router.get('/users/:id/units', async (req, res) => {
           SELECT COUNT(*)
           FROM sessions s
           WHERE s.unit_id = un.id
-            AND s.assigned_tutor_id = $1
+            AND EXISTS (
+              SELECT 1 FROM session_tutors st
+              WHERE st.session_id = s.id AND st.tutor_id = $1
+                AND st.tutor_confirmed IS DISTINCT FROM false
+            )
         ) AS assigned_session_count
       FROM (
         SELECT id AS unit_id, 'coordinator'::text AS access_role, TRUE AS is_primary_coordinator
@@ -774,7 +819,11 @@ router.post('/users/:id/units', async (req, res) => {
           SELECT COUNT(*)
           FROM sessions s
           WHERE s.unit_id = un.id
-            AND s.assigned_tutor_id = $2
+            AND EXISTS (
+              SELECT 1 FROM session_tutors st
+              WHERE st.session_id = s.id AND st.tutor_id = $2
+                AND st.tutor_confirmed IS DISTINCT FROM false
+            )
         ) AS assigned_session_count
       FROM unit_memberships um
       JOIN units un ON un.id = um.unit_id
@@ -816,7 +865,10 @@ router.delete('/users/:id/units/:unitId/:role', async (req, res) => {
 
     if (isTutorMembershipRole(role)) {
       const assignedSessions = await pool.query(
-        'SELECT COUNT(*)::int AS count FROM sessions WHERE unit_id = $1 AND assigned_tutor_id = $2',
+        `SELECT COUNT(*)::int AS count FROM sessions s
+         JOIN session_tutors st ON st.session_id = s.id
+         WHERE s.unit_id = $1 AND st.tutor_id = $2
+           AND st.tutor_confirmed IS DISTINCT FROM false`,
         [req.params.unitId, req.params.id]
       );
 
@@ -1119,7 +1171,11 @@ router.get('/units/:id/tutors', async (req, res) => {
           SELECT COUNT(*)
           FROM sessions s
           WHERE s.unit_id = $1
-            AND s.assigned_tutor_id = u.id
+            AND EXISTS (
+              SELECT 1 FROM session_tutors st
+              WHERE st.session_id = s.id AND st.tutor_id = u.id
+                AND st.tutor_confirmed IS DISTINCT FROM false
+            )
         ) AS assigned_session_count
       FROM tutor_memberships tm
       JOIN users u ON u.id = tm.user_id
@@ -1203,7 +1259,11 @@ router.post('/units/:id/tutors', async (req, res) => {
           SELECT COUNT(*)
           FROM sessions s
           WHERE s.unit_id = $1
-            AND s.assigned_tutor_id = u.id
+            AND EXISTS (
+              SELECT 1 FROM session_tutors st
+              WHERE st.session_id = s.id AND st.tutor_id = u.id
+                AND st.tutor_confirmed IS DISTINCT FROM false
+            )
         ) AS assigned_session_count
       FROM users u
       WHERE u.id = $2
@@ -1279,7 +1339,11 @@ router.patch('/units/:id/tutors/:userId/role', async (req, res) => {
           SELECT COUNT(*)
           FROM sessions s
           WHERE s.unit_id = $1
-            AND s.assigned_tutor_id = u.id
+            AND EXISTS (
+              SELECT 1 FROM session_tutors st
+              WHERE st.session_id = s.id AND st.tutor_id = u.id
+                AND st.tutor_confirmed IS DISTINCT FROM false
+            )
         ) AS assigned_session_count
       FROM users u
       WHERE u.id = $2
@@ -1301,9 +1365,11 @@ router.delete('/units/:id/tutors/:userId', async (req, res) => {
     const assigned = await pool.query(
       `
       SELECT COUNT(*) AS assigned_count
-      FROM sessions
-      WHERE unit_id = $1
-        AND assigned_tutor_id = $2
+      FROM sessions s
+      JOIN session_tutors st ON st.session_id = s.id
+      WHERE s.unit_id = $1
+        AND st.tutor_id = $2
+        AND st.tutor_confirmed IS DISTINCT FROM false
       `,
       [id, userId]
     );
@@ -1767,6 +1833,7 @@ router.get('/sessions', async (req, res) => {
         un.unit_name,
         un.semester,
         un.year,
+        un.schedule_locked,
         s.day,
         s.start_time,
         s.end_time,
@@ -1776,23 +1843,22 @@ router.get('/sessions', async (req, res) => {
         s.capacity,
         s.required_tutors,
         s.status,
-        COUNT(DISTINCT st.tutor_id) AS assigned_tutor_count,
+        COUNT(DISTINCT st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) AS assigned_tutor_count,
         STRING_AGG(
           DISTINCT TRIM(CONCAT(t.name, ' ', COALESCE(t.last_name, ''))),
           ', '
-        ) FILTER (WHERE t.id IS NOT NULL) AS assigned_tutors,
+        ) FILTER (WHERE t.id IS NOT NULL AND st.tutor_confirmed IS DISTINCT FROM false) AS assigned_tutors,
         CASE
-          WHEN COUNT(DISTINCT st.tutor_id) = 0 THEN 'Unassigned'
-          WHEN BOOL_OR(st.tutor_confirmed IS FALSE) THEN 'Declined'
+          WHEN COUNT(DISTINCT st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) = 0 THEN 'Unassigned'
           WHEN BOOL_OR(st.tutor_confirmed IS NULL) THEN 'Awaiting confirmation'
-          WHEN BOOL_AND(st.tutor_confirmed IS TRUE) THEN 'Confirmed'
+          WHEN BOOL_AND(st.tutor_confirmed IS TRUE) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) THEN 'Confirmed'
           ELSE 'Assigned'
         END AS tutor_confirmation_state
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users t ON t.id = st.tutor_id
-      GROUP BY s.id, un.unit_code, un.unit_name, un.semester, un.year
+      GROUP BY s.id, un.unit_code, un.unit_name, un.semester, un.year, un.schedule_locked
       ORDER BY
         un.year DESC,
         un.semester DESC,
@@ -1857,7 +1923,7 @@ router.post('/sessions', async (req, res) => {
 
     const refreshed = await pool.query(
       `
-      SELECT s.*, un.unit_code, un.unit_name, un.semester, un.year,
+      SELECT s.*, un.unit_code, un.unit_name, un.semester, un.year, un.schedule_locked,
         0 AS assigned_tutor_count,
         NULL AS assigned_tutors,
         'Unassigned' AS tutor_confirmation_state
@@ -1905,6 +1971,37 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
+    const currentResult = await pool.query(`
+      SELECT s.unit_id,
+        COUNT(st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false)::int AS assigned_count
+      FROM sessions s
+      LEFT JOIN session_tutors st ON st.session_id = s.id
+      WHERE s.id = $1
+      GROUP BY s.id
+    `, [id]);
+    if (currentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const current = currentResult.rows[0];
+    if (current.assigned_count > 0 && unitId !== current.unit_id) {
+      return res.status(409).json({ error: 'Unassign staff before moving this session to another unit' });
+    }
+    if (requiredTutors < current.assigned_count) {
+      return res.status(409).json({ error: 'Tutors required cannot be lower than the number already assigned' });
+    }
+    if (current.assigned_count > 0 && requiresSuperTutor(sessionType)) {
+      const assignedResult = await pool.query(`
+        SELECT st.tutor_id
+        FROM session_tutors st
+        WHERE st.session_id = $1 AND st.tutor_confirmed IS DISTINCT FROM false
+      `, [id]);
+      const staff = await getAdminSessionStaff(pool.query.bind(pool), unitId);
+      const eligibleIds = new Set(staff.filter(member => member.role !== 'tutor').map(member => member.id));
+      if (assignedResult.rows.some(item => !eligibleIds.has(item.tutor_id))) {
+        return res.status(409).json({ error: 'Unassign Tutors before changing this session to a lecture or consultation' });
+      }
+    }
+
     const result = await pool.query(
       `
       UPDATE sessions
@@ -1937,6 +2034,7 @@ router.put('/sessions/:id', async (req, res) => {
         un.unit_name,
         un.semester,
         un.year,
+        un.schedule_locked,
         s.day,
         s.start_time,
         s.end_time,
@@ -1946,16 +2044,15 @@ router.put('/sessions/:id', async (req, res) => {
         s.capacity,
         s.required_tutors,
         s.status,
-        COUNT(DISTINCT st.tutor_id) AS assigned_tutor_count,
+        COUNT(DISTINCT st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) AS assigned_tutor_count,
         STRING_AGG(
           DISTINCT TRIM(CONCAT(t.name, ' ', COALESCE(t.last_name, ''))),
           ', '
-        ) FILTER (WHERE t.id IS NOT NULL) AS assigned_tutors,
+        ) FILTER (WHERE t.id IS NOT NULL AND st.tutor_confirmed IS DISTINCT FROM false) AS assigned_tutors,
         CASE
-          WHEN COUNT(DISTINCT st.tutor_id) = 0 THEN 'Unassigned'
-          WHEN BOOL_OR(st.tutor_confirmed IS FALSE) THEN 'Declined'
+          WHEN COUNT(DISTINCT st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) = 0 THEN 'Unassigned'
           WHEN BOOL_OR(st.tutor_confirmed IS NULL) THEN 'Awaiting confirmation'
-          WHEN BOOL_AND(st.tutor_confirmed IS TRUE) THEN 'Confirmed'
+          WHEN BOOL_AND(st.tutor_confirmed IS TRUE) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false) THEN 'Confirmed'
           ELSE 'Assigned'
         END AS tutor_confirmation_state
       FROM sessions s
@@ -1963,7 +2060,7 @@ router.put('/sessions/:id', async (req, res) => {
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users t ON t.id = st.tutor_id
       WHERE s.id = $1
-      GROUP BY s.id, un.unit_code, un.unit_name, un.semester, un.year
+      GROUP BY s.id, un.unit_code, un.unit_name, un.semester, un.year, un.schedule_locked
       `,
       [id]
     );
@@ -1975,18 +2072,227 @@ router.put('/sessions/:id', async (req, res) => {
   }
 });
 
-router.delete('/sessions/:id', async (req, res) => {
+router.get('/sessions/:id/assignments', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM sessions WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid session ID' });
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Session not found' });
+    const sessionResult = await pool.query(`
+      SELECT s.id, s.unit_id, s.required_tutors, un.schedule_locked
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = $1
+    `, [req.params.id]);
+    const session = sessionResult.rows[0];
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const [staff, assignedResult] = await Promise.all([
+      getAdminSessionStaff(pool.query.bind(pool), session.unit_id),
+      pool.query(`
+        SELECT u.id, u.name, u.last_name, u.email, st.tutor_confirmed
+        FROM session_tutors st
+        JOIN users u ON u.id = st.tutor_id
+        WHERE st.session_id = $1
+        ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, ''))
+      `, [session.id])
+    ]);
+    const staffRoles = new Map(staff.map(member => [member.id, member.role]));
+
+    res.json({
+      scheduleLocked: !!session.schedule_locked,
+      requiredTutors: Number(session.required_tutors || 1),
+      candidates: staff,
+      assigned: assignedResult.rows.map(user => ({
+        id: user.id,
+        name: joinUserName(user.name, user.last_name) || user.email,
+        email: user.email,
+        role: staffRoles.get(user.id) || null,
+        confirmed: user.tutor_confirmed
+      }))
+    });
+  } catch (error) {
+    console.error('Admin session assignments fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch session assignments' });
+  }
+});
+
+router.post('/sessions/:id/assignments', async (req, res) => {
+  const { id } = req.params;
+  const tutorId = String(req.body.tutorId || '').trim();
+  if (!isUuid(id) || !isUuid(tutorId)) {
+    return res.status(400).json({ error: 'Valid session and staff IDs are required' });
+  }
+
+  let client;
+  let committed = false;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const sessionResult = await client.query(`
+      SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time,
+             s.session_type, s.required_tutors, un.unit_code, un.schedule_locked
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = $1
+      FOR UPDATE OF s
+    `, [id]);
+    const session = sessionResult.rows[0];
+    if (!session) throw sessionAssignmentError(404, 'Session not found');
+    if (session.schedule_locked) {
+      throw sessionAssignmentError(409, 'This schedule is locked. Unlock it before changing assignments.');
     }
 
+    const existingResult = await client.query(
+      'SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1',
+      [id]
+    );
+    const activeAssignments = existingResult.rows.filter(item => item.tutor_confirmed !== false);
+    if (activeAssignments.some(item => item.tutor_id === tutorId)) {
+      throw sessionAssignmentError(409, 'This staff member is already assigned to the session');
+    }
+    if (activeAssignments.length >= Number(session.required_tutors || 1)) {
+      throw sessionAssignmentError(409, 'This session already has its required number of staff assigned');
+    }
+
+    const candidates = await getAdminSessionStaff(client.query.bind(client), session.unit_id);
+    const staff = candidates.find(candidate => candidate.id === tutorId);
+    if (!staff) {
+      throw sessionAssignmentError(409, 'This staff member does not have active access to the unit');
+    }
+    if (staff.role !== 'coordinator' && requiresSuperTutor(session.session_type) && staff.role !== 'super_tutor') {
+      throw sessionAssignmentError(409, `Only Super Tutors can be assigned to ${session.session_type} sessions`);
+    }
+
+    const otherResult = await client.query(`
+      SELECT s.day, s.start_time, s.end_time, un.unit_code
+      FROM sessions s
+      JOIN session_tutors st ON st.session_id = s.id
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id <> $1 AND st.tutor_id = $2 AND st.tutor_confirmed IS DISTINCT FROM false
+    `, [id, tutorId]);
+    const overlap = otherResult.rows.find(other =>
+      other.day === session.day &&
+      timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
+    );
+    if (overlap) {
+      throw sessionAssignmentError(409, `This staff member has an overlapping session in ${overlap.unit_code}`);
+    }
+
+    const hours = otherResult.rows.reduce(
+      (total, other) => total + sessionDurationHours(other.start_time, other.end_time),
+      sessionDurationHours(session.start_time, session.end_time)
+    );
+    if (staff.maximumHours != null && hours > staff.maximumHours) {
+      throw sessionAssignmentError(409, `This assignment would exceed the staff member's maximum hours (${hours}/${staff.maximumHours})`);
+    }
+
+    const confirmed = staff.role === 'coordinator' ? true : null;
+    await client.query(`
+      INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed, tutor_reject_reason)
+      VALUES ($1, $2, $3, NULL)
+      ON CONFLICT (session_id, tutor_id)
+      DO UPDATE SET tutor_confirmed = $3, tutor_reject_reason = NULL, assigned_at = NOW(), reminder_sent_at = NULL
+    `, [id, tutorId, confirmed]);
+    await client.query('COMMIT');
+    committed = true;
+
+    try {
+      await createNotification({
+        userId: tutorId,
+        type: 'session_assigned',
+        title: staff.role === 'coordinator' ? 'Session assigned to you' : 'New session assignment',
+        content: staff.role === 'coordinator'
+          ? `You have been assigned to a ${session.day} session in ${session.unit_code}.`
+          : `You've been assigned to a ${session.day} session in ${session.unit_code}. Please confirm or decline it.`,
+        unitId: session.unit_id,
+        sessionId: id,
+        actionUrl: staff.role === 'coordinator'
+          ? `/schedule-builder/${session.unit_id}`
+          : `/tutor-schedule/${session.unit_id}`
+      });
+    } catch (notificationError) {
+      console.error('Admin session assignment notification error:', notificationError);
+    }
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    if (client && !committed) await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    console.error('Admin session assignment error:', error);
+    res.status(500).json({ error: 'Failed to assign staff member' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+router.delete('/sessions/:id/assignments/:tutorId', async (req, res) => {
+  const { id, tutorId } = req.params;
+  if (!isUuid(id) || !isUuid(tutorId)) {
+    return res.status(400).json({ error: 'Valid session and staff IDs are required' });
+  }
+
+  try {
+    const sessionResult = await pool.query(`
+      SELECT s.id, un.schedule_locked
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = $1
+    `, [id]);
+    if (sessionResult.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
+    if (sessionResult.rows[0].schedule_locked) {
+      return res.status(409).json({ error: 'This schedule is locked. Unlock it before changing assignments.' });
+    }
+
+    const removed = await pool.query(
+      'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2 RETURNING tutor_id',
+      [id, tutorId]
+    );
+    if (removed.rows.length === 0) return res.status(404).json({ error: 'Assignment not found' });
     res.json({ success: true });
   } catch (error) {
+    console.error('Admin session unassignment error:', error);
+    res.status(500).json({ error: 'Failed to unassign staff member' });
+  }
+});
+
+router.delete('/sessions/:id', async (req, res) => {
+  if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid session ID' });
+
+  let client;
+  let committed = false;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const sessionResult = await client.query(`
+      SELECT s.id, un.schedule_locked
+      FROM sessions s
+      JOIN units un ON un.id = s.unit_id
+      WHERE s.id = $1
+      FOR UPDATE OF s
+    `, [req.params.id]);
+    if (sessionResult.rows.length === 0) throw sessionAssignmentError(404, 'Session not found');
+    if (sessionResult.rows[0].schedule_locked) {
+      throw sessionAssignmentError(409, 'This schedule is locked. Unlock it before deleting sessions.');
+    }
+
+    const assigned = await client.query(
+      'SELECT 1 FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM false LIMIT 1',
+      [req.params.id]
+    );
+    if (assigned.rows.length > 0) {
+      throw sessionAssignmentError(409, 'This session has assigned staff. Unassign them before deleting it.');
+    }
+
+    await client.query('DELETE FROM sessions WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
+    committed = true;
+    res.json({ success: true });
+  } catch (error) {
+    if (client && !committed) await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ error: error.message });
     console.error('Admin session delete error:', error);
     res.status(500).json({ error: 'Failed to delete session' });
+  } finally {
+    if (client) client.release();
   }
 });
 

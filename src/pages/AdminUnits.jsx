@@ -338,9 +338,9 @@ const AdminUnits = () => {
                   </div>
                 </td>
                 <td>
-                  <div className="admin-row-actions">
-                    <button className="admin-text-btn" onClick={() => openEditModal(unit)}>Modify</button>
-                    <button className="admin-text-btn" onClick={() => openTutorModal(unit)}>Tutors</button>
+                  <div className="admin-actions-cell admin-user-actions">
+                    <button className="admin-action-btn primary" onClick={() => openEditModal(unit)}>Modify</button>
+                    <button className="admin-action-btn secondary" onClick={() => openTutorModal(unit)}>Tutors</button>
                   </div>
                 </td>
               </tr>

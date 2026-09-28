@@ -1601,6 +1601,36 @@ export const adminAPI = {
     return result;
   },
 
+  getSessionAssignments: async (sessionId) => {
+    const response = await fetch(`${API_URL}/admin/sessions/${sessionId}/assignments`, {
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to fetch session assignments');
+    return result;
+  },
+
+  assignSessionTutor: async (sessionId, tutorId) => {
+    const response = await fetch(`${API_URL}/admin/sessions/${sessionId}/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ tutorId })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to assign staff member');
+    return result;
+  },
+
+  unassignSessionTutor: async (sessionId, tutorId) => {
+    const response = await fetch(`${API_URL}/admin/sessions/${sessionId}/assignments/${tutorId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to unassign staff member');
+    return result;
+  },
+
   createSession: async (sessionData) => {
     const response = await fetch(`${API_URL}/admin/sessions`, {
       method: 'POST',

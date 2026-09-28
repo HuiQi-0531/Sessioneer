@@ -23,6 +23,8 @@ const statusOptions = ['Draft', 'Tentative', 'Confirmed', 'Cancelled'];
 const toTimeInput = (time) => time ? String(time).slice(0, 5) : '';
 const toApiTime = (time) => time && time.length === 5 ? `${time}:00` : time;
 const formatUnitTerm = (unit) => [unit?.semester, unit?.year].filter(Boolean).join(', ');
+const semesterRank = { Summer: 3, 'Semester 2': 2, 'Semester 1': 1 };
+const staffRoleLabel = { coordinator: 'Unit Coordinator', super_tutor: 'Super Tutor', tutor: 'Tutor' };
 
 const AdminSessions = () => {
   const [sessions, setSessions] = useState([]);
@@ -34,6 +36,12 @@ const AdminSessions = () => {
   const [modalSession, setModalSession] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState('details');
+  const [assignmentData, setAssignmentData] = useState(null);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [assignmentError, setAssignmentError] = useState('');
+  const [isAssignmentLoading, setIsAssignmentLoading] = useState(false);
+  const [isAssignmentSubmitting, setIsAssignmentSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,11 +96,25 @@ const AdminSessions = () => {
   }, [sessions, searchTerm, unitFilter, semesterFilter, statusFilter]);
 
   const semesterOptions = useMemo(() => {
-    const terms = units
-      .map(formatUnitTerm)
-      .filter(Boolean);
-    return Array.from(new Set(terms)).sort((a, b) => b.localeCompare(a));
+    const terms = units.filter(unit => unit.semester && unit.year);
+    const uniqueTerms = Array.from(new Map(terms.map(unit => [formatUnitTerm(unit), unit])).values());
+    return uniqueTerms
+      .sort((a, b) => Number(b.year) - Number(a.year)
+        || (semesterRank[b.semester] || 0) - (semesterRank[a.semester] || 0))
+      .map(formatUnitTerm);
   }, [units]);
+
+  const availableStaff = useMemo(() => {
+    if (!assignmentData) return [];
+    const assignedIds = new Set(
+      assignmentData.assigned.filter(item => item.confirmed !== false).map(item => item.id)
+    );
+    return assignmentData.candidates.filter(item => !assignedIds.has(item.id));
+  }, [assignmentData]);
+
+  const activeAssignmentCount = assignmentData
+    ? assignmentData.assigned.filter(item => item.confirmed !== false).length
+    : 0;
 
   const unitOptions = useMemo(() => {
     const unitMap = new Map();
@@ -110,10 +132,24 @@ const AdminSessions = () => {
       unitId: ''
     });
     setIsModalOpen(true);
+    setModalTab('details');
+    setAssignmentData(null);
     setError('');
   };
 
-  const openEditModal = (session) => {
+  const loadAssignments = async (sessionId) => {
+    setIsAssignmentLoading(true);
+    setAssignmentError('');
+    try {
+      setAssignmentData(await adminAPI.getSessionAssignments(sessionId));
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to load session assignments');
+    } finally {
+      setIsAssignmentLoading(false);
+    }
+  };
+
+  const openEditModal = (session, initialTab = 'details') => {
     setModalSession(session);
     setFormData({
       unitId: session.unitId || '',
@@ -128,14 +164,62 @@ const AdminSessions = () => {
       status: session.status || 'Confirmed'
     });
     setIsModalOpen(true);
+    setModalTab(initialTab);
+    setAssignmentData(null);
+    setSelectedStaffId('');
+    setAssignmentError('');
+    if (initialTab === 'tutors') loadAssignments(session.id);
     setError('');
+  };
+
+  const openTutorsTab = () => {
+    setModalTab('tutors');
+    if (modalSession && !assignmentData) loadAssignments(modalSession.id);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setModalSession(null);
     setFormData(emptyForm);
+    setModalTab('details');
+    setAssignmentData(null);
+    setSelectedStaffId('');
+    setAssignmentError('');
     setError('');
+  };
+
+  const refreshAssignmentViews = async (sessionId) => {
+    await loadAssignments(sessionId);
+    setSessions(await adminAPI.getSessions());
+  };
+
+  const assignStaff = async () => {
+    if (!modalSession || !selectedStaffId) return;
+    setIsAssignmentSubmitting(true);
+    setAssignmentError('');
+    try {
+      await adminAPI.assignSessionTutor(modalSession.id, selectedStaffId);
+      setSelectedStaffId('');
+      await refreshAssignmentViews(modalSession.id);
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to assign staff member');
+    } finally {
+      setIsAssignmentSubmitting(false);
+    }
+  };
+
+  const unassignStaff = async (staffId) => {
+    if (!modalSession) return;
+    setIsAssignmentSubmitting(true);
+    setAssignmentError('');
+    try {
+      await adminAPI.unassignSessionTutor(modalSession.id, staffId);
+      await refreshAssignmentViews(modalSession.id);
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to unassign staff member');
+    } finally {
+      setIsAssignmentSubmitting(false);
+    }
   };
 
   const handleChange = (event) => {
@@ -297,9 +381,9 @@ const AdminSessions = () => {
                   </span>
                 </td>
                 <td>
-                  <div className="admin-row-actions">
-                    <button className="admin-text-btn" onClick={() => openEditModal(session)}>Modify</button>
-                    <button className="admin-text-btn danger" onClick={() => setDeleteTarget(session)}>Delete</button>
+                  <div className="admin-actions-cell admin-user-actions">
+                    <button className="admin-action-btn primary" onClick={() => openEditModal(session)}>Modify</button>
+                    <button className="admin-action-btn danger" onClick={() => setDeleteTarget(session)}>Delete</button>
                   </div>
                 </td>
               </tr>
@@ -309,12 +393,22 @@ const AdminSessions = () => {
       </div>
 
       {isModalOpen && (
-        <div className="admin-modal-backdrop">
-          <form className="admin-modal wide" onSubmit={handleSubmit}>
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-session-title">
+          <div className="admin-modal wide admin-session-modal">
             <div className="admin-modal-header">
-              <h2>{modalSession ? 'Modify Session' : 'Add Session'}</h2>
-              <button type="button" className="admin-icon-btn light" onClick={closeModal}>x</button>
+              <h2 id="admin-session-title">{modalSession ? 'Modify Session' : 'Add Session'}</h2>
+              <button type="button" className="admin-icon-btn light" onClick={closeModal} aria-label="Close">x</button>
             </div>
+
+            {modalSession && (
+              <div className="admin-session-tabs" role="tablist" aria-label="Session editor sections">
+                <button type="button" role="tab" aria-selected={modalTab === 'details'} className={modalTab === 'details' ? 'active' : ''} onClick={() => setModalTab('details')}>Details</button>
+                <button type="button" role="tab" aria-selected={modalTab === 'tutors'} className={modalTab === 'tutors' ? 'active' : ''} onClick={openTutorsTab}>Tutors</button>
+              </div>
+            )}
+
+            {modalTab === 'details' ? (
+            <form onSubmit={handleSubmit}>
 
             <label>
               Unit
@@ -384,7 +478,58 @@ const AdminSessions = () => {
                 {isSubmitting ? 'Saving...' : 'Save session'}
               </button>
             </div>
-          </form>
+            </form>
+            ) : (
+              <div className="admin-session-assignments">
+                {assignmentError && <div className="admin-alert error">{assignmentError}</div>}
+                {isAssignmentLoading && !assignmentData ? (
+                  <p className="admin-muted">Loading tutors...</p>
+                ) : assignmentData ? (
+                  <>
+                    <div className="admin-session-assignment-heading">
+                      <h3>Assigned staff</h3>
+                      <span className="admin-count-pill">{activeAssignmentCount} of {assignmentData.requiredTutors}</span>
+                    </div>
+                    {assignmentData.scheduleLocked && (
+                      <div className="admin-alert error">This schedule is locked. Unlock it before changing assignments.</div>
+                    )}
+                    <div className="admin-session-assignment-list">
+                      {assignmentData.assigned.length === 0 ? (
+                        <p className="admin-muted">No staff assigned.</p>
+                      ) : assignmentData.assigned.map(staff => (
+                        <div className="admin-session-assignment-row" key={staff.id}>
+                          <div className="admin-strong-cell">
+                            <strong>{staff.name}</strong>
+                            <span>{staffRoleLabel[staff.role] || 'No unit access'} · {staff.confirmed === true ? 'Confirmed' : staff.confirmed === false ? 'Declined' : 'Awaiting confirmation'}</span>
+                          </div>
+                          <button type="button" className="admin-action-btn danger" onClick={() => unassignStaff(staff.id)} disabled={isAssignmentSubmitting || assignmentData.scheduleLocked}>Unassign</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="admin-session-assignment-heading">
+                      <h3>Assign staff</h3>
+                    </div>
+                    <div className="admin-session-assignment-form">
+                      <select value={selectedStaffId} onChange={event => setSelectedStaffId(event.target.value)} aria-label="Staff to assign" disabled={assignmentData.scheduleLocked || isAssignmentSubmitting || activeAssignmentCount >= assignmentData.requiredTutors}>
+                        <option value="">Select staff</option>
+                        {availableStaff.map(staff => (
+                          <option key={staff.id} value={staff.id}>{staff.name} · {staffRoleLabel[staff.role]}</option>
+                        ))}
+                      </select>
+                      <button type="button" className="admin-primary-btn" onClick={assignStaff} disabled={!selectedStaffId || isAssignmentSubmitting || assignmentData.scheduleLocked || activeAssignmentCount >= assignmentData.requiredTutors}>
+                        {isAssignmentSubmitting ? 'Saving...' : 'Assign'}
+                      </button>
+                    </div>
+                    <div className="admin-modal-actions">
+                      <button type="button" className="admin-secondary-btn" onClick={closeModal}>Done</button>
+                    </div>
+                  </>
+                ) : (
+                  <button type="button" className="admin-secondary-btn" onClick={() => loadAssignments(modalSession.id)}>Retry</button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -396,13 +541,21 @@ const AdminSessions = () => {
               <button type="button" className="admin-icon-btn light" onClick={() => setDeleteTarget(null)}>x</button>
             </div>
             <p className="admin-modal-copy">
-              Delete {deleteTarget.unitCode} {deleteTarget.day} {formatTimeRange(deleteTarget)} at {deleteTarget.location}? This cannot be undone.
+              {deleteTarget.scheduleLocked
+                ? 'This schedule is locked. Unlock it before deleting the session.'
+                : deleteTarget.assignedTutorCount > 0
+                  ? 'This session has assigned staff. Unassign them before deleting the session.'
+                  : `Delete ${deleteTarget.unitCode} ${deleteTarget.day} ${formatTimeRange(deleteTarget)} at ${deleteTarget.location}? This cannot be undone.`}
             </p>
             <div className="admin-modal-actions">
               <button type="button" className="admin-secondary-btn" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button type="button" className="admin-primary-btn danger" onClick={confirmDelete} disabled={isSubmitting}>
-                {isSubmitting ? 'Deleting...' : 'Delete session'}
-              </button>
+              {deleteTarget.assignedTutorCount > 0 && !deleteTarget.scheduleLocked ? (
+                <button type="button" className="admin-primary-btn" onClick={() => { const session = deleteTarget; setDeleteTarget(null); openEditModal(session, 'tutors'); }}>Manage tutors</button>
+              ) : !deleteTarget.scheduleLocked ? (
+                <button type="button" className="admin-primary-btn danger" onClick={confirmDelete} disabled={isSubmitting}>
+                  {isSubmitting ? 'Deleting...' : 'Delete session'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
