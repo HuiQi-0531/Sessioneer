@@ -38,7 +38,6 @@ const AdminSessions = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState('details');
   const [assignmentData, setAssignmentData] = useState(null);
-  const [assignmentSearch, setAssignmentSearch] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
   const [isAssignmentLoading, setIsAssignmentLoading] = useState(false);
@@ -110,12 +109,8 @@ const AdminSessions = () => {
     const assignedIds = new Set(
       assignmentData.assigned.filter(item => item.confirmed !== false).map(item => item.id)
     );
-    const query = assignmentSearch.trim().toLowerCase();
-    return assignmentData.candidates.filter(item =>
-      !assignedIds.has(item.id)
-      && (!query || `${item.name} ${item.email}`.toLowerCase().includes(query))
-    );
-  }, [assignmentData, assignmentSearch]);
+    return assignmentData.candidates.filter(item => !assignedIds.has(item.id));
+  }, [assignmentData]);
 
   const activeAssignmentCount = assignmentData
     ? assignmentData.assigned.filter(item => item.confirmed !== false).length
@@ -171,7 +166,6 @@ const AdminSessions = () => {
     setIsModalOpen(true);
     setModalTab(initialTab);
     setAssignmentData(null);
-    setAssignmentSearch('');
     setSelectedStaffId('');
     setAssignmentError('');
     if (initialTab === 'tutors') loadAssignments(session.id);
@@ -189,7 +183,6 @@ const AdminSessions = () => {
     setFormData(emptyForm);
     setModalTab('details');
     setAssignmentData(null);
-    setAssignmentSearch('');
     setSelectedStaffId('');
     setAssignmentError('');
     setError('');
@@ -517,7 +510,6 @@ const AdminSessions = () => {
                       <h3>Assign staff</h3>
                     </div>
                     <div className="admin-session-assignment-form">
-                      <input type="search" value={assignmentSearch} onChange={event => { setAssignmentSearch(event.target.value); setSelectedStaffId(''); }} placeholder="Search unit staff" aria-label="Search unit staff" />
                       <select value={selectedStaffId} onChange={event => setSelectedStaffId(event.target.value)} aria-label="Staff to assign" disabled={assignmentData.scheduleLocked || isAssignmentSubmitting || activeAssignmentCount >= assignmentData.requiredTutors}>
                         <option value="">Select staff</option>
                         {availableStaff.map(staff => (

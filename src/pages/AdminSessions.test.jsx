@@ -76,6 +76,8 @@ test('opens tutor management from Modify and assigns an eligible staff member', 
   fireEvent.click(screen.getByRole('tab', { name: 'Tutors' }));
 
   await screen.findByText('Assigned staff');
+  expect(screen.queryByPlaceholderText('Search unit staff')).not.toBeInTheDocument();
+  expect(within(screen.getByLabelText('Staff to assign')).getByRole('option', { name: 'Taylor Staff · Tutor' })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Staff to assign'), {
     target: { value: '22222222-2222-2222-2222-222222222222' }
   });
