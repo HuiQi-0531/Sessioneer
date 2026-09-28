@@ -873,10 +873,21 @@
   color: #334155;
 }
 
+.admin-action-btn.danger {
+  background: #fff7f7;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
 .admin-action-btn:hover:not(:disabled) {
   border-color: #2563eb;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
   transform: translateY(-1px);
+}
+
+.admin-action-btn.danger:hover:not(:disabled) {
+  border-color: #ef4444;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.12);
 }
 
 .admin-primary-btn,
@@ -1071,6 +1082,99 @@
 
 .admin-modal.wide {
   width: min(760px, 100%);
+}
+
+.admin-modal.wide.admin-session-modal {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-session-modal form {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.admin-session-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+.admin-session-tabs button {
+  min-height: 38px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-session-tabs button.active {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.admin-session-assignments {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.admin-session-assignment-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-session-assignment-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.admin-session-assignment-list {
+  min-height: 60px;
+  max-height: min(330px, 38vh);
+  overflow-y: auto;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+}
+
+.admin-session-assignment-list > p {
+  padding: 16px;
+}
+
+.admin-session-assignment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8edf4;
+}
+
+.admin-session-assignment-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-session-assignment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-session-assignment-form .admin-primary-btn {
+  min-height: 42px;
 }
 
 .admin-modal.wide.admin-tutor-modal {
@@ -1646,6 +1750,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+}
+
+@media (max-width: 640px) {
+  .admin-modal.wide.admin-session-modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px;
+  }
+
+  .admin-session-assignment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-session-assignment-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 760px) {
