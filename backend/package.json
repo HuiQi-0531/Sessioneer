@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "json-server": "json-server --watch db.json --port 5000",
     "test:rbac": "jest --runInBand --config jest.rbac.config.js",
-    "test:logic": "jest --config jest.logic.config.js"
+    "test:logic": "jest --config jest.logic.config.js",
+    "test:api": "jest --runInBand --config jest.api.config.js",
+    "test:api:coverage": "jest --runInBand --coverage --config jest.api.config.js"
   },
   "keywords": [],
   "author": "",

@@ -214,8 +214,15 @@ router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, r
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT resume_filename, resume_mime_type, resume_data FROM tutor_applications WHERE id = $1',
-      [id]
+      `SELECT ta.resume_filename, ta.resume_mime_type, ta.resume_data
+       FROM tutor_applications ta
+       JOIN units un ON un.id = ta.unit_id
+       WHERE ta.id = $1
+         AND (un.unit_coordinator_id = $2 OR EXISTS (
+           SELECT 1 FROM unit_memberships um
+           WHERE um.unit_id = un.id AND um.user_id = $2 AND um.role = 'coordinator'
+         ))`,
+      [id, req.user.id]
     );
     if (result.rows.length === 0 || !result.rows[0].resume_data) {
       return res.status(404).json({ error: 'No resume found' });
@@ -497,8 +504,23 @@ router.get('/user/:userId/resume', verifyToken, requireRole('coordinator'), asyn
   try {
     const { userId } = req.params;
     const result = await pool.query(
-      'SELECT resume_filename, resume_mime_type, resume_data FROM users WHERE id = $1',
-      [userId]
+      `SELECT u.resume_filename, u.resume_mime_type, u.resume_data
+       FROM users u
+       WHERE u.id = $1 AND EXISTS (
+         SELECT 1 FROM units un
+         WHERE (un.unit_coordinator_id = $2 OR EXISTS (
+           SELECT 1 FROM unit_memberships cm
+           WHERE cm.unit_id = un.id AND cm.user_id = $2 AND cm.role = 'coordinator'
+         )) AND (
+           EXISTS (SELECT 1 FROM unit_memberships tm WHERE tm.unit_id = un.id AND tm.user_id = u.id AND tm.role IN ('tutor', 'super_tutor'))
+           OR EXISTS (SELECT 1 FROM availability a WHERE a.unit_id = un.id AND a.tutor_id = u.id)
+           OR EXISTS (
+             SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id
+             WHERE s.unit_id = un.id AND st.tutor_id = u.id
+           )
+         )
+       )`,
+      [userId, req.user.id]
     );
     if (result.rows.length === 0 || !result.rows[0].resume_data) {
       return res.status(404).json({ error: 'No resume found' });

@@ -198,6 +198,10 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     const tutor_id = req.user.id;
 
+    if (!unitCode || !requestType || !reason) {
+      return res.status(400).json({ error: 'Unit, request type, and reason are required' });
+    }
+
     const unitResult = await pool.query(
       `
       SELECT
@@ -213,20 +217,23 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     );
     const unit = unitResult.rows[0];
     const unit_id = unit?.id;
+    if (!unit_id) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    const access = await pool.query(
+      `SELECT 1 FROM unit_memberships WHERE unit_id = $1 AND user_id = $2
+       UNION SELECT 1 FROM units WHERE id = $1 AND unit_coordinator_id = $2
+       LIMIT 1`,
+      [unit_id, tutor_id]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to this unit' });
+    }
+
     const coordinators = unit_id ? await getUnitCoordinators(unit_id) : [];
 
     const priorityValue = priority || 'Normal';
-
-    if (unit_id) {
-      await pool.query(
-        `
-        INSERT INTO unit_memberships (unit_id, user_id, role)
-        VALUES ($1, $2, 'tutor')
-        ON CONFLICT (unit_id, user_id, role) DO NOTHING
-        `,
-        [unit_id, tutor_id]
-      );
-    }
 
     const resolvedCurrentId = await resolveSessionId(pool, unit_id, currentSessionId || null, currentSession);
     const resolvedPreferredId = await resolveSessionId(pool, unit_id, preferredSessionId || null, preferredSwapTo);
@@ -301,7 +308,7 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    let { status, reviewNotes, reason } = req.body;
+    const { status, reviewNotes, reason } = req.body;
 
     const existingResult = await client.query(
       'SELECT * FROM change_requests WHERE id = $1 AND tutor_id = $2',
@@ -312,26 +319,23 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
     }
     const existing = existingResult.rows[0];
 
-    if (
-      String(existing.status || '').toLowerCase() === 'suggested' &&
-      String(status || '').toLowerCase() === 'rejected'
-    ) {
-      status = 'Pending';
+    const currentStatus = String(existing.status || '').toLowerCase();
+    const requestedStatus = String(status || '').toLowerCase();
+    const isAppeal = ['rejected', 'suggested'].includes(currentStatus)
+      && ['pending', 'rejected'].includes(requestedStatus);
+    if (reviewNotes !== undefined || (status !== undefined && !isAppeal)) {
+      return res.status(403).json({ error: 'Only a Unit Coordinator can review a request' });
     }
+    const nextStatus = isAppeal ? 'Pending' : null;
 
     await client.query('BEGIN');
-
-    if (String(status || existing.status || '').toLowerCase() === 'accepted') {
-      await applyApprovedChangeRequest(client, existing);
-    }
 
     const result = await client.query(`
       UPDATE change_requests 
       SET 
         status = COALESCE($1, status),
-        review_notes = COALESCE($2, review_notes),
-        reason = COALESCE($3, reason)
-      WHERE id = $4 AND tutor_id = $5
+        reason = COALESCE($2, reason)
+      WHERE id = $3 AND tutor_id = $4
       RETURNING 
         id,
         request_type as "requestType",
@@ -343,13 +347,13 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
         preferred_swap_to as "preferredSwapTo",
         created_at as "submittedDate",
         unit_id
-    `, [status, reviewNotes, reason, id, req.user.id]);
+    `, [nextStatus, reason, id, req.user.id]);
 
     await client.query('COMMIT');
 
     const updated = result.rows[0];
 
-    if ((status || '').toLowerCase() === 'pending' && updated.unit_id) {
+    if (nextStatus === 'Pending' && updated.unit_id) {
       const unitResult = await pool.query(
         'SELECT unit_code FROM units WHERE id = $1',
         [updated.unit_id]
@@ -402,7 +406,7 @@ router.delete('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'),
   }
 });
 
-router.get('/sessions', verifyToken, async (req, res) => {
+router.get('/sessions', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -412,8 +416,14 @@ router.get('/sessions', verifyToken, async (req, res) => {
       FROM sessions s
       LEFT JOIN users u ON s.assigned_tutor_id = u.id
       LEFT JOIN units un ON s.unit_id = un.id
+      WHERE $2::text = 'admin'
+         OR un.unit_coordinator_id = $1
+         OR EXISTS (
+           SELECT 1 FROM unit_memberships um
+           WHERE um.unit_id = s.unit_id AND um.user_id = $1
+         )
       ORDER BY s.day, s.start_time
-    `);
+    `, [req.user.id, req.user.role]);
 
     res.json(result.rows);
   } catch (error) {

@@ -70,6 +70,22 @@ const formatMessage = (m, currentUserId) => ({
   isMine: m.sender_id === currentUserId
 });
 
+const shareUnit = async (firstUserId, secondUserId) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secondUserId)) {
+    return false;
+  }
+  const result = await pool.query(
+    `SELECT 1 FROM units un
+     WHERE (un.unit_coordinator_id = $1 OR EXISTS (
+       SELECT 1 FROM unit_memberships um WHERE um.unit_id = un.id AND um.user_id = $1
+     )) AND (un.unit_coordinator_id = $2 OR EXISTS (
+       SELECT 1 FROM unit_memberships um WHERE um.unit_id = un.id AND um.user_id = $2
+     )) LIMIT 1`,
+    [firstUserId, secondUserId]
+  );
+  return result.rows.length > 0;
+};
+
 const getSupabaseConfig = () => {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -203,6 +219,9 @@ const canAccessUnit = async (user, unitId) => {
 router.get('/thread/:otherUserId', verifyToken, async (req, res) => {
   try {
     const { otherUserId } = req.params;
+    if (!(await shareUnit(req.user.id, otherUserId))) {
+      return res.status(403).json({ error: 'You cannot message this user' });
+    }
 
     const result = await pool.query(
       `
@@ -234,6 +253,9 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
     const cleanContent = (content || '').trim();
     if (!recipientId || (!cleanContent && !req.file)) {
       return res.status(400).json({ error: 'recipientId and message content or attachment are required' });
+    }
+    if (!(await shareUnit(req.user.id, recipientId))) {
+      return res.status(403).json({ error: 'You cannot message this user' });
     }
 
     const attachment = await uploadAttachment(req.file, req.user.id, req);
@@ -287,6 +309,9 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
 router.patch('/thread/:otherUserId/read', verifyToken, async (req, res) => {
   try {
     const { otherUserId } = req.params;
+    if (!(await shareUnit(req.user.id, otherUserId))) {
+      return res.status(403).json({ error: 'You cannot message this user' });
+    }
     await pool.query(
       `
       UPDATE messages

@@ -921,6 +921,9 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
+    const session = await pool.query('SELECT 1 FROM sessions WHERE id = $1 AND unit_id = $2', [sessionId, unitId]);
+    if (session.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
+
     if (await isScheduleLocked(unitId)) {
       return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
     }
@@ -947,10 +950,10 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
      FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
-      WHERE s.id = $1
+      WHERE s.id = $1 AND s.unit_id = $2
       GROUP BY s.id
       `,
-      [sessionId]
+      [sessionId, unitId]
     );
     if (withName.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
 

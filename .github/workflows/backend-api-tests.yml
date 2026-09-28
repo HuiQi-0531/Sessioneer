@@ -1,0 +1,49 @@
+name: Backend API and integration tests
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-api-tests.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-api-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  api-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sessioneer_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: sessioneer_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sessioneer_test -d sessioneer_test_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      TEST_DATABASE_URL: postgresql://sessioneer_test:test_password@127.0.0.1:5432/sessioneer_test_db
+      JWT_SECRET: api-integration-ci-secret
+      FRONTEND_URL: http://localhost:3000
+      CRON_SECRET: api-integration-ci-cron-secret
+      BREVO_API_KEY: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:api
