@@ -49,7 +49,44 @@ CREATE TABLE IF NOT EXISTS sessions (
     required_tutors INTEGER NOT NULL DEFAULT 1,
     is_assigned BOOLEAN DEFAULT FALSE,
     assigned_tutor_id UUID REFERENCES users(id),
+    session_code VARCHAR(30),
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Unit-level access and tutor markers
+CREATE TABLE IF NOT EXISTS unit_memberships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('coordinator', 'tutor', 'super_tutor')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(unit_id, user_id, role)
+);
+
+CREATE TABLE IF NOT EXISTS tutor_unit_markers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    tutor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    priority_tag VARCHAR(50) DEFAULT 'Standard',
+    internal_notes TEXT,
+    tags TEXT[] DEFAULT '{}',
+    early_access BOOLEAN DEFAULT FALSE,
+    starred BOOLEAN DEFAULT FALSE,
+    flagged BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(unit_id, tutor_id)
+);
+
+CREATE TABLE IF NOT EXISTS session_tutors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    tutor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    tutor_confirmed BOOLEAN DEFAULT NULL,
+    tutor_reject_reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    assigned_at TIMESTAMP DEFAULT NOW(),
+    reminder_sent_at TIMESTAMP,
+    UNIQUE(session_id, tutor_id)
 );
 
 -- Availability table
@@ -191,6 +228,31 @@ CREATE TABLE IF NOT EXISTS cover_requests (
     claimed_by_id UUID REFERENCES users(id),
     claimed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tutor applications and invitations
+CREATE TABLE IF NOT EXISTS tutor_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255),
+    email VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50),
+    work_experience TEXT,
+    maximum_hours INTEGER,
+    contract_type VARCHAR(50),
+    resume_filename VARCHAR(255),
+    resume_mime_type VARCHAR(100),
+    resume_data BYTEA,
+    custom_answers JSONB DEFAULT '{}'::jsonb,
+    status VARCHAR(20) DEFAULT 'pending',
+    applied_at TIMESTAMP DEFAULT NOW(),
+    invited_by_id UUID REFERENCES users(id),
+    invited_at TIMESTAMP,
+    invite_token VARCHAR(255) UNIQUE,
+    invite_token_expires_at TIMESTAMP,
+    invited_role VARCHAR(20) NOT NULL DEFAULT 'tutor',
+    created_user_id UUID REFERENCES users(id)
 );
 
 -- Create indexes

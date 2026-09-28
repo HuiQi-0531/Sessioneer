@@ -14,7 +14,7 @@ on:
 jobs:
   api-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -47,3 +47,4 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run test:api
+      - run: npm run test:api:coverage

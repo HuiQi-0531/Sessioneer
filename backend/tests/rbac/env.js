@@ -10,7 +10,9 @@ if (!testDb) {
   throw new Error('TEST_DATABASE_URL must be set in backend/.env.test (see tests/rbac/README.md)');
 }
 // Safety: the tests wipe the database, so refuse anything that is not clearly a test DB.
-if (!/test/i.test(testDb) || /supabase|render\.com/i.test(testDb)) {
+const testDatabase = new URL(testDb);
+if (!['localhost', '127.0.0.1', '[::1]'].includes(testDatabase.hostname)
+    || !/test/i.test(testDatabase.pathname)) {
   throw new Error('TEST_DATABASE_URL must point at a throwaway local database whose name contains "test"');
 }
 

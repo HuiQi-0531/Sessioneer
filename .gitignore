@@ -18,9 +18,11 @@ backend/coverage/
 .env
 .env.local
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 backend/.env
+backend/.env.test
 
 # logs
 npm-debug.log*
