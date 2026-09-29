@@ -48,4 +48,4 @@ const sendEmail = async ({ to, subject, htmlContent, textContent }) => {
   return data;
 };
 
-module.exports = { escapeHtml, sendEmail };
+module.exports = { escapeHtml, sendEmail, getEmailSender };

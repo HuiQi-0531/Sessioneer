@@ -13,12 +13,7 @@ const router = express.Router();
 const INVITABLE_ROLES = ['tutor', 'super_tutor'];
 const normaliseInvitedRole = (role) => (INVITABLE_ROLES.includes(role) ? role : 'tutor');
 
-// Same password hashing scheme used by auth.routes.js
-const hashPassword = (password) => {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-};
+const { hashPassword, isValidPassword } = require('../utils/passwords');
 
 const formatApplication = (a) => ({
   id: a.id,
@@ -411,7 +406,7 @@ router.post('/accept-invite', async (req, res) => {
     if (!token || !password) {
       return res.status(400).json({ error: 'Token and password are required' });
     }
-    if (password.length < 6) {
+    if (!isValidPassword(password)) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 

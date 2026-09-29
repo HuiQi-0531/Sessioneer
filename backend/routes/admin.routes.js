@@ -22,15 +22,7 @@ const MEMBERSHIP_ROLE_LABELS = {
 
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 
-const hashPassword = (password) => {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-};
-
-const hashResetToken = (token) => {
-  return crypto.createHash('sha256').update(token).digest('hex');
-};
+const { hashPassword, hashResetToken } = require('../utils/passwords');
 
 const sendPasswordResetEmail = async (email, resetLink, isSetup = false) => {
   const subject = isSetup ? 'Set up your Sessioneer password' : 'Reset your Sessioneer password';

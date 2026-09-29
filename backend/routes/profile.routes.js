@@ -24,22 +24,7 @@ const upload = multer({
   }
 });
 
-// Same scheme as auth.routes.js: "salt:hash" using scrypt.
-const hashPassword = (password) => {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-};
-
-const verifyPassword = (password, storedHash) => {
-  if (!storedHash || !storedHash.includes(':')) {
-    return false;
-  }
-  const [salt, originalHash] = storedHash.split(':');
-  const originalHashBuffer = Buffer.from(originalHash, 'hex');
-  const inputHashBuffer = crypto.scryptSync(password, salt, 64);
-  return crypto.timingSafeEqual(originalHashBuffer, inputHashBuffer);
-};
+const { hashPassword, verifyPassword, isValidPassword } = require('../utils/passwords');
 
 const formatProfile = (u) => ({
   id: u.id,
@@ -231,7 +216,7 @@ router.put('/password', verifyToken, async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current and new password are required' });
     }
-    if (newPassword.length < 6) {
+    if (!isValidPassword(newPassword)) {
       return res.status(400).json({ error: 'New password must be at least 6 characters' });
     }
 

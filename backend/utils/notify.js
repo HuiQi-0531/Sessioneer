@@ -58,4 +58,4 @@ const getUserDisplayName = async (userId) => {
   return joinUserName(user?.name, user?.last_name) || user?.email || 'Someone';
 };
 
-module.exports = { createNotification, getUserDisplayName };
+module.exports = { createNotification, getUserDisplayName, getPreferenceColumn };

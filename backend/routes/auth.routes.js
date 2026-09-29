@@ -7,21 +7,7 @@ const { formatUserNameFields, splitDisplayName } = require('../utils/userNames')
 
 const router = express.Router();
 
-const hashPassword = (password) => {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-};
-
-const verifyPassword = (password, storedHash) => {
-  if (!storedHash || !storedHash.includes(':')) {
-    return false;
-  }
-  const [salt, originalHash] = storedHash.split(':');
-  const originalHashBuffer = Buffer.from(originalHash, 'hex');
-  const inputHashBuffer = crypto.scryptSync(password, salt, 64);
-  return crypto.timingSafeEqual(originalHashBuffer, inputHashBuffer);
-};
+const { hashPassword, verifyPassword, hashResetToken, isValidPassword } = require('../utils/passwords');
 
 const formatUser = (user) => ({
   id: user.id,
@@ -30,10 +16,6 @@ const formatUser = (user) => ({
   role: user.role,
   avatarUrl: user.avatar_url || null
 });
-
-const hashResetToken = (token) => {
-  return crypto.createHash('sha256').update(token).digest('hex');
-};
 
 const sendPasswordResetEmail = async (email, resetLink) => {
   return sendEmail({
@@ -213,7 +195,7 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Reset token and new password are required' });
     }
 
-    if (newPassword.length < 6) {
+    if (!isValidPassword(newPassword)) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 

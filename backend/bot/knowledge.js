@@ -355,4 +355,4 @@ const searchKnowledge = (question, role, limit = 3) => {
   return scored.map(x => x.s);
 };
 
-module.exports = { OVERVIEW, SECTIONS, searchKnowledge };
+module.exports = { OVERVIEW, SECTIONS, searchKnowledge, tokenize };

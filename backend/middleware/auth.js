@@ -74,4 +74,4 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-module.exports = { verifyToken, requireRole };
+module.exports = { verifyToken, requireRole, getBlockedAccountResponse };

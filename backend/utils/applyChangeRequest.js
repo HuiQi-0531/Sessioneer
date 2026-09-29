@@ -280,5 +280,9 @@ const applyApprovedChangeRequest = async (client, request) => {
 module.exports = {
   AllocationError,
   applyApprovedChangeRequest,
-  resolveSessionId
+  resolveSessionId,
+  comparable,
+  sessionComparable,
+  sessionLoose,
+  labelFromStored
 };
