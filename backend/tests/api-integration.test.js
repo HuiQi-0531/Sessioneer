@@ -655,6 +655,16 @@ describe('Admin management workflows', () => {
     expect(listed.status).toBe(200);
     expect(listed.body.some((access) => access.unitId === ctx.unit.id && access.role === 'super_tutor')).toBe(true);
 
+    const blocked = await request(app)
+      .delete(`/admin/users/${ctx.users.superTutor.id}/units/${ctx.unit.id}/super_tutor`)
+      .set(auth(ctx.tokens.admin));
+    expect(blocked.status).toBe(409);
+
+    const unassigned = await request(app)
+      .delete(`/admin/sessions/${ctx.sessions.lecture.id}/assignments/${ctx.users.superTutor.id}`)
+      .set(auth(ctx.tokens.admin));
+    expect(unassigned.status).toBe(200);
+
     const removed = await request(app)
       .delete(`/admin/users/${ctx.users.superTutor.id}/units/${ctx.unit.id}/super_tutor`)
       .set(auth(ctx.tokens.admin));

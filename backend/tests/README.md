@@ -27,7 +27,7 @@ The CI workflow at `.github/workflows/backend-api-tests.yml` starts its own Post
 
 ## What the results mean
 
-- `route-security-api-integration.test.js` discovers every route declaration in `backend/routes`. The inventory currently has 106 route handlers plus `/health`. It checks missing credentials, invalid credentials, and a valid-role request to every protected route. The public auth/application routes are listed explicitly. Its authenticated smoke checks reject unexpected server errors, but do not by themselves prove that every business operation succeeds.
+- `route-security-api-integration.test.js` discovers every route declaration in `backend/routes`. The inventory currently has 109 route handlers plus `/health`. It checks missing credentials, invalid credentials, and a valid-role request to every protected route. The public auth/application routes are listed explicitly. Its authenticated smoke checks reject unexpected server errors, but do not by themselves prove that every business operation succeeds.
 - `api-integration.test.js` covers login, registration, password reset, account status, admin user/unit/session management, tutor assignment, requests, and cover claims. It checks response data and database side effects.
 - `extended-api-integration.test.js` covers availability, tutor applications/invites, messages, notifications, dashboards, unit management, profiles, and tutor markers. It checks persisted state and role boundaries.
 - `tests/rbac` and `tests/logic` are teammate-owned suites with separate commands (`npm run test:rbac` and `npm run test:logic`). Their case counts are not included in the API/integration total.

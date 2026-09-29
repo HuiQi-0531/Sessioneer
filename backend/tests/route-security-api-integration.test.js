@@ -86,7 +86,14 @@ afterAll(async () => {
 describe('Complete API authentication inventory', () => {
   test('all current route files and endpoints are discovered', () => {
     expect(routeFiles).toHaveLength(16);
-    expect(routes).toHaveLength(106);
+    expect(routes).toHaveLength(109);
+    for (const key of [
+      'GET /admin/sessions/:id/assignments',
+      'POST /admin/sessions/:id/assignments',
+      'DELETE /admin/sessions/:id/assignments/:tutorId',
+    ]) {
+      expect(routes.some((route) => `${route.method} ${route.path}` === key)).toBe(true);
+    }
     expect(publicRoutes.size).toBe(8);
     expect(secretRoutes.size).toBe(1);
   });
