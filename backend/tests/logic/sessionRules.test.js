@@ -165,9 +165,9 @@ describe('formatSessionRow', () => {
     expect(formatSessionRow({ ...session, tutors: [accepted] }).tutorConfirmed).toBe(true);
     expect(formatSessionRow({ ...session, tutors: [] }).tutorConfirmed).toBeNull();
   });
-  test('LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5)', () => {
+  test('LG-180: a session with 1 of 2 tutors still counts as assigned (Unassigned = no tutor, as in the User Manual)', () => {
     const row = formatSessionRow({ ...session, required_tutors: 2, tutors: [accepted] });
-    expect(row.isAssigned).toBe(false);
+    expect(row.isAssigned).toBe(true);
   });
 });
 

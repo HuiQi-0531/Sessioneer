@@ -2,66 +2,23 @@
 > backend@1.0.0 test:logic
 > jest --config jest.logic.config.js --verbose
 
-FAIL tests/logic/botRules.test.js
-  buildSystemPrompt
-    √ LG-436: a follow-up question also searches the previous question (16 ms)
-    √ LG-437: the user's role is named in the prompt (2 ms)
-    √ LG-438: nothing matched → the bot is told to use only the overview (10 ms)
-  filterRecentHistory
-    √ LG-439: keeps only the last 10 turns (5 ms)
-    √ LG-440: drops turns that are not from user or assistant (12 ms)
-    √ LG-441: drops turns whose content is not text (1 ms)
-  formatToolReply
-    √ LG-442: an error is shown as the reply (1 ms)
-    √ LG-443: lists the tutors who have not submitted
-    √ LG-444: everyone submitted
-  tokenize
-    √ LG-445: lowercases and splits on anything that is not a letter or number
-    √ LG-446: common words are removed (1 ms)
-    √ LG-447: one-letter words are removed
-  searchKnowledge
-    √ LG-448: an English keyword finds its section (2 ms)
-    √ LG-449: a Chinese keyword finds its section (3 ms)
-    √ LG-450: a multi-word keyword ranks above a single word (1 ms)
-    √ LG-451: on a tie, the asker's own role comes first (3 ms)
-    √ LG-452: the result limit is respected (2 ms)
-    √ LG-453: nothing matching gives no sections (1 ms)
-    × LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18) (4 ms)
-
-  ● searchKnowledge › LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)
-
-    expect(received).not.toContain(expected) // indexOf
-
-    Expected value: not "uc_messages"
-    Received array:     ["admin_users", "uc_messages", "admin_units_sessions"]
-
-    [0m [90m 78 |[39m   })[33m;[39m
-     [90m 79 |[39m   test([32m'LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 80 |[39m     expect(ids([32m'How do I disable a user in admin?'[39m[33m,[39m [32m'coordinator'[39m))[33m.[39mnot[33m.[39mtoContain([32m'uc_messages'[39m)[33m;[39m
-     [90m    |[39m                                                                         [31m[1m^[22m[39m
-     [90m 81 |[39m   })[33m;[39m
-     [90m 82 |[39m })[33m;[39m
-     [90m 83 |[39m[0m
-
-      at Object.toContain (tests/logic/botRules.test.js:80:73)
-
 FAIL tests/logic/changeRequestRules.test.js
   applyApprovedChangeRequest (fake database)
-    √ LG-225: a "change" request removes the tutor from their session (18 ms)
-    √ LG-226: a swap with no target session is refused (103 ms)
+    √ LG-225: a "change" request removes the tutor from their session (14 ms)
+    √ LG-226: a swap with no target session is refused (44 ms)
     √ LG-227: target is the same session → nothing changes
-    √ LG-228: tutor no longer on the current session is refused (2 ms)
+    √ LG-228: tutor no longer on the current session is refused (1 ms)
     √ LG-229: tutor already on the target is just removed from the old session (2 ms)
-    √ LG-230: a full target session is refused (no forced swap) (14 ms)
-    √ LG-231: a free target session moves the tutor (9 ms)
+    √ LG-230: a full target session is refused (no forced swap) (1 ms)
+    √ LG-231: a free target session moves the tutor (1 ms)
   resolveTutorRequestStatus
-    √ LG-232: rejecting a coordinator suggestion sends the request back to Pending (1 ms)
-    √ LG-233: any other status is kept as sent (1 ms)
+    √ LG-232: rejecting a coordinator suggestion sends the request back to Pending
+    √ LG-233: any other status is kept as sent
     √ LG-234: the check ignores upper/lower case
   shouldApplyChange
     √ LG-235: accepting applies the change (1 ms)
-    × LG-236: editing an already-accepted request without a new status does not apply it again (LOGIC-B11) (3 ms)
-    √ LG-237: pending does not apply anything (1 ms)
+    × LG-236: editing an already-accepted request without a new status does not apply it again (LOGIC-B11) (2 ms)
+    √ LG-237: pending does not apply anything
 
   ● shouldApplyChange › LG-236: editing an already-accepted request without a new status does not apply it again (LOGIC-B11)
 
@@ -80,39 +37,117 @@ FAIL tests/logic/changeRequestRules.test.js
 
       at Object.toBe (tests/logic/changeRequestRules.test.js:80:54)
 
+FAIL tests/logic/applicationRules.test.js
+  normaliseInvitedRole
+    √ LG-396: tutor stays tutor (8 ms)
+    √ LG-397: super_tutor stays super_tutor
+    √ LG-398: anything else (e.g. coordinator) becomes tutor
+  formatApplication
+    √ LG-399: full name joins first and last name (5 ms)
+    √ LG-400: invite link is only shown while the status is "invited" (1 ms)
+    √ LG-401: defaults for invited role and custom answers (2 ms)
+  filterCustomAnswers
+    √ LG-402: answers for built-in fields are removed (2 ms)
+    √ LG-403: custom answers are kept
+    √ LG-404: not an object gives {}
+  isInviteExpired (clock fixed at 1 Oct 2026, 12:00 UTC)
+    √ LG-405: before expiry is not expired
+    √ LG-406: after expiry is expired (49 ms)
+    √ LG-407: exactly at expiry is not yet expired (1 ms)
+  resolveInviteName
+    √ LG-408: names from the application are used (2 ms)
+    √ LG-409: direct invite (no name yet) uses the names typed in (4 ms)
+    √ LG-410: last name comes from the application when present (3 ms)
+    × LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15) (93 ms)
+
+  ● resolveInviteName › LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "firstName": "Alex",
+    +   "firstName": "Alex Lee",
+        "lastName": "Lee",
+      }
+
+    [0m [90m 61 |[39m   })[33m;[39m
+     [90m 62 |[39m   test([32m'LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 63 |[39m     expect(resolveInviteName({ name[33m:[39m [32m'Alex Lee'[39m[33m,[39m last_name[33m:[39m [36mnull[39m }[33m,[39m [32m''[39m[33m,[39m [32m''[39m))[33m.[39mtoEqual({ firstName[33m:[39m [32m'Alex'[39m[33m,[39m lastName[33m:[39m [32m'Lee'[39m })[33m;[39m
+     [90m    |[39m                                                                              [31m[1m^[22m[39m
+     [90m 64 |[39m   })[33m;[39m
+     [90m 65 |[39m })[33m;[39m
+     [90m 66 |[39m[0m
+
+      at Object.toEqual (tests/logic/applicationRules.test.js:63:78)
+
+FAIL tests/logic/passwords.test.js
+  hashPassword
+    √ LG-134: result is "salt:hash" in hex (98 ms)
+    √ LG-135: same password gives a different hash each time (random salt) (172 ms)
+  verifyPassword
+    √ LG-136: correct password is accepted (69 ms)
+    √ LG-137: wrong password is rejected (134 ms)
+    √ LG-138: missing hash or hash without ":" is rejected (3 ms)
+    × LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8) (61 ms)
+  hashResetToken
+    √ LG-140: same token always gives the same 64-character hash
+    √ LG-141: different tokens give different hashes (1 ms)
+  isValidPassword (minimum 6 characters)
+    √ LG-142: 5 characters is too short (1 ms)
+    √ LG-143: exactly 6 characters is accepted (1 ms)
+    √ LG-144: empty password is too short
+
+  ● verifyPassword › LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8)
+
+    RangeError: Input buffers must have the same byte length
+
+    [0m [90m 17 |[39m   [36mconst[39m originalHashBuffer [33m=[39m [33mBuffer[39m[33m.[39m[36mfrom[39m(originalHash[33m,[39m [32m'hex'[39m)[33m;[39m
+     [90m 18 |[39m   [36mconst[39m inputHashBuffer [33m=[39m crypto[33m.[39mscryptSync(password[33m,[39m salt[33m,[39m [35m64[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 19 |[39m   [36mreturn[39m crypto[33m.[39mtimingSafeEqual(originalHashBuffer[33m,[39m inputHashBuffer)[33m;[39m
+     [90m    |[39m                 [31m[1m^[22m[39m
+     [90m 20 |[39m }[33m;[39m
+     [90m 21 |[39m
+     [90m 22 |[39m [36mconst[39m hashResetToken [33m=[39m (token) [33m=>[39m {[0m
+
+      at timingSafeEqual (utils/passwords.js:19:17)
+      at Object.verifyPassword (tests/logic/passwords.test.js:32:12)
+
 FAIL tests/logic/requestLabels.test.js
   labelFromSessionValue
-    √ LG-238: missing value shows "Not specified" (13 ms)
+    √ LG-238: missing value shows "Not specified" (54 ms)
     √ LG-239: "id::label" shows the label with spaced " | " (1 ms)
     √ LG-240: value without "::" is shown as it is (1 ms)
     √ LG-241: value with more than one "::" is shown as it is
   normaliseSessionLabel
-    √ LG-242: spaces around "|" are removed (1 ms)
-    √ LG-243: repeated spaces become one
+    √ LG-242: spaces around "|" are removed
+    √ LG-243: repeated spaces become one (2 ms)
     √ LG-244: text becomes uppercase (1 ms)
   getSessionComparableLabel
-    √ LG-245: builds DAY START-END|ROOM (3 ms)
-    √ LG-246: seconds are cut from database times
+    √ LG-245: builds DAY START-END|ROOM
+    √ LG-246: seconds are cut from database times (4 ms)
     √ LG-247: missing values become TBC / TBA (1 ms)
-    × LG-248: a stored label written "10:00 - 12:00" still matches its session (LOGIC-B10) (7 ms)
+    × LG-248: a stored label written "10:00 - 12:00" still matches its session (LOGIC-B10) (9 ms)
   buildSuggestionSessions (sessions an admin can suggest instead)
-    √ LG-249: the tutor's current session is not suggested (2 ms)
-    √ LG-250: a full session is not suggested
-    √ LG-251: a full session is suggested if its tutor also asked to swap out (1 ms)
-    √ LG-252: an empty session is labelled "Unassigned" (1 ms)
-    √ LG-253: a part-filled session is labelled "Space available" (18 ms)
+    √ LG-249: the tutor's current session is not suggested (1 ms)
+    √ LG-250: a full session is not suggested (1 ms)
+    √ LG-251: a full session is suggested if its tutor also asked to swap out
+    √ LG-252: an empty session is labelled "Unassigned"
+    √ LG-253: a part-filled session is labelled "Space available"
   buildReviewEmailSubject
-    √ LG-254: accepted is shown as "approved" (9 ms)
+    √ LG-254: accepted is shown as "approved" (1 ms)
     √ LG-255: suggested has its own subject
-    √ LG-256: no status is shown as "updated" (2 ms)
+    √ LG-256: no status is shown as "updated"
   review notifications
-    √ LG-257: admin approval says it was approved by an administrator (1 ms)
-    √ LG-258: admin rejection includes the note when there is one
-    √ LG-259: coordinator rejection without a note has no "Note:" (1 ms)
+    √ LG-257: admin approval says it was approved by an administrator (56 ms)
+    √ LG-258: admin rejection includes the note when there is one (1 ms)
+    √ LG-259: coordinator rejection without a note has no "Note:" (5 ms)
     √ LG-260: coordinator suggestion has its own title (1 ms)
   isValidReviewStatus
     √ LG-261: accepted, rejected and suggested are valid (1 ms)
-    √ LG-262: anything else is invalid (1 ms)
+    √ LG-262: anything else is invalid (2 ms)
 
   ● getSessionComparableLabel › LG-248: a stored label written "10:00 - 12:00" still matches its session (LOGIC-B10)
 
@@ -131,215 +166,66 @@ FAIL tests/logic/requestLabels.test.js
 
       at Object.toBe (tests/logic/requestLabels.test.js:53:69)
 
-FAIL tests/logic/sessionRules.test.js
-  suggestedTutorCount (1 tutor per 30 students, starting at 1)
-    √ LG-145: no capacity gives 1 tutor (15 ms)
-    √ LG-146: 29 students gives 1 tutor (3 ms)
-    √ LG-147: 30 students gives 2 tutors (1 ms)
-    √ LG-148: 60 students gives 3 tutors (2 ms)
-    √ LG-149: capacity as text from a CSV ("45") gives 2 tutors (2 ms)
-  codePrefixForType
-    √ LG-150: Tutorial gets TUT (1 ms)
-    √ LG-151: Lecture gets LEC
-    √ LG-152: unknown or missing type gets SES (2 ms)
-    × LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9) (8 ms)
-  nextSessionCode
-    √ LG-154: no codes yet gives 01
-    √ LG-155: TUT01 to TUT03 used gives TUT04
-    √ LG-156: with a gap, continues after the highest number
-    √ LG-157: codes that are not PREFIX + number are ignored (1 ms)
-    √ LG-158: after TUT99 comes TUT100 (30 ms)
-  isBlank
-    √ LG-159: undefined, null, empty and spaces are blank (1 ms)
-    √ LG-160: 0 is a value, not blank (1 ms)
-    √ LG-161: normal text is not blank
-  getMissingSessionFields
-    √ LG-162: all fields filled gives no missing fields
-    √ LG-163: missing day is reported as "Day" (3 ms)
-    √ LG-164: capacity 0 is not treated as missing (32 ms)
-    √ LG-165: a field with only spaces is missing (1 ms)
-    √ LG-166: several missing fields keep the form order (1 ms)
-    √ LG-167: admin version also requires the unit (3 ms)
-    √ LG-168: admin version with unit given has nothing missing (1 ms)
-  validateSessionInput (creating one session)
-    √ LG-169: valid input passes and numbers are read
-    √ LG-170: missing fields are listed in the error
-    √ LG-171: capacity 0 or not a number is rejected
-    √ LG-172: tutor count below 1 is rejected (1 ms)
-    × LG-173: end time before start time is rejected (LOGIC-B4) (4 ms)
-    × LG-174: end time equal to start time is rejected (LOGIC-B4) (1 ms)
-  formatSessionRow
-    √ LG-175: no tutors means not assigned (1 ms)
-    √ LG-176: a pending tutor still fills the session (1 ms)
-    √ LG-177: a declined tutor is moved to declinedTutors and does not fill the session (2 ms)
-    √ LG-178: legacy fields show the first tutor who has not declined
-    √ LG-179: tutorConfirmed follows the first active tutor, null when there is none (1 ms)
-    × LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5) (1 ms)
-  formatCoveringSessionRow
-    √ LG-181: marks the row as covering and keeps the cover dates (2 ms)
-    √ LG-182: counts how many Mondays the cover period includes
-  buildConfirmationUpdate (tutor accepts or declines)
-    √ LG-190: accepting needs no reason (1 ms)
-    √ LG-191: declining with a reason keeps the trimmed reason (2 ms)
-    √ LG-192: declining without a reason is rejected
-    √ LG-193: declining with only spaces is rejected (1 ms)
-    × LG-194: missing "confirmed" value gives an error, not a crash (LOGIC-B6) (57 ms)
-  checkAssignSlot (room for one more tutor?)
-    √ LG-195: the same tutor cannot be assigned twice (1 ms)
-    √ LG-196: a full session is refused (declined tutors do not count) (1 ms)
-    √ LG-197: missing required_tutors counts as 1 (1 ms)
+FAIL tests/logic/messageProfileRules.test.js
+  formatMessage
+    √ LG-373: my own message is marked isMine (10 ms)
+    √ LG-374: someone else's message is not mine (2 ms)
+    √ LG-375: no attachment gives null attachment fields (4 ms)
+  getSupabaseConfig
+    √ LG-376: both settings present (2 ms)
+    √ LG-377: a missing setting means local storage is used (null) (1 ms)
+    √ LG-378: a trailing "/" on the URL is removed (1 ms)
+  buildRequestBaseUrl
+    √ LG-379: uses x-forwarded-proto behind a proxy (Render) (2 ms)
+    √ LG-380: a list "https,http" uses the first (1 ms)
+    √ LG-381: no proxy header uses the request protocol (6 ms)
+  upload file types
+    √ LG-382: PDF attachment is allowed (1 ms)
+    √ LG-383: an .exe attachment is refused (1 ms)
+    √ LG-384: PNG profile picture is allowed (2 ms)
+    √ LG-385: PDF profile picture is refused (2 ms)
+  formatProfile
+    √ LG-386: maps the profile row (1 ms)
+  buildProfileUpdateParams
+    √ LG-387: tutor-only fields are only written for a tutor (15 ms)
+    √ LG-388: sending an empty last name clears it (2 ms)
+    √ LG-389: not sending a last name keeps the old one
+    × LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17) (4 ms)
 
-  ● codePrefixForType › LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9)
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: "TUT"
-    Received: "SES"
-
-    [0m [90m 44 |[39m   })[33m;[39m
-     [90m 45 |[39m   test([32m'LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 46 |[39m     expect(codePrefixForType([32m'tutorial'[39m))[33m.[39mtoBe([32m'TUT'[39m)[33m;[39m
-     [90m    |[39m                                           [31m[1m^[22m[39m
-     [90m 47 |[39m   })[33m;[39m
-     [90m 48 |[39m })[33m;[39m
-     [90m 49 |[39m[0m
-
-      at Object.toBe (tests/logic/sessionRules.test.js:46:43)
-
-  ● validateSessionInput (creating one session) › LG-173: end time before start time is rejected (LOGIC-B4)
-
-    expect(received).toBeTruthy()
-
-    Received: null
-
-    [0m [90m 129 |[39m   })[33m;[39m
-     [90m 130 |[39m   test([32m'LG-173: end time before start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 131 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'11:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m
-     [90m     |[39m                                                                                            [31m[1m^[22m[39m
-     [90m 132 |[39m   })[33m;[39m
-     [90m 133 |[39m   test([32m'LG-174: end time equal to start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
-     [90m 134 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'10:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m[0m
-
-      at Object.toBeTruthy (tests/logic/sessionRules.test.js:131:92)
-
-  ● validateSessionInput (creating one session) › LG-174: end time equal to start time is rejected (LOGIC-B4)
-
-    expect(received).toBeTruthy()
-
-    Received: null
-
-    [0m [90m 132 |[39m   })[33m;[39m
-     [90m 133 |[39m   test([32m'LG-174: end time equal to start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 134 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'10:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m
-     [90m     |[39m                                                                                            [31m[1m^[22m[39m
-     [90m 135 |[39m   })[33m;[39m
-     [90m 136 |[39m })[33m;[39m
-     [90m 137 |[39m[0m
-
-      at Object.toBeTruthy (tests/logic/sessionRules.test.js:134:92)
-
-  ● formatSessionRow › LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5)
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: false
-    Received: true
-
-    [0m [90m 168 |[39m   test([32m'LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5)'[39m[33m,[39m () [33m=>[39m {
-     [90m 169 |[39m     [36mconst[39m row [33m=[39m formatSessionRow({ [33m...[39msession[33m,[39m required_tutors[33m:[39m [35m2[39m[33m,[39m tutors[33m:[39m [accepted] })[33m;[39m
-    [31m[1m>[22m[39m[90m 170 |[39m     expect(row[33m.[39misAssigned)[33m.[39mtoBe([36mfalse[39m)[33m;[39m
-     [90m     |[39m                            [31m[1m^[22m[39m
-     [90m 171 |[39m   })[33m;[39m
-     [90m 172 |[39m })[33m;[39m
-     [90m 173 |[39m[0m
-
-      at Object.toBe (tests/logic/sessionRules.test.js:170:28)
-
-  ● buildConfirmationUpdate (tutor accepts or declines) › LG-194: missing "confirmed" value gives an error, not a crash (LOGIC-B6)
-
-    expect(received).not.toThrow()
-
-    Error name:    "TypeError"
-    Error message: "Cannot read properties of undefined (reading 'trim')"
-
-        [0m [90m 172 |[39m     [36mreturn[39m { error[33m:[39m [32m'Please provide a reason for declining'[39m }[33m;[39m
-         [90m 173 |[39m   }
-        [31m[1m>[22m[39m[90m 174 |[39m   [36mreturn[39m { error[33m:[39m [36mnull[39m[33m,[39m confirmed[33m,[39m rejectReason[33m:[39m confirmed [33m?[39m [36mnull[39m [33m:[39m reason[33m.[39mtrim() }[33m;[39m
-         [90m     |[39m                                                                            [31m[1m^[22m[39m
-         [90m 175 |[39m }[33m;[39m
-         [90m 176 |[39m
-         [90m 177 |[39m [90m// Whether this session still has room for this tutor (was inline in PATCH /:sessionId/assign).[39m[0m
-
-      at trim (utils/sessionRules.js:174:76)
-      at buildConfirmationUpdate (tests/logic/sessionRules.test.js:205:18)
-      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
-      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
-      at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
-      at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
-
-FAIL tests/logic/availabilityRules.test.js
-  availabilityTimeToSlot (availability page slot names)
-    √ LG-310: 00:00 is 12:00am (2 ms)
-    √ LG-311: 08:00 is 8:00am (1 ms)
-    √ LG-312: 12:00 is 12:00pm
-    √ LG-313: 13:00 is 1:00pm
-    √ LG-314: 23:00 is 11:00pm
-  isAvailabilityLocked (clock fixed at 1 Oct 2026, 12:00 UTC)
-    √ LG-315: coordinator locked it (1 ms)
-    √ LG-316: deadline has passed
-    √ LG-317: deadline is still in the future (1 ms)
-    √ LG-318: no deadline set stays open
-    √ LG-319: missing lock flag and no deadline stays open (1 ms)
-  parseAvailabilitySlot
-    √ LG-320: "Monday-8:00am" becomes MON 08:00-09:00 (1 ms)
-    √ LG-321: "MON-1:00pm" becomes 13:00-14:00 (1 ms)
-    √ LG-322: 12:00pm is noon (1 ms)
-    √ LG-323: 12:00am is midnight
-    √ LG-324: weekend days are ignored (1 ms)
-    √ LG-325: unknown preference is ignored
-    √ LG-326: key without "-" is ignored (1 ms)
-    √ LG-327: time without minutes ("8am") is ignored
-    × LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13) (1 ms)
-  buildAvailabilityGrid
-    √ LG-329: slots are grouped by day, then tutor, then time (7 ms)
-    √ LG-330: rows for tutors not on the list are skipped (7 ms)
-    √ LG-331: rows on an unknown day are skipped (1 ms)
-    √ LG-332: submission status lists every tutor, ignoring others
-
-  ● parseAvailabilitySlot › LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)
+  ● buildProfileUpdateParams › LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)
 
     expect(received).toBeNull()
 
-    Received: {"day": "MON", "endTime": "26:00:00", "preference": "preferred", "startTime": "25:00:00"}
+    Received: ""
 
-    [0m [90m 62 |[39m   })[33m;[39m
-     [90m 63 |[39m   test([32m'LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 64 |[39m     expect(parseAvailabilitySlot([32m'Monday-13:00pm'[39m[33m,[39m [32m'preferred'[39m))[33m.[39mtoBeNull()[33m;[39m
-     [90m    |[39m                                                                  [31m[1m^[22m[39m
-     [90m 65 |[39m   })[33m;[39m
-     [90m 66 |[39m })[33m;[39m
-     [90m 67 |[39m[0m
+    [0m [90m 79 |[39m   })[33m;[39m
+     [90m 80 |[39m   test([32m'LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 81 |[39m     expect(buildProfileUpdateParams({ maximumHours[33m:[39m [32m''[39m }[33m,[39m [32m'tutor'[39m[33m,[39m [32m'u1'[39m)[[35m6[39m])[33m.[39mtoBeNull()[33m;[39m
+     [90m    |[39m                                                                              [31m[1m^[22m[39m
+     [90m 82 |[39m   })[33m;[39m
+     [90m 83 |[39m })[33m;[39m
+     [90m 84 |[39m[0m
 
-      at Object.toBeNull (tests/logic/availabilityRules.test.js:64:66)
+      at Object.toBeNull (tests/logic/messageProfileRules.test.js:81:78)
 
 FAIL tests/logic/jobRules.test.js
   verifyCronSecret (reminder job protection)
-    √ LG-360: no secret configured → 503 (4 ms)
+    √ LG-360: no secret configured → 503 (3 ms)
     √ LG-361: correct Bearer token is let through (1 ms)
-    √ LG-362: correct x-cron-secret header is let through
+    √ LG-362: correct x-cron-secret header is let through (1 ms)
     √ LG-363: wrong secret → 401 (1 ms)
   formatTime
-    √ LG-364: seconds are cut (4 ms)
-    √ LG-365: missing time gives "" (1 ms)
+    √ LG-364: seconds are cut (1 ms)
+    √ LG-365: missing time gives ""
     √ LG-366: short value stays as it is (1 ms)
   formatSessionLabel
     √ LG-367: all parts joined with " | " (1 ms)
-    √ LG-368: missing parts are left out (1 ms)
+    √ LG-368: missing parts are left out
     √ LG-369: time only (1 ms)
   frontendUrl
-    √ LG-370: default is localhost:3000 (1 ms)
-    √ LG-371: a trailing "/" is removed
-    × LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14) (1 ms)
+    √ LG-370: default is localhost:3000
+    √ LG-371: a trailing "/" is removed (1 ms)
+    × LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14) (2 ms)
 
   ● frontendUrl › LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14)
 
@@ -358,89 +244,91 @@ FAIL tests/logic/jobRules.test.js
 
       at Object.toBe (tests/logic/jobRules.test.js:68:31)
 
-FAIL tests/logic/passwords.test.js
-  hashPassword
-    √ LG-134: result is "salt:hash" in hex (74 ms)
-    √ LG-135: same password gives a different hash each time (random salt) (171 ms)
-  verifyPassword
-    √ LG-136: correct password is accepted (66 ms)
-    √ LG-137: wrong password is rejected (65 ms)
-    √ LG-138: missing hash or hash without ":" is rejected (1 ms)
-    × LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8) (73 ms)
-  hashResetToken
-    √ LG-140: same token always gives the same 64-character hash (2 ms)
-    √ LG-141: different tokens give different hashes (1 ms)
-  isValidPassword (minimum 6 characters)
-    √ LG-142: 5 characters is too short (2 ms)
-    √ LG-143: exactly 6 characters is accepted
-    √ LG-144: empty password is too short
+FAIL tests/logic/botRules.test.js
+  buildSystemPrompt
+    √ LG-436: a follow-up question also searches the previous question (12 ms)
+    √ LG-437: the user's role is named in the prompt (1 ms)
+    √ LG-438: nothing matched → the bot is told to use only the overview (1 ms)
+  filterRecentHistory
+    √ LG-439: keeps only the last 10 turns (3 ms)
+    √ LG-440: drops turns that are not from user or assistant (19 ms)
+    √ LG-441: drops turns whose content is not text (1 ms)
+  formatToolReply
+    √ LG-442: an error is shown as the reply (1 ms)
+    √ LG-443: lists the tutors who have not submitted
+    √ LG-444: everyone submitted (1 ms)
+  tokenize
+    √ LG-445: lowercases and splits on anything that is not a letter or number
+    √ LG-446: common words are removed (1 ms)
+    √ LG-447: one-letter words are removed
+  searchKnowledge
+    √ LG-448: an English keyword finds its section (2 ms)
+    √ LG-449: a Chinese keyword finds its section (2 ms)
+    √ LG-450: a multi-word keyword ranks above a single word (1 ms)
+    √ LG-451: on a tie, the asker's own role comes first (2 ms)
+    √ LG-452: the result limit is respected (2 ms)
+    √ LG-453: nothing matching gives no sections (1 ms)
+    × LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18) (3 ms)
 
-  ● verifyPassword › LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8)
+  ● searchKnowledge › LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)
 
-    RangeError: Input buffers must have the same byte length
+    expect(received).not.toContain(expected) // indexOf
 
-    [0m [90m 17 |[39m   [36mconst[39m originalHashBuffer [33m=[39m [33mBuffer[39m[33m.[39m[36mfrom[39m(originalHash[33m,[39m [32m'hex'[39m)[33m;[39m
-     [90m 18 |[39m   [36mconst[39m inputHashBuffer [33m=[39m crypto[33m.[39mscryptSync(password[33m,[39m salt[33m,[39m [35m64[39m)[33m;[39m
-    [31m[1m>[22m[39m[90m 19 |[39m   [36mreturn[39m crypto[33m.[39mtimingSafeEqual(originalHashBuffer[33m,[39m inputHashBuffer)[33m;[39m
-     [90m    |[39m                 [31m[1m^[22m[39m
-     [90m 20 |[39m }[33m;[39m
-     [90m 21 |[39m
-     [90m 22 |[39m [36mconst[39m hashResetToken [33m=[39m (token) [33m=>[39m {[0m
+    Expected value: not "uc_messages"
+    Received array:     ["admin_users", "uc_messages", "admin_units_sessions"]
 
-      at timingSafeEqual (utils/passwords.js:19:17)
-      at Object.verifyPassword (tests/logic/passwords.test.js:32:12)
+    [0m [90m 78 |[39m   })[33m;[39m
+     [90m 79 |[39m   test([32m'LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 80 |[39m     expect(ids([32m'How do I disable a user in admin?'[39m[33m,[39m [32m'coordinator'[39m))[33m.[39mnot[33m.[39mtoContain([32m'uc_messages'[39m)[33m;[39m
+     [90m    |[39m                                                                         [31m[1m^[22m[39m
+     [90m 81 |[39m   })[33m;[39m
+     [90m 82 |[39m })[33m;[39m
+     [90m 83 |[39m[0m
 
-FAIL tests/logic/messageProfileRules.test.js
-  formatMessage
-    √ LG-373: my own message is marked isMine (13 ms)
-    √ LG-374: someone else's message is not mine (1 ms)
-    √ LG-375: no attachment gives null attachment fields (17 ms)
-  getSupabaseConfig
-    √ LG-376: both settings present (1 ms)
-    √ LG-377: a missing setting means local storage is used (null) (1 ms)
-    √ LG-378: a trailing "/" on the URL is removed
-  buildRequestBaseUrl
-    √ LG-379: uses x-forwarded-proto behind a proxy (Render)
-    √ LG-380: a list "https,http" uses the first (1 ms)
-    √ LG-381: no proxy header uses the request protocol (1 ms)
-  upload file types
-    √ LG-382: PDF attachment is allowed
-    √ LG-383: an .exe attachment is refused
-    √ LG-384: PNG profile picture is allowed
-    √ LG-385: PDF profile picture is refused
-  formatProfile
-    √ LG-386: maps the profile row (1 ms)
-  buildProfileUpdateParams
-    √ LG-387: tutor-only fields are only written for a tutor (1 ms)
-    √ LG-388: sending an empty last name clears it
-    √ LG-389: not sending a last name keeps the old one (1 ms)
-    × LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17) (2 ms)
+      at Object.toContain (tests/logic/botRules.test.js:80:73)
 
-  ● buildProfileUpdateParams › LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)
+FAIL tests/logic/tutorRules.test.js
+  formatTutor
+    √ LG-412: maps a full tutor row (3 ms)
+    √ LG-413: missing values get defaults (1 ms)
+  cleanTagList
+    √ LG-414: tags are trimmed and blank tags removed (1 ms)
+    √ LG-415: not a list gives [] (1 ms)
+    × LG-416: a tag that is not text does not crash the save (LOGIC-B16) (15 ms)
 
-    expect(received).toBeNull()
+  ● cleanTagList › LG-416: a tag that is not text does not crash the save (LOGIC-B16)
 
-    Received: ""
+    expect(received).not.toThrow()
 
-    [0m [90m 79 |[39m   })[33m;[39m
-     [90m 80 |[39m   test([32m'LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 81 |[39m     expect(buildProfileUpdateParams({ maximumHours[33m:[39m [32m''[39m }[33m,[39m [32m'tutor'[39m[33m,[39m [32m'u1'[39m)[[35m6[39m])[33m.[39mtoBeNull()[33m;[39m
-     [90m    |[39m                                                                              [31m[1m^[22m[39m
-     [90m 82 |[39m   })[33m;[39m
-     [90m 83 |[39m })[33m;[39m
-     [90m 84 |[39m[0m
+    Error name:    "TypeError"
+    Error message: "t.trim is not a function"
 
-      at Object.toBeNull (tests/logic/messageProfileRules.test.js:81:78)
+        [0m [90m 20 |[39m
+         [90m 21 |[39m [36mconst[39m cleanTagList [33m=[39m (tags) [33m=>[39m ([33mArray[39m[33m.[39misArray(tags)
+        [31m[1m>[22m[39m[90m 22 |[39m   [33m?[39m tags[33m.[39mmap(t [33m=>[39m t[33m.[39mtrim())[33m.[39mfilter(t [33m=>[39m t[33m.[39mlength [33m>[39m [35m0[39m)
+         [90m    |[39m                     [31m[1m^[22m[39m
+         [90m 23 |[39m   [33m:[39m [])[33m;[39m
+         [90m 24 |[39m
+         [90m 25 |[39m module[33m.[39mexports [33m=[39m { formatTutor[33m,[39m cleanTagList }[33m;[39m[0m
+
+      at trim (utils/tutorRules.js:22:21)
+                at Array.map (<anonymous>)
+      at map (utils/tutorRules.js:22:10)
+      at cleanTagList (tests/logic/tutorRules.test.js:23:18)
+      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
+      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
+      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
+      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
 
 FAIL tests/logic/sessionImport.test.js
   prepareImportRow (one CSV row)
-    √ LG-183: a valid row is read and the session code is cleaned (3 ms)
-    √ LG-184: a day that cannot be read skips the row (2 ms)
-    √ LG-185: a time that cannot be read skips the row (2 ms)
-    √ LG-186: no tutor count uses 1 tutor per 30 students (1 ms)
+    √ LG-183: a valid row is read and the session code is cleaned (1 ms)
+    √ LG-184: a day that cannot be read skips the row (1 ms)
+    √ LG-185: a time that cannot be read skips the row
+    √ LG-186: no tutor count uses 1 tutor per 30 students
     √ LG-187: missing optional fields become null, status becomes Confirmed, no code is generated here (1 ms)
-    × LG-188: a row whose end time is before its start time is skipped (LOGIC-B4) (1 ms)
-    × LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7) (1 ms)
+    × LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)
+    × LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7) (17 ms)
 
   ● prepareImportRow (one CSV row) › LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)
 
@@ -474,266 +362,14 @@ FAIL tests/logic/sessionImport.test.js
 
       at Object.toBeTruthy (tests/logic/sessionImport.test.js:46:70)
 
-FAIL tests/logic/tutorRules.test.js
-  formatTutor
-    √ LG-412: maps a full tutor row (2 ms)
-    √ LG-413: missing values get defaults (1 ms)
-  cleanTagList
-    √ LG-414: tags are trimmed and blank tags removed (1 ms)
-    √ LG-415: not a list gives []
-    × LG-416: a tag that is not text does not crash the save (LOGIC-B16) (29 ms)
-
-  ● cleanTagList › LG-416: a tag that is not text does not crash the save (LOGIC-B16)
-
-    expect(received).not.toThrow()
-
-    Error name:    "TypeError"
-    Error message: "t.trim is not a function"
-
-        [0m [90m 20 |[39m
-         [90m 21 |[39m [36mconst[39m cleanTagList [33m=[39m (tags) [33m=>[39m ([33mArray[39m[33m.[39misArray(tags)
-        [31m[1m>[22m[39m[90m 22 |[39m   [33m?[39m tags[33m.[39mmap(t [33m=>[39m t[33m.[39mtrim())[33m.[39mfilter(t [33m=>[39m t[33m.[39mlength [33m>[39m [35m0[39m)
-         [90m    |[39m                     [31m[1m^[22m[39m
-         [90m 23 |[39m   [33m:[39m [])[33m;[39m
-         [90m 24 |[39m
-         [90m 25 |[39m module[33m.[39mexports [33m=[39m { formatTutor[33m,[39m cleanTagList }[33m;[39m[0m
-
-      at trim (utils/tutorRules.js:22:21)
-                at Array.map (<anonymous>)
-      at map (utils/tutorRules.js:22:10)
-      at cleanTagList (tests/logic/tutorRules.test.js:23:18)
-      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
-      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
-      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
-      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
-
-FAIL tests/logic/applicationRules.test.js
-  normaliseInvitedRole
-    √ LG-396: tutor stays tutor (12 ms)
-    √ LG-397: super_tutor stays super_tutor (1 ms)
-    √ LG-398: anything else (e.g. coordinator) becomes tutor
-  formatApplication
-    √ LG-399: full name joins first and last name (3 ms)
-    √ LG-400: invite link is only shown while the status is "invited" (2 ms)
-    √ LG-401: defaults for invited role and custom answers (3 ms)
-  filterCustomAnswers
-    √ LG-402: answers for built-in fields are removed (1 ms)
-    √ LG-403: custom answers are kept
-    √ LG-404: not an object gives {} (1 ms)
-  isInviteExpired (clock fixed at 1 Oct 2026, 12:00 UTC)
-    √ LG-405: before expiry is not expired (1 ms)
-    √ LG-406: after expiry is expired
-    √ LG-407: exactly at expiry is not yet expired (1 ms)
-  resolveInviteName
-    √ LG-408: names from the application are used (1 ms)
-    √ LG-409: direct invite (no name yet) uses the names typed in
-    √ LG-410: last name comes from the application when present (1 ms)
-    × LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15) (7 ms)
-
-  ● resolveInviteName › LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)
-
-    expect(received).toEqual(expected) // deep equality
-
-    - Expected  - 1
-    + Received  + 1
-
-      Object {
-    -   "firstName": "Alex",
-    +   "firstName": "Alex Lee",
-        "lastName": "Lee",
-      }
-
-    [0m [90m 61 |[39m   })[33m;[39m
-     [90m 62 |[39m   test([32m'LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 63 |[39m     expect(resolveInviteName({ name[33m:[39m [32m'Alex Lee'[39m[33m,[39m last_name[33m:[39m [36mnull[39m }[33m,[39m [32m''[39m[33m,[39m [32m''[39m))[33m.[39mtoEqual({ firstName[33m:[39m [32m'Alex'[39m[33m,[39m lastName[33m:[39m [32m'Lee'[39m })[33m;[39m
-     [90m    |[39m                                                                              [31m[1m^[22m[39m
-     [90m 64 |[39m   })[33m;[39m
-     [90m 65 |[39m })[33m;[39m
-     [90m 66 |[39m[0m
-
-      at Object.toEqual (tests/logic/applicationRules.test.js:63:78)
-
-PASS tests/logic/authMiddleware.test.js
-  getBlockedAccountResponse
-    √ LG-119: disabled account is blocked with 403 (4 ms)
-    √ LG-120: pending account is blocked with 403 (1 ms)
-    √ LG-121: active account and unknown status are not blocked (2 ms)
-
-PASS tests/logic/normalise.test.js
-  timeRangesOverlap
-    √ partial overlap (2 ms)
-    √ one inside the other (1 ms)
-    √ identical times (55 ms)
-    √ back-to-back (A then B) (1 ms)
-    √ back-to-back (B then A)
-    √ completely separate
-    √ 1-minute overlap (31 ms)
-    √ gives the same answer whichever session is passed first (1 ms)
-  sessionDurationHours
-    √ 10:00:00 to 12:00:00 = 2 hours
-    √ 10:00:00 to 11:30:00 = 1.5 hours (1 ms)
-    √ 09:00:00 to 09:00:00 = 0 hours (1 ms)
-    √ returns a negative number when end is before start
-  timeToMinutes
-    √ 00:00:00 -> 0
-    √ 08:30:00 -> 510
-    √ 23:59:00 -> 1439
-  timeToSlot
-    √ 00:00:00 -> 12am (1 ms)
-    √ 08:00:00 -> 8am
-    √ 11:30:00 -> 11am
-    √ 12:00:00 -> 12pm
-    √ 13:00:00 -> 1pm (1 ms)
-    √ 23:00:00 -> 11pm
-  getHourlySlotsInRange
-    √ 10:00:00 to 12:00:00 (1 ms)
-    √ 11:00:00 to 13:00:00
-    √ 10:00:00 to 11:30:00 (1 ms)
-    √ 10:00:00 to 10:00:00
-  normaliseDay
-    √ "Monday" -> MON
-    √ "mon" -> MON (1 ms)
-    √ "  TUES  " -> TUE
-    √ "Thurs" -> THU
-    √ "sunday" -> SUN
-    √ returns null for ""
-    √ returns null for null
-    √ returns null for undefined
-    √ returns null for "Funday" (1 ms)
-    √ returns null for "Mo"
-  normaliseTime
-    accepts common formats
-      √ "3pm" -> 15:00:00 (1 ms)
-      √ "3 pm" -> 15:00:00
-      √ " 3PM " -> 15:00:00 (1 ms)
-      √ "12pm" -> 12:00:00
-      √ "12am" -> 00:00:00
-      √ "3:30 pm" -> 15:30:00 (1 ms)
-      √ "9:05am" -> 09:05:00
-      √ "12:30am" -> 00:30:00
-      √ "8:00" -> 08:00:00 (1 ms)
-      √ "15:00" -> 15:00:00
-      √ "1500" -> 15:00:00
-      √ "800" -> 08:00:00 (1 ms)
-      √ 1500 -> 15:00:00
-    rejects unrecognised input
-      √ returns null for ""
-      √ returns null for null (1 ms)
-      √ returns null for "noon"
-      √ returns null for "25:00"
-      √ returns null for "2400" (1 ms)
-    rejects out-of-range values
-      √ returns null for "13pm"
-      √ returns null for "3:75pm"
-      √ returns null for "8:60" (1 ms)
-      √ returns null for "1275"
-  isUnitActive (clock fixed to 26 Sep 2026)
-    √ "Semester 2" 2026 -> true (1 ms)
-    √ "Semester 2" "2026" -> true
-    √ "Semester 1" 2026 -> false
-    √ "Semester 2" 2025 -> false (1 ms)
-    √ "Semester 2" 2027 -> false
-    √ null 2026 -> true
-    √ "Semester 2" null -> true (1 ms)
-
-PASS tests/logic/adminSessionRules.test.js
-  isUuid
-    √ LG-457: a normal id is accepted (2 ms)
-    √ LG-458: upper-case letters are accepted (1 ms)
-    √ LG-459: wrong format, empty or missing is refused (1 ms)
-  formatAdminStaff
-    √ LG-460: full name is used, or the email when there is no name
-    √ LG-461: max hours becomes a number, missing stays null
-  checkAdminSessionEdit
-    √ LG-462: a session with staff cannot be moved to another unit (1 ms)
-    √ LG-463: tutors required cannot go below the number already assigned
-    √ LG-464: a session with no staff can be moved and changed (1 ms)
-  hasIneligibleForSuperTutorType
-    √ LG-465: a normal Tutor assigned blocks changing to a Lecture (1 ms)
-    √ LG-466: only Super Tutors and coordinators assigned is fine
-  checkAdminAssignSlot
-    √ LG-467: the same staff member cannot be assigned twice
-    √ LG-468: a full session is refused (declined staff do not count) (1 ms)
-
-PASS tests/logic/allocationRules.test.js
-  findOverlappingSessions
-    √ LG-198: same day with overlapping times is a clash (2 ms)
-    √ LG-199: same times on a different day is not a clash
-    √ LG-200: back-to-back sessions (12:00 end, 12:00 start) are not a clash (1 ms)
-    √ LG-201: tutor with no other sessions has no clash
-    √ LG-202: every clashing session is returned, not just the first (1 ms)
-  calcHoursIfAssigned
-    √ LG-203: adds this session to the hours already assigned (1 ms)
-    √ LG-204: no other sessions gives just this session (35 ms)
-  exceedsMaxHours
-    √ LG-205: no maximum set never exceeds
-    √ LG-206: reaching exactly the maximum is allowed (1 ms)
-    √ LG-207: going over the maximum is blocked
-  violatesSuperTutorRule
-    √ LG-208: a normal tutor cannot take a Lecture
-    √ LG-209: a Super Tutor can take a Lecture (1 ms)
-    √ LG-210: a coordinator assigning themselves skips the rule
-
-PASS tests/logic/coverRules.test.js
-  countWeekdayOccurrences (1 Oct 2026 is a Thursday)
-    √ LG-333: one week has one Thursday (1 ms)
-    √ LG-334: the start date itself counts (1 ms)
-    √ LG-335: the end date itself counts (4 ms)
-    √ LG-336: four weeks has four Thursdays
-    √ LG-337: works across the end of a month (4 ms)
-    √ LG-338: lowercase day works
-    √ LG-339: start after end gives 0 (1 ms)
-    √ LG-340: unknown day gives 0
-    √ LG-341: missing or invalid date gives 0 (1 ms)
-  formatDateRange
-    √ LG-342: same month (42 ms)
-    √ LG-343: across months (1 ms)
-  formatTimeRange
-    √ LG-344: seconds are cut (1 ms)
-  formatCoverSession
-    √ LG-345: with location
-    √ LG-346: without location (1 ms)
-    √ LG-347: camelCase fields from the frontend also work
-  validateCoverDates
-    √ LG-348: missing date is refused
-    √ LG-349: start after end is refused (1 ms)
-    √ LG-350: a one-day range is fine
-  getCoverRecipients
-    √ LG-351: the tutor who cannot make it is not notified (1 ms)
-    √ LG-352: several sessions exclude each original tutor (1 ms)
-    √ LG-353: sessions with no tutor notify everyone
-  buildCoverSummary
-    √ LG-354: one session over several weeks says "sessions" (1 ms)
-    √ LG-355: one week says "session" (1 ms)
-    √ LG-356: several sessions show the count (1 ms)
-  checkCoverClaim
-    √ LG-357: a tutor cannot claim their own session
-    √ LG-358: a Lecture needs a Super Tutor (1 ms)
-    √ LG-359: a normal claim is allowed (1 ms)
-
-PASS tests/logic/dashboardRules.test.js
-  countDashboardUnits
-    √ LG-434: counts active units only (2 ms)
-    √ LG-435: counts units with availability submitted (1 ms)
-
-PASS tests/logic/emailSender.test.js
-  getEmailSender
-    √ LG-122: "Name <email>" is split into sender name and email (2 ms)
-    √ LG-123: "<email>" with no name uses "Sessioneer" as the name (3 ms)
-    √ LG-124: missing email settings throw an error (85 ms)
-  sendEmail (email service replaced by a fake)
-    √ LG-125: a single address is sent as [{ email }] (2 ms)
-    √ LG-126: a list of recipients is sent as it is (2 ms)
-    √ LG-127: a failed send throws the message from the email service (2 ms)
-
 FAIL tests/logic/authRules.test.js
   normaliseRegisterRole
-    √ LG-304: "Coordinator" registers a coordinator (59 ms)
-    √ LG-305: anything else registers a tutor (2 ms)
-    × LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12) (6 ms)
+    √ LG-304: "Coordinator" registers a coordinator (4 ms)
+    √ LG-305: anything else registers a tutor (1 ms)
+    × LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12) (4 ms)
   resolveRegisterName
-    √ LG-307: first and last name are used and trimmed (2 ms)
-    √ LG-308: only a full name is split into first and last (1 ms)
+    √ LG-307: first and last name are used and trimmed (1 ms)
+    √ LG-308: only a full name is split into first and last
     √ LG-309: nothing given gives empty names (1 ms)
 
   ● normaliseRegisterRole › LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12)
@@ -753,44 +389,262 @@ FAIL tests/logic/authRules.test.js
 
       at Object.toBe (tests/logic/authRules.test.js:10:50)
 
-PASS tests/logic/applyChangeRequest.test.js
-  comparable
-    √ LG-103: spaces around a hyphen are removed (24 ms)
-    √ LG-104: en dash (–) is treated the same as a hyphen (3 ms)
-    √ LG-105: spaces around | are removed (1 ms)
-    √ LG-106: repeated spaces become one and text becomes uppercase
-    √ LG-107: missing value gives empty string (1 ms)
-  sessionComparable
-    √ LG-108: builds the label DAY START-END|ROOM (1 ms)
-    √ LG-109: seconds are cut from database times (3 ms)
-    √ LG-110: missing times become TBC
-    √ LG-111: missing day becomes TBC and missing room becomes TBA (1 ms)
-  sessionLoose
-    √ LG-112: builds the label with a space before the room instead of | (1 ms)
-    √ LG-113: matches a label a tutor typed with extra spaces and lowercase (5 ms)
-  labelFromStored
-    √ LG-114: removes the id part before :: (1 ms)
-    √ LG-115: with more than one ::, keeps only the last part
-    √ LG-116: value without :: is returned as it is (3 ms)
-    √ LG-117: missing value gives empty string
-  stored label matches the session on the timetable
-    √ LG-118: a stored request label finds the right session
+FAIL tests/logic/availabilityRules.test.js
+  availabilityTimeToSlot (availability page slot names)
+    √ LG-310: 00:00 is 12:00am (1 ms)
+    √ LG-311: 08:00 is 8:00am
+    √ LG-312: 12:00 is 12:00pm
+    √ LG-313: 13:00 is 1:00pm (1 ms)
+    √ LG-314: 23:00 is 11:00pm
+  isAvailabilityLocked (clock fixed at 1 Oct 2026, 12:00 UTC)
+    √ LG-315: coordinator locked it (1 ms)
+    √ LG-316: deadline has passed
+    √ LG-317: deadline is still in the future (1 ms)
+    √ LG-318: no deadline set stays open
+    √ LG-319: missing lock flag and no deadline stays open
+  parseAvailabilitySlot
+    √ LG-320: "Monday-8:00am" becomes MON 08:00-09:00 (1 ms)
+    √ LG-321: "MON-1:00pm" becomes 13:00-14:00 (1 ms)
+    √ LG-322: 12:00pm is noon
+    √ LG-323: 12:00am is midnight (1 ms)
+    √ LG-324: weekend days are ignored (1 ms)
+    √ LG-325: unknown preference is ignored
+    √ LG-326: key without "-" is ignored (1 ms)
+    √ LG-327: time without minutes ("8am") is ignored
+    × LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13) (2 ms)
+  buildAvailabilityGrid
+    √ LG-329: slots are grouped by day, then tutor, then time (1 ms)
+    √ LG-330: rows for tutors not on the list are skipped (1 ms)
+    √ LG-331: rows on an unknown day are skipped (1 ms)
+    √ LG-332: submission status lists every tutor, ignoring others (1 ms)
 
-PASS tests/logic/email.test.js
-  escapeHtml
-    √ LG-93: escapes all five special HTML characters (1 ms)
-    √ LG-94: a script tag in a name is shown as text, not run (1 ms)
-    √ LG-95: normal text is unchanged
-    √ LG-96: null and undefined give empty string (1 ms)
-    √ LG-97: numbers (including 0) are turned into text
+  ● parseAvailabilitySlot › LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)
+
+    expect(received).toBeNull()
+
+    Received: {"day": "MON", "endTime": "26:00:00", "preference": "preferred", "startTime": "25:00:00"}
+
+    [0m [90m 62 |[39m   })[33m;[39m
+     [90m 63 |[39m   test([32m'LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 64 |[39m     expect(parseAvailabilitySlot([32m'Monday-13:00pm'[39m[33m,[39m [32m'preferred'[39m))[33m.[39mtoBeNull()[33m;[39m
+     [90m    |[39m                                                                  [31m[1m^[22m[39m
+     [90m 65 |[39m   })[33m;[39m
+     [90m 66 |[39m })[33m;[39m
+     [90m 67 |[39m[0m
+
+      at Object.toBeNull (tests/logic/availabilityRules.test.js:64:66)
+
+PASS tests/logic/coverRules.test.js
+  countWeekdayOccurrences (1 Oct 2026 is a Thursday)
+    √ LG-333: one week has one Thursday (2 ms)
+    √ LG-334: the start date itself counts (1 ms)
+    √ LG-335: the end date itself counts (1 ms)
+    √ LG-336: four weeks has four Thursdays
+    √ LG-337: works across the end of a month
+    √ LG-338: lowercase day works (1 ms)
+    √ LG-339: start after end gives 0
+    √ LG-340: unknown day gives 0 (1 ms)
+    √ LG-341: missing or invalid date gives 0 (1 ms)
+  formatDateRange
+    √ LG-342: same month (70 ms)
+    √ LG-343: across months (1 ms)
+  formatTimeRange
+    √ LG-344: seconds are cut
+  formatCoverSession
+    √ LG-345: with location
+    √ LG-346: without location
+    √ LG-347: camelCase fields from the frontend also work
+  validateCoverDates
+    √ LG-348: missing date is refused
+    √ LG-349: start after end is refused (1 ms)
+    √ LG-350: a one-day range is fine
+  getCoverRecipients
+    √ LG-351: the tutor who cannot make it is not notified (1 ms)
+    √ LG-352: several sessions exclude each original tutor (1 ms)
+    √ LG-353: sessions with no tutor notify everyone
+  buildCoverSummary
+    √ LG-354: one session over several weeks says "sessions" (1 ms)
+    √ LG-355: one week says "session" (1 ms)
+    √ LG-356: several sessions show the count (1 ms)
+  checkCoverClaim
+    √ LG-357: a tutor cannot claim their own session
+    √ LG-358: a Lecture needs a Super Tutor (1 ms)
+    √ LG-359: a normal claim is allowed
+
+PASS tests/logic/dbTypes.test.js
+  parseTimestampAsUtc (database TIMESTAMP read as UTC)
+    √ LG-455: "2026-10-01 10:00:00" is read as 10:00 UTC (3 ms)
+    √ LG-456: fractional seconds are kept (1 ms)
+
+PASS tests/logic/adminRules.test.js
+  normaliseRole
+    √ LG-263: "unit coordinator" becomes coordinator (1 ms)
+    √ LG-264: "UC" becomes coordinator
+    √ LG-265: "Administrator" becomes admin (1 ms)
+    √ LG-266: " TUTOR " becomes tutor (1 ms)
+    √ LG-267: super_tutor is not an account role
+    √ LG-268: missing role gives "" (1 ms)
+  normaliseMembershipRole
+    √ LG-269: "Unit Coordinator" becomes coordinator
+    √ LG-270: "uc" becomes coordinator
+    √ LG-271: "Super Tutor" and "super-tutor" become super_tutor (1 ms)
+    √ LG-272: "supertutor" becomes super_tutor (1 ms)
+    √ LG-273: "tutor" stays tutor
+    √ LG-274: "admin" is not a unit role
+  isTutorMembershipRole
+    √ LG-275: tutor and super_tutor are tutor roles (1 ms)
+    √ LG-276: coordinator is not a tutor role
+  normaliseAccountStatus
+    √ LG-277: missing status becomes active (1 ms)
+    √ LG-278: "DISABLED" becomes disabled
+    √ LG-279: pending stays pending
+    √ LG-280: unknown status gives "" (1 ms)
+  normaliseUnitCode
+    √ LG-281: spaces removed and uppercase
+    √ LG-282: missing code gives "" (1 ms)
+  isValidEmail
+    √ LG-283: normal email is valid
+    √ LG-284: no @ is invalid
+    √ LG-285: no dot after @ is invalid (19 ms)
+    √ LG-286: a space is invalid (6 ms)
+  getSelfEditError
+    √ LG-287: admin cannot remove their own admin role (3 ms)
+    √ LG-288: admin cannot disable their own account (1 ms)
+    √ LG-289: editing someone else is allowed (1 ms)
+  admin format functions
+    √ LG-290: formatAdminUser maps a full row (2 ms)
+    √ LG-291: formatAdminUser fills defaults (3 ms)
+    √ LG-292: formatAdminUnit maps coordinator name and counts (1 ms)
+    √ LG-293: formatAdminUnit fills defaults (1 ms)
+    √ LG-294: formatAdminUnitTutor marks a Super Tutor (1 ms)
+    √ LG-295: formatAdminUnitTutor defaults to tutor (1 ms)
+    √ LG-296: formatAdminUserUnitAccess maps a full row (2 ms)
+    √ LG-297: formatAdminUserUnitAccess defaults
+    √ LG-298: formatAdminSession maps a full row (1 ms)
+    √ LG-299: formatAdminSession defaults (1 ms)
+    √ LG-300: formatAdminApplication joins names and flags a resume (1 ms)
+    √ LG-301: formatAdminApplication with no name shows "Pending profile"
+    √ LG-302: formatAdminRequest maps tutor and claimer names (1 ms)
+    √ LG-303: formatAdminRequest falls back to email, then "Unknown tutor" (1 ms)
+
+PASS tests/logic/authMiddleware.test.js
+  getBlockedAccountResponse
+    √ LG-119: disabled account is blocked with 403 (7 ms)
+    √ LG-120: pending account is blocked with 403 (1 ms)
+    √ LG-121: active account and unknown status are not blocked (3 ms)
+
+PASS tests/logic/normalise.test.js
+  timeRangesOverlap
+    √ partial overlap (43 ms)
+    √ one inside the other (2 ms)
+    √ identical times (1 ms)
+    √ back-to-back (A then B) (1 ms)
+    √ back-to-back (B then A) (1 ms)
+    √ completely separate (1 ms)
+    √ 1-minute overlap
+    √ gives the same answer whichever session is passed first (1 ms)
+  sessionDurationHours
+    √ 10:00:00 to 12:00:00 = 2 hours (20 ms)
+    √ 10:00:00 to 11:30:00 = 1.5 hours (2 ms)
+    √ 09:00:00 to 09:00:00 = 0 hours (3 ms)
+    √ returns a negative number when end is before start
+  timeToMinutes
+    √ 00:00:00 -> 0 (1 ms)
+    √ 08:30:00 -> 510
+    √ 23:59:00 -> 1439
+  timeToSlot
+    √ 00:00:00 -> 12am (1 ms)
+    √ 08:00:00 -> 8am
+    √ 11:30:00 -> 11am (19 ms)
+    √ 12:00:00 -> 12pm (1 ms)
+    √ 13:00:00 -> 1pm
+    √ 23:00:00 -> 11pm (1 ms)
+  getHourlySlotsInRange
+    √ 10:00:00 to 12:00:00 (1 ms)
+    √ 11:00:00 to 13:00:00 (1 ms)
+    √ 10:00:00 to 11:30:00
+    √ 10:00:00 to 10:00:00 (1 ms)
+  normaliseDay
+    √ "Monday" -> MON (1 ms)
+    √ "mon" -> MON
+    √ "  TUES  " -> TUE
+    √ "Thurs" -> THU (1 ms)
+    √ "sunday" -> SUN
+    √ returns null for "" (1 ms)
+    √ returns null for null
+    √ returns null for undefined (1 ms)
+    √ returns null for "Funday"
+    √ returns null for "Mo"
+  normaliseTime
+    accepts common formats
+      √ "3pm" -> 15:00:00 (1 ms)
+      √ "3 pm" -> 15:00:00 (1 ms)
+      √ " 3PM " -> 15:00:00
+      √ "12pm" -> 12:00:00 (1 ms)
+      √ "12am" -> 00:00:00
+      √ "3:30 pm" -> 15:30:00
+      √ "9:05am" -> 09:05:00 (1 ms)
+      √ "12:30am" -> 00:30:00
+      √ "8:00" -> 08:00:00 (1 ms)
+      √ "15:00" -> 15:00:00
+      √ "1500" -> 15:00:00
+      √ "800" -> 08:00:00 (1 ms)
+      √ 1500 -> 15:00:00 (1 ms)
+    rejects unrecognised input
+      √ returns null for ""
+      √ returns null for null (1 ms)
+      √ returns null for "noon"
+      √ returns null for "25:00"
+      √ returns null for "2400"
+    rejects out-of-range values
+      √ returns null for "13pm"
+      √ returns null for "3:75pm" (1 ms)
+      √ returns null for "8:60"
+      √ returns null for "1275"
+  isUnitActive (clock fixed to 26 Sep 2026)
+    √ "Semester 2" 2026 -> true (2 ms)
+    √ "Semester 2" "2026" -> true (1 ms)
+    √ "Semester 1" 2026 -> false
+    √ "Semester 2" 2025 -> false (1 ms)
+    √ "Semester 2" 2027 -> false
+    √ null 2026 -> true
+    √ "Semester 2" null -> true (2 ms)
+
+PASS tests/logic/allocationRules.test.js
+  findOverlappingSessions
+    √ LG-198: same day with overlapping times is a clash (1 ms)
+    √ LG-199: same times on a different day is not a clash
+    √ LG-200: back-to-back sessions (12:00 end, 12:00 start) are not a clash (1 ms)
+    √ LG-201: tutor with no other sessions has no clash
+    √ LG-202: every clashing session is returned, not just the first (1 ms)
+  calcHoursIfAssigned
+    √ LG-203: adds this session to the hours already assigned
+    √ LG-204: no other sessions gives just this session (1 ms)
+  exceedsMaxHours
+    √ LG-205: no maximum set never exceeds
+    √ LG-206: reaching exactly the maximum is allowed (1 ms)
+    √ LG-207: going over the maximum is blocked
+  violatesSuperTutorRule
+    √ LG-208: a normal tutor cannot take a Lecture
+    √ LG-209: a Super Tutor can take a Lecture
+    √ LG-210: a coordinator assigning themselves skips the rule
+
+PASS tests/logic/notificationRules.test.js
+  replaceEmailsWithNames
+    √ LG-391: an email in the text is replaced by the person's name (1 ms)
+    √ LG-392: every appearance is replaced
+    √ LG-393: a user with no name keeps their email (1 ms)
+    √ LG-394: empty content is returned as it is
+  formatNotification
+    √ LG-395: maps the row and replaces emails in the content (1 ms)
 
 PASS tests/logic/unitRules.test.js
   formatUnit
-    √ LG-417: maps a unit row (3 ms)
-    √ LG-418: lock / release flags default to false
-    √ LG-419: isActive comes from the semester and year (25 ms)
+    √ LG-417: maps a unit row (2 ms)
+    √ LG-418: lock / release flags default to false (1 ms)
+    √ LG-419: isActive comes from the semester and year (2 ms)
   formatUnitAccess
-    √ LG-420: roles default to [] (4 ms)
+    √ LG-420: roles default to [] (1 ms)
   normaliseEmails
     √ LG-421: not a list gives [] (1 ms)
     √ LG-422: emails are trimmed and lowercased
@@ -800,22 +654,122 @@ PASS tests/logic/unitRules.test.js
     √ LG-425: the current user's own email is ignored (1 ms)
     √ LG-426: emails with no account are listed as missing (1 ms)
     √ LG-427: accounts that are not coordinators are listed separately (1 ms)
-    √ LG-428: no emails means no database query (2 ms)
+    √ LG-428: no emails means no database query (1 ms)
   canLockSchedule
-    √ LG-429: everything assigned and confirmed can be locked (1 ms)
-    √ LG-430: unassigned or pending sessions block locking (1 ms)
+    √ LG-429: everything assigned and confirmed can be locked
+    √ LG-430: unassigned or pending sessions block locking
     √ LG-431: force locks anyway
   resolveDuplicateUnitName
-    √ LG-432: a new name is used (trimmed) (1 ms)
-    √ LG-433: blank name keeps the original unit name
+    √ LG-432: a new name is used (trimmed)
+    √ LG-433: blank name keeps the original unit name (1 ms)
+
+PASS tests/logic/applicationFields.test.js
+  sanitiseFields
+    √ LG-84: input that is not a list returns null (1 ms)
+    √ LG-85: valid field is kept and required becomes true/false (1 ms)
+    √ LG-86: unknown field type becomes text (1 ms)
+    √ LG-87: field with missing key or label is removed
+    √ LG-88: second field with the same key is removed (1 ms)
+    √ LG-89: null and non-object items are skipped (1 ms)
+    √ LG-90: select options are trimmed and blank options removed
+    √ LG-91: checkbox without options gets an empty list (1 ms)
+    √ LG-92: text field does not get an options list (1 ms)
+
+PASS tests/logic/candidateScoring.test.js
+  scoreCandidate
+    √ LG-211: preferred for the whole session scores +2 per hour and is allPreferred (2 ms)
+    √ LG-212: "avoid" gives a warning and −2 per hour (1 ms)
+    √ LG-213: tutor with no availability gets a warning (1 ms)
+    √ LG-214: coordinator does not need availability
+    √ LG-215: coordinator is not blocked from Lecture sessions (1 ms)
+    √ LG-216: clash with a confirmed session blocks and names the unit
+    √ LG-217: clash with a pending session is marked tentative
+    √ LG-218: going over max hours blocks the tutor (1 ms)
+    √ LG-219: normal tutor is blocked from a Super Tutor–only session (1 ms)
+    √ LG-220: Preferred priority adds +2
+    √ LG-221: Backup priority gives −1
+    √ LG-222: Risk priority gives −1 and a warning
+  sortCandidates
+    √ LG-223: tutor already on this session is listed first (1 ms)
+    √ LG-224: blocked tutors go last, the rest by highest score
+
+PASS tests/logic/adminSessionRules.test.js
+  isUuid
+    √ LG-457: a normal id is accepted (5 ms)
+    √ LG-458: upper-case letters are accepted (1 ms)
+    √ LG-459: wrong format, empty or missing is refused
+  formatAdminStaff
+    √ LG-460: full name is used, or the email when there is no name (1 ms)
+    √ LG-461: max hours becomes a number, missing stays null (1 ms)
+  checkAdminSessionEdit
+    √ LG-462: a session with staff cannot be moved to another unit
+    √ LG-463: tutors required cannot go below the number already assigned
+    √ LG-464: a session with no staff can be moved and changed (1 ms)
+  hasIneligibleForSuperTutorType
+    √ LG-465: a normal Tutor assigned blocks changing to a Lecture
+    √ LG-466: only Super Tutors and coordinators assigned is fine (1 ms)
+  checkAdminAssignSlot
+    √ LG-467: the same staff member cannot be assigned twice
+    √ LG-468: a full session is refused (declined staff do not count)
+
+PASS tests/logic/roles.test.js
+  requiresSuperTutor
+    √ LG-79: Lecture needs a Super Tutor (2 ms)
+    √ LG-80: Consultation needs a Super Tutor, ignoring case and spaces (1 ms)
+    √ LG-81: Tutorial and Workshop do not need a Super Tutor
+    √ LG-82: similar but different text is not treated as Lecture (1 ms)
+    √ LG-83: missing session type does not need a Super Tutor
+
+PASS tests/logic/applyChangeRequest.test.js
+  comparable
+    √ LG-103: spaces around a hyphen are removed (1 ms)
+    √ LG-104: en dash (–) is treated the same as a hyphen
+    √ LG-105: spaces around | are removed (21 ms)
+    √ LG-106: repeated spaces become one and text becomes uppercase (1 ms)
+    √ LG-107: missing value gives empty string (30 ms)
+  sessionComparable
+    √ LG-108: builds the label DAY START-END|ROOM (2 ms)
+    √ LG-109: seconds are cut from database times (1 ms)
+    √ LG-110: missing times become TBC
+    √ LG-111: missing day becomes TBC and missing room becomes TBA (1 ms)
+  sessionLoose
+    √ LG-112: builds the label with a space before the room instead of | (1 ms)
+    √ LG-113: matches a label a tutor typed with extra spaces and lowercase (1 ms)
+  labelFromStored
+    √ LG-114: removes the id part before ::
+    √ LG-115: with more than one ::, keeps only the last part (1 ms)
+    √ LG-116: value without :: is returned as it is (1 ms)
+    √ LG-117: missing value gives empty string
+  stored label matches the session on the timetable
+    √ LG-118: a stored request label finds the right session
+
+PASS tests/logic/notifyDb.test.js
+  createNotification
+    √ LG-128: user who turned off session updates gets no session notification (4 ms)
+    √ LG-129: setting not stored (null) still creates the notification (1 ms)
+    √ LG-130: a database error does not break the action that sent it (2 ms)
+  getUserDisplayName
+    √ LG-131: full name when first and last name exist (1 ms)
+    √ LG-132: no name falls back to email
+    √ LG-133: user not found gives "Someone" (1 ms)
+
+PASS tests/logic/emailSender.test.js
+  getEmailSender
+    √ LG-122: "Name <email>" is split into sender name and email (1 ms)
+    √ LG-123: "<email>" with no name uses "Sessioneer" as the name (4 ms)
+    √ LG-124: missing email settings throw an error (70 ms)
+  sendEmail (email service replaced by a fake)
+    √ LG-125: a single address is sent as [{ email }] (2 ms)
+    √ LG-126: a list of recipients is sent as it is (1 ms)
+    √ LG-127: a failed send throws the message from the email service (1 ms)
 
 PASS tests/logic/notify.test.js
   getPreferenceColumn
-    √ LG-98: session_ types are controlled by the session updates setting (1 ms)
-    √ LG-99: request_ types are controlled by the request updates setting
+    √ LG-98: session_ types are controlled by the session updates setting (23 ms)
+    √ LG-99: request_ types are controlled by the request updates setting (1 ms)
     √ LG-100: other types have no setting, so they are always sent (1 ms)
     √ LG-101: prefix must be at the start and lowercase
-    √ LG-102: missing type throws (records current behaviour) (10 ms)
+    √ LG-102: missing type throws (records current behaviour) (19 ms)
 
 PASS tests/logic/userNames.test.js
   joinUserName
@@ -829,145 +783,156 @@ PASS tests/logic/userNames.test.js
     √ LG-71: three words keep everything after the first word as last name
     √ LG-72: one word gives empty last name (1 ms)
     √ LG-73: extra spaces between and around words are ignored
-    √ LG-74: empty or missing name gives two empty strings
+    √ LG-74: empty or missing name gives two empty strings (1 ms)
   formatUserNameFields
-    √ LG-75: database row (name + last_name) builds all fields (1 ms)
-    √ LG-76: uses lastName (camelCase) when last_name is missing
-    √ LG-77: missing last name gives display name of first name only (1 ms)
+    √ LG-75: database row (name + last_name) builds all fields
+    √ LG-76: uses lastName (camelCase) when last_name is missing (1 ms)
+    √ LG-77: missing last name gives display name of first name only
     √ LG-78: null user does not crash and gives empty fields
 
-PASS tests/logic/dbTypes.test.js
-  parseTimestampAsUtc (database TIMESTAMP read as UTC)
-    √ LG-455: "2026-10-01 10:00:00" is read as 10:00 UTC (17 ms)
-    √ LG-456: fractional seconds are kept (2 ms)
+PASS tests/logic/email.test.js
+  escapeHtml
+    √ LG-93: escapes all five special HTML characters (2 ms)
+    √ LG-94: a script tag in a name is shown as text, not run
+    √ LG-95: normal text is unchanged (1 ms)
+    √ LG-96: null and undefined give empty string
+    √ LG-97: numbers (including 0) are turned into text
 
-PASS tests/logic/notificationRules.test.js
-  replaceEmailsWithNames
-    √ LG-391: an email in the text is replaced by the person's name (8 ms)
-    √ LG-392: every appearance is replaced (1 ms)
-    √ LG-393: a user with no name keeps their email
-    √ LG-394: empty content is returned as it is (1 ms)
-  formatNotification
-    √ LG-395: maps the row and replaces emails in the content (2 ms)
+PASS tests/logic/dashboardRules.test.js
+  countDashboardUnits
+    √ LG-434: counts active units only (1 ms)
+    √ LG-435: counts units with availability submitted
 
-PASS tests/logic/roles.test.js
-  requiresSuperTutor
-    √ LG-79: Lecture needs a Super Tutor (1 ms)
-    √ LG-80: Consultation needs a Super Tutor, ignoring case and spaces
-    √ LG-81: Tutorial and Workshop do not need a Super Tutor
-    √ LG-82: similar but different text is not treated as Lecture
-    √ LG-83: missing session type does not need a Super Tutor (1 ms)
+FAIL tests/logic/sessionRules.test.js
+  suggestedTutorCount (1 tutor per 30 students, starting at 1)
+    √ LG-145: no capacity gives 1 tutor (9 ms)
+    √ LG-146: 29 students gives 1 tutor (1 ms)
+    √ LG-147: 30 students gives 2 tutors
+    √ LG-148: 60 students gives 3 tutors
+    √ LG-149: capacity as text from a CSV ("45") gives 2 tutors (1 ms)
+  codePrefixForType
+    √ LG-150: Tutorial gets TUT (1 ms)
+    √ LG-151: Lecture gets LEC
+    √ LG-152: unknown or missing type gets SES (1 ms)
+    × LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9) (5 ms)
+  nextSessionCode
+    √ LG-154: no codes yet gives 01
+    √ LG-155: TUT01 to TUT03 used gives TUT04
+    √ LG-156: with a gap, continues after the highest number (1 ms)
+    √ LG-157: codes that are not PREFIX + number are ignored
+    √ LG-158: after TUT99 comes TUT100 (1 ms)
+  isBlank
+    √ LG-159: undefined, null, empty and spaces are blank
+    √ LG-160: 0 is a value, not blank (1 ms)
+    √ LG-161: normal text is not blank
+  getMissingSessionFields
+    √ LG-162: all fields filled gives no missing fields (2 ms)
+    √ LG-163: missing day is reported as "Day" (1 ms)
+    √ LG-164: capacity 0 is not treated as missing (1 ms)
+    √ LG-165: a field with only spaces is missing
+    √ LG-166: several missing fields keep the form order (1 ms)
+    √ LG-167: admin version also requires the unit
+    √ LG-168: admin version with unit given has nothing missing
+  validateSessionInput (creating one session)
+    √ LG-169: valid input passes and numbers are read (1 ms)
+    √ LG-170: missing fields are listed in the error
+    √ LG-171: capacity 0 or not a number is rejected
+    √ LG-172: tutor count below 1 is rejected
+    × LG-173: end time before start time is rejected (LOGIC-B4) (1 ms)
+    × LG-174: end time equal to start time is rejected (LOGIC-B4) (1 ms)
+  formatSessionRow
+    √ LG-175: no tutors means not assigned (2 ms)
+    √ LG-176: a pending tutor still fills the session
+    √ LG-177: a declined tutor is moved to declinedTutors and does not fill the session (1 ms)
+    √ LG-178: legacy fields show the first tutor who has not declined
+    √ LG-179: tutorConfirmed follows the first active tutor, null when there is none
+    √ LG-180: a session with 1 of 2 tutors still counts as assigned (Unassigned = no tutor, as in the User Manual) (1 ms)
+  formatCoveringSessionRow
+    √ LG-181: marks the row as covering and keeps the cover dates (1 ms)
+    √ LG-182: counts how many Mondays the cover period includes
+  buildConfirmationUpdate (tutor accepts or declines)
+    √ LG-190: accepting needs no reason
+    √ LG-191: declining with a reason keeps the trimmed reason
+    √ LG-192: declining without a reason is rejected
+    √ LG-193: declining with only spaces is rejected
+    × LG-194: missing "confirmed" value gives an error, not a crash (LOGIC-B6) (23 ms)
+  checkAssignSlot (room for one more tutor?)
+    √ LG-195: the same tutor cannot be assigned twice
+    √ LG-196: a full session is refused (declined tutors do not count)
+    √ LG-197: missing required_tutors counts as 1
 
-PASS tests/logic/candidateScoring.test.js
-  scoreCandidate
-    √ LG-211: preferred for the whole session scores +2 per hour and is allPreferred (10 ms)
-    √ LG-212: "avoid" gives a warning and −2 per hour (2 ms)
-    √ LG-213: tutor with no availability gets a warning (1 ms)
-    √ LG-214: coordinator does not need availability (2 ms)
-    √ LG-215: coordinator is not blocked from Lecture sessions (1 ms)
-    √ LG-216: clash with a confirmed session blocks and names the unit (1 ms)
-    √ LG-217: clash with a pending session is marked tentative
-    √ LG-218: going over max hours blocks the tutor (1 ms)
-    √ LG-219: normal tutor is blocked from a Super Tutor–only session
-    √ LG-220: Preferred priority adds +2 (1 ms)
-    √ LG-221: Backup priority gives −1
-    √ LG-222: Risk priority gives −1 and a warning
-  sortCandidates
-    √ LG-223: tutor already on this session is listed first (1 ms)
-    √ LG-224: blocked tutors go last, the rest by highest score (1 ms)
+  ● codePrefixForType › LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9)
 
-PASS tests/logic/applicationFields.test.js
-  sanitiseFields
-    √ LG-84: input that is not a list returns null (3 ms)
-    √ LG-85: valid field is kept and required becomes true/false (1 ms)
-    √ LG-86: unknown field type becomes text
-    √ LG-87: field with missing key or label is removed (1 ms)
-    √ LG-88: second field with the same key is removed
-    √ LG-89: null and non-object items are skipped (1 ms)
-    √ LG-90: select options are trimmed and blank options removed
-    √ LG-91: checkbox without options gets an empty list (1 ms)
-    √ LG-92: text field does not get an options list
+    expect(received).toBe(expected) // Object.is equality
 
-PASS tests/logic/adminRules.test.js
-  normaliseRole
-    √ LG-263: "unit coordinator" becomes coordinator (1 ms)
-    √ LG-264: "UC" becomes coordinator (1 ms)
-    √ LG-265: "Administrator" becomes admin
-    √ LG-266: " TUTOR " becomes tutor
-    √ LG-267: super_tutor is not an account role (1 ms)
-    √ LG-268: missing role gives ""
-  normaliseMembershipRole
-    √ LG-269: "Unit Coordinator" becomes coordinator (1 ms)
-    √ LG-270: "uc" becomes coordinator
-    √ LG-271: "Super Tutor" and "super-tutor" become super_tutor
-    √ LG-272: "supertutor" becomes super_tutor
-    √ LG-273: "tutor" stays tutor
-    √ LG-274: "admin" is not a unit role (1 ms)
-  isTutorMembershipRole
-    √ LG-275: tutor and super_tutor are tutor roles (1 ms)
-    √ LG-276: coordinator is not a tutor role (1 ms)
-  normaliseAccountStatus
-    √ LG-277: missing status becomes active
-    √ LG-278: "DISABLED" becomes disabled (1 ms)
-    √ LG-279: pending stays pending
-    √ LG-280: unknown status gives "" (1 ms)
-  normaliseUnitCode
-    √ LG-281: spaces removed and uppercase
-    √ LG-282: missing code gives ""
-  isValidEmail
-    √ LG-283: normal email is valid (1 ms)
-    √ LG-284: no @ is invalid
-    √ LG-285: no dot after @ is invalid (1 ms)
-    √ LG-286: a space is invalid
-  getSelfEditError
-    √ LG-287: admin cannot remove their own admin role
-    √ LG-288: admin cannot disable their own account (1 ms)
-    √ LG-289: editing someone else is allowed
-  admin format functions
-    √ LG-290: formatAdminUser maps a full row (2 ms)
-    √ LG-291: formatAdminUser fills defaults (1 ms)
-    √ LG-292: formatAdminUnit maps coordinator name and counts (1 ms)
-    √ LG-293: formatAdminUnit fills defaults
-    √ LG-294: formatAdminUnitTutor marks a Super Tutor (1 ms)
-    √ LG-295: formatAdminUnitTutor defaults to tutor (1 ms)
-    √ LG-296: formatAdminUserUnitAccess maps a full row
-    √ LG-297: formatAdminUserUnitAccess defaults (1 ms)
-    √ LG-298: formatAdminSession maps a full row
-    √ LG-299: formatAdminSession defaults (1 ms)
-    √ LG-300: formatAdminApplication joins names and flags a resume
-    √ LG-301: formatAdminApplication with no name shows "Pending profile" (1 ms)
-    √ LG-302: formatAdminRequest maps tutor and claimer names
-    √ LG-303: formatAdminRequest falls back to email, then "Unknown tutor" (1 ms)
+    Expected: "TUT"
+    Received: "SES"
 
-PASS tests/logic/notifyDb.test.js
-  createNotification
-    √ LG-128: user who turned off session updates gets no session notification (2 ms)
-    √ LG-129: setting not stored (null) still creates the notification (3 ms)
-    √ LG-130: a database error does not break the action that sent it (2 ms)
-  getUserDisplayName
-    √ LG-131: full name when first and last name exist (1 ms)
-    √ LG-132: no name falls back to email
-    √ LG-133: user not found gives "Someone"
+    [0m [90m 44 |[39m   })[33m;[39m
+     [90m 45 |[39m   test([32m'LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 46 |[39m     expect(codePrefixForType([32m'tutorial'[39m))[33m.[39mtoBe([32m'TUT'[39m)[33m;[39m
+     [90m    |[39m                                           [31m[1m^[22m[39m
+     [90m 47 |[39m   })[33m;[39m
+     [90m 48 |[39m })[33m;[39m
+     [90m 49 |[39m[0m
+
+      at Object.toBe (tests/logic/sessionRules.test.js:46:43)
+
+  ● validateSessionInput (creating one session) › LG-173: end time before start time is rejected (LOGIC-B4)
+
+    expect(received).toBeTruthy()
+
+    Received: null
+
+    [0m [90m 129 |[39m   })[33m;[39m
+     [90m 130 |[39m   test([32m'LG-173: end time before start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 131 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'11:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m
+     [90m     |[39m                                                                                            [31m[1m^[22m[39m
+     [90m 132 |[39m   })[33m;[39m
+     [90m 133 |[39m   test([32m'LG-174: end time equal to start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
+     [90m 134 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'10:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m[0m
+
+      at Object.toBeTruthy (tests/logic/sessionRules.test.js:131:92)
+
+  ● validateSessionInput (creating one session) › LG-174: end time equal to start time is rejected (LOGIC-B4)
+
+    expect(received).toBeTruthy()
+
+    Received: null
+
+    [0m [90m 132 |[39m   })[33m;[39m
+     [90m 133 |[39m   test([32m'LG-174: end time equal to start time is rejected (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 134 |[39m     expect(validateSessionInput({ [33m...[39minput[33m,[39m startTime[33m:[39m [32m'10:00'[39m[33m,[39m endTime[33m:[39m [32m'10:00'[39m })[33m.[39merror)[33m.[39mtoBeTruthy()[33m;[39m
+     [90m     |[39m                                                                                            [31m[1m^[22m[39m
+     [90m 135 |[39m   })[33m;[39m
+     [90m 136 |[39m })[33m;[39m
+     [90m 137 |[39m[0m
+
+      at Object.toBeTruthy (tests/logic/sessionRules.test.js:134:92)
+
+  ● buildConfirmationUpdate (tutor accepts or declines) › LG-194: missing "confirmed" value gives an error, not a crash (LOGIC-B6)
+
+    expect(received).not.toThrow()
+
+    Error name:    "TypeError"
+    Error message: "Cannot read properties of undefined (reading 'trim')"
+
+        [0m [90m 172 |[39m     [36mreturn[39m { error[33m:[39m [32m'Please provide a reason for declining'[39m }[33m;[39m
+         [90m 173 |[39m   }
+        [31m[1m>[22m[39m[90m 174 |[39m   [36mreturn[39m { error[33m:[39m [36mnull[39m[33m,[39m confirmed[33m,[39m rejectReason[33m:[39m confirmed [33m?[39m [36mnull[39m [33m:[39m reason[33m.[39mtrim() }[33m;[39m
+         [90m     |[39m                                                                            [31m[1m^[22m[39m
+         [90m 175 |[39m }[33m;[39m
+         [90m 176 |[39m
+         [90m 177 |[39m [90m// Whether this session still has room for this tutor (was inline in PATCH /:sessionId/assign).[39m[0m
+
+      at trim (utils/sessionRules.js:174:76)
+      at buildConfirmationUpdate (tests/logic/sessionRules.test.js:205:18)
+      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
+      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
+      at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
+      at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
 
 Summary of all failing tests
-FAIL tests/logic/botRules.test.js
-  ● searchKnowledge › LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)
-
-    expect(received).not.toContain(expected) // indexOf
-
-    Expected value: not "uc_messages"
-    Received array:     ["admin_users", "uc_messages", "admin_units_sessions"]
-
-    [0m [90m 78 |[39m   })[33m;[39m
-     [90m 79 |[39m   test([32m'LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 80 |[39m     expect(ids([32m'How do I disable a user in admin?'[39m[33m,[39m [32m'coordinator'[39m))[33m.[39mnot[33m.[39mtoContain([32m'uc_messages'[39m)[33m;[39m
-     [90m    |[39m                                                                         [31m[1m^[22m[39m
-     [90m 81 |[39m   })[33m;[39m
-     [90m 82 |[39m })[33m;[39m
-     [90m 83 |[39m[0m
-
-      at Object.toContain (tests/logic/botRules.test.js:80:73)
-
 FAIL tests/logic/changeRequestRules.test.js
   ● shouldApplyChange › LG-236: editing an already-accepted request without a new status does not apply it again (LOGIC-B11)
 
@@ -986,6 +951,46 @@ FAIL tests/logic/changeRequestRules.test.js
 
       at Object.toBe (tests/logic/changeRequestRules.test.js:80:54)
 
+FAIL tests/logic/applicationRules.test.js
+  ● resolveInviteName › LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "firstName": "Alex",
+    +   "firstName": "Alex Lee",
+        "lastName": "Lee",
+      }
+
+    [0m [90m 61 |[39m   })[33m;[39m
+     [90m 62 |[39m   test([32m'LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 63 |[39m     expect(resolveInviteName({ name[33m:[39m [32m'Alex Lee'[39m[33m,[39m last_name[33m:[39m [36mnull[39m }[33m,[39m [32m''[39m[33m,[39m [32m''[39m))[33m.[39mtoEqual({ firstName[33m:[39m [32m'Alex'[39m[33m,[39m lastName[33m:[39m [32m'Lee'[39m })[33m;[39m
+     [90m    |[39m                                                                              [31m[1m^[22m[39m
+     [90m 64 |[39m   })[33m;[39m
+     [90m 65 |[39m })[33m;[39m
+     [90m 66 |[39m[0m
+
+      at Object.toEqual (tests/logic/applicationRules.test.js:63:78)
+
+FAIL tests/logic/passwords.test.js
+  ● verifyPassword › LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8)
+
+    RangeError: Input buffers must have the same byte length
+
+    [0m [90m 17 |[39m   [36mconst[39m originalHashBuffer [33m=[39m [33mBuffer[39m[33m.[39m[36mfrom[39m(originalHash[33m,[39m [32m'hex'[39m)[33m;[39m
+     [90m 18 |[39m   [36mconst[39m inputHashBuffer [33m=[39m crypto[33m.[39mscryptSync(password[33m,[39m salt[33m,[39m [35m64[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 19 |[39m   [36mreturn[39m crypto[33m.[39mtimingSafeEqual(originalHashBuffer[33m,[39m inputHashBuffer)[33m;[39m
+     [90m    |[39m                 [31m[1m^[22m[39m
+     [90m 20 |[39m }[33m;[39m
+     [90m 21 |[39m
+     [90m 22 |[39m [36mconst[39m hashResetToken [33m=[39m (token) [33m=>[39m {[0m
+
+      at timingSafeEqual (utils/passwords.js:19:17)
+      at Object.verifyPassword (tests/logic/passwords.test.js:32:12)
+
 FAIL tests/logic/requestLabels.test.js
   ● getSessionComparableLabel › LG-248: a stored label written "10:00 - 12:00" still matches its session (LOGIC-B10)
 
@@ -1003,6 +1008,152 @@ FAIL tests/logic/requestLabels.test.js
      [90m 56 |[39m[0m
 
       at Object.toBe (tests/logic/requestLabels.test.js:53:69)
+
+FAIL tests/logic/messageProfileRules.test.js
+  ● buildProfileUpdateParams › LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)
+
+    expect(received).toBeNull()
+
+    Received: ""
+
+    [0m [90m 79 |[39m   })[33m;[39m
+     [90m 80 |[39m   test([32m'LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 81 |[39m     expect(buildProfileUpdateParams({ maximumHours[33m:[39m [32m''[39m }[33m,[39m [32m'tutor'[39m[33m,[39m [32m'u1'[39m)[[35m6[39m])[33m.[39mtoBeNull()[33m;[39m
+     [90m    |[39m                                                                              [31m[1m^[22m[39m
+     [90m 82 |[39m   })[33m;[39m
+     [90m 83 |[39m })[33m;[39m
+     [90m 84 |[39m[0m
+
+      at Object.toBeNull (tests/logic/messageProfileRules.test.js:81:78)
+
+FAIL tests/logic/jobRules.test.js
+  ● frontendUrl › LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "https://sessioneer.vercel.app"
+    Received: "https://sessioneer.vercel.app/"
+
+    [0m [90m 66 |[39m   test([32m'LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14)'[39m[33m,[39m () [33m=>[39m {
+     [90m 67 |[39m     process[33m.[39menv[33m.[39m[33mFRONTEND_URL[39m [33m=[39m [32m'https://sessioneer.vercel.app/'[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 68 |[39m     expect(jobsFrontendUrl())[33m.[39mtoBe([32m'https://sessioneer.vercel.app'[39m)[33m;[39m
+     [90m    |[39m                               [31m[1m^[22m[39m
+     [90m 69 |[39m   })[33m;[39m
+     [90m 70 |[39m })[33m;[39m
+     [90m 71 |[39m[0m
+
+      at Object.toBe (tests/logic/jobRules.test.js:68:31)
+
+FAIL tests/logic/botRules.test.js
+  ● searchKnowledge › LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)
+
+    expect(received).not.toContain(expected) // indexOf
+
+    Expected value: not "uc_messages"
+    Received array:     ["admin_users", "uc_messages", "admin_units_sessions"]
+
+    [0m [90m 78 |[39m   })[33m;[39m
+     [90m 79 |[39m   test([32m'LG-454: an admin question does not pull in Messages because "dm" is inside "admin" (LOGIC-B18)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 80 |[39m     expect(ids([32m'How do I disable a user in admin?'[39m[33m,[39m [32m'coordinator'[39m))[33m.[39mnot[33m.[39mtoContain([32m'uc_messages'[39m)[33m;[39m
+     [90m    |[39m                                                                         [31m[1m^[22m[39m
+     [90m 81 |[39m   })[33m;[39m
+     [90m 82 |[39m })[33m;[39m
+     [90m 83 |[39m[0m
+
+      at Object.toContain (tests/logic/botRules.test.js:80:73)
+
+FAIL tests/logic/tutorRules.test.js
+  ● cleanTagList › LG-416: a tag that is not text does not crash the save (LOGIC-B16)
+
+    expect(received).not.toThrow()
+
+    Error name:    "TypeError"
+    Error message: "t.trim is not a function"
+
+        [0m [90m 20 |[39m
+         [90m 21 |[39m [36mconst[39m cleanTagList [33m=[39m (tags) [33m=>[39m ([33mArray[39m[33m.[39misArray(tags)
+        [31m[1m>[22m[39m[90m 22 |[39m   [33m?[39m tags[33m.[39mmap(t [33m=>[39m t[33m.[39mtrim())[33m.[39mfilter(t [33m=>[39m t[33m.[39mlength [33m>[39m [35m0[39m)
+         [90m    |[39m                     [31m[1m^[22m[39m
+         [90m 23 |[39m   [33m:[39m [])[33m;[39m
+         [90m 24 |[39m
+         [90m 25 |[39m module[33m.[39mexports [33m=[39m { formatTutor[33m,[39m cleanTagList }[33m;[39m[0m
+
+      at trim (utils/tutorRules.js:22:21)
+                at Array.map (<anonymous>)
+      at map (utils/tutorRules.js:22:10)
+      at cleanTagList (tests/logic/tutorRules.test.js:23:18)
+      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
+      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
+      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
+      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
+
+FAIL tests/logic/sessionImport.test.js
+  ● prepareImportRow (one CSV row) › LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)
+
+    expect(received).toBeTruthy()
+
+    Received: null
+
+    [0m [90m 41 |[39m   })[33m;[39m
+     [90m 42 |[39m   test([32m'LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 43 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m startTime[33m:[39m [32m'11am'[39m[33m,[39m endTime[33m:[39m [32m'10am'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
+     [90m    |[39m                                                                                         [31m[1m^[22m[39m
+     [90m 44 |[39m   })[33m;[39m
+     [90m 45 |[39m   test([32m'LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)'[39m[33m,[39m () [33m=>[39m {
+     [90m 46 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m capacity[33m:[39m [32m'abc'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m[0m
+
+      at Object.toBeTruthy (tests/logic/sessionImport.test.js:43:89)
+
+  ● prepareImportRow (one CSV row) › LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)
+
+    expect(received).toBeTruthy()
+
+    Received: null
+
+    [0m [90m 44 |[39m   })[33m;[39m
+     [90m 45 |[39m   test([32m'LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 46 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m capacity[33m:[39m [32m'abc'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
+     [90m    |[39m                                                                      [31m[1m^[22m[39m
+     [90m 47 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m requiredTutors[33m:[39m [32m'two'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
+     [90m 48 |[39m   })[33m;[39m
+     [90m 49 |[39m })[33m;[39m[0m
+
+      at Object.toBeTruthy (tests/logic/sessionImport.test.js:46:70)
+
+FAIL tests/logic/authRules.test.js
+  ● normaliseRegisterRole › LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "coordinator"
+    Received: "tutor"
+
+    [0m [90m  8 |[39m   })[33m;[39m
+     [90m  9 |[39m   test([32m'LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 10 |[39m     expect(normaliseRegisterRole([32m'coordinator'[39m))[33m.[39mtoBe([32m'coordinator'[39m)[33m;[39m
+     [90m    |[39m                                                  [31m[1m^[22m[39m
+     [90m 11 |[39m   })[33m;[39m
+     [90m 12 |[39m })[33m;[39m
+     [90m 13 |[39m[0m
+
+      at Object.toBe (tests/logic/authRules.test.js:10:50)
+
+FAIL tests/logic/availabilityRules.test.js
+  ● parseAvailabilitySlot › LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)
+
+    expect(received).toBeNull()
+
+    Received: {"day": "MON", "endTime": "26:00:00", "preference": "preferred", "startTime": "25:00:00"}
+
+    [0m [90m 62 |[39m   })[33m;[39m
+     [90m 63 |[39m   test([32m'LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)'[39m[33m,[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m 64 |[39m     expect(parseAvailabilitySlot([32m'Monday-13:00pm'[39m[33m,[39m [32m'preferred'[39m))[33m.[39mtoBeNull()[33m;[39m
+     [90m    |[39m                                                                  [31m[1m^[22m[39m
+     [90m 65 |[39m   })[33m;[39m
+     [90m 66 |[39m })[33m;[39m
+     [90m 67 |[39m[0m
+
+      at Object.toBeNull (tests/logic/availabilityRules.test.js:64:66)
 
 FAIL tests/logic/sessionRules.test.js
   ● codePrefixForType › LG-153: lowercase "tutorial" from a CSV gets TUT (LOGIC-B9)
@@ -1054,23 +1205,6 @@ FAIL tests/logic/sessionRules.test.js
 
       at Object.toBeTruthy (tests/logic/sessionRules.test.js:134:92)
 
-  ● formatSessionRow › LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5)
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: false
-    Received: true
-
-    [0m [90m 168 |[39m   test([32m'LG-180: session needing 2 tutors with only 1 is not fully assigned (LOGIC-B5)'[39m[33m,[39m () [33m=>[39m {
-     [90m 169 |[39m     [36mconst[39m row [33m=[39m formatSessionRow({ [33m...[39msession[33m,[39m required_tutors[33m:[39m [35m2[39m[33m,[39m tutors[33m:[39m [accepted] })[33m;[39m
-    [31m[1m>[22m[39m[90m 170 |[39m     expect(row[33m.[39misAssigned)[33m.[39mtoBe([36mfalse[39m)[33m;[39m
-     [90m     |[39m                            [31m[1m^[22m[39m
-     [90m 171 |[39m   })[33m;[39m
-     [90m 172 |[39m })[33m;[39m
-     [90m 173 |[39m[0m
-
-      at Object.toBe (tests/logic/sessionRules.test.js:170:28)
-
   ● buildConfirmationUpdate (tutor accepts or declines) › LG-194: missing "confirmed" value gives an error, not a crash (LOGIC-B6)
 
     expect(received).not.toThrow()
@@ -1093,177 +1227,9 @@ FAIL tests/logic/sessionRules.test.js
       at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
       at Object.toThrow (tests/logic/sessionRules.test.js:205:69)
 
-FAIL tests/logic/availabilityRules.test.js
-  ● parseAvailabilitySlot › LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)
-
-    expect(received).toBeNull()
-
-    Received: {"day": "MON", "endTime": "26:00:00", "preference": "preferred", "startTime": "25:00:00"}
-
-    [0m [90m 62 |[39m   })[33m;[39m
-     [90m 63 |[39m   test([32m'LG-328: impossible time "13:00pm" is ignored, not saved as 25:00 (LOGIC-B13)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 64 |[39m     expect(parseAvailabilitySlot([32m'Monday-13:00pm'[39m[33m,[39m [32m'preferred'[39m))[33m.[39mtoBeNull()[33m;[39m
-     [90m    |[39m                                                                  [31m[1m^[22m[39m
-     [90m 65 |[39m   })[33m;[39m
-     [90m 66 |[39m })[33m;[39m
-     [90m 67 |[39m[0m
-
-      at Object.toBeNull (tests/logic/availabilityRules.test.js:64:66)
-
-FAIL tests/logic/jobRules.test.js
-  ● frontendUrl › LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14)
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: "https://sessioneer.vercel.app"
-    Received: "https://sessioneer.vercel.app/"
-
-    [0m [90m 66 |[39m   test([32m'LG-372: the reminder-job version also removes a trailing "/" (LOGIC-B14)'[39m[33m,[39m () [33m=>[39m {
-     [90m 67 |[39m     process[33m.[39menv[33m.[39m[33mFRONTEND_URL[39m [33m=[39m [32m'https://sessioneer.vercel.app/'[39m[33m;[39m
-    [31m[1m>[22m[39m[90m 68 |[39m     expect(jobsFrontendUrl())[33m.[39mtoBe([32m'https://sessioneer.vercel.app'[39m)[33m;[39m
-     [90m    |[39m                               [31m[1m^[22m[39m
-     [90m 69 |[39m   })[33m;[39m
-     [90m 70 |[39m })[33m;[39m
-     [90m 71 |[39m[0m
-
-      at Object.toBe (tests/logic/jobRules.test.js:68:31)
-
-FAIL tests/logic/passwords.test.js
-  ● verifyPassword › LG-139: damaged stored hash is rejected, not a crash (LOGIC-B8)
-
-    RangeError: Input buffers must have the same byte length
-
-    [0m [90m 17 |[39m   [36mconst[39m originalHashBuffer [33m=[39m [33mBuffer[39m[33m.[39m[36mfrom[39m(originalHash[33m,[39m [32m'hex'[39m)[33m;[39m
-     [90m 18 |[39m   [36mconst[39m inputHashBuffer [33m=[39m crypto[33m.[39mscryptSync(password[33m,[39m salt[33m,[39m [35m64[39m)[33m;[39m
-    [31m[1m>[22m[39m[90m 19 |[39m   [36mreturn[39m crypto[33m.[39mtimingSafeEqual(originalHashBuffer[33m,[39m inputHashBuffer)[33m;[39m
-     [90m    |[39m                 [31m[1m^[22m[39m
-     [90m 20 |[39m }[33m;[39m
-     [90m 21 |[39m
-     [90m 22 |[39m [36mconst[39m hashResetToken [33m=[39m (token) [33m=>[39m {[0m
-
-      at timingSafeEqual (utils/passwords.js:19:17)
-      at Object.verifyPassword (tests/logic/passwords.test.js:32:12)
-
-FAIL tests/logic/messageProfileRules.test.js
-  ● buildProfileUpdateParams › LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)
-
-    expect(received).toBeNull()
-
-    Received: ""
-
-    [0m [90m 79 |[39m   })[33m;[39m
-     [90m 80 |[39m   test([32m'LG-390: empty max hours "" is saved as no value, not "" (LOGIC-B17)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 81 |[39m     expect(buildProfileUpdateParams({ maximumHours[33m:[39m [32m''[39m }[33m,[39m [32m'tutor'[39m[33m,[39m [32m'u1'[39m)[[35m6[39m])[33m.[39mtoBeNull()[33m;[39m
-     [90m    |[39m                                                                              [31m[1m^[22m[39m
-     [90m 82 |[39m   })[33m;[39m
-     [90m 83 |[39m })[33m;[39m
-     [90m 84 |[39m[0m
-
-      at Object.toBeNull (tests/logic/messageProfileRules.test.js:81:78)
-
-FAIL tests/logic/sessionImport.test.js
-  ● prepareImportRow (one CSV row) › LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)
-
-    expect(received).toBeTruthy()
-
-    Received: null
-
-    [0m [90m 41 |[39m   })[33m;[39m
-     [90m 42 |[39m   test([32m'LG-188: a row whose end time is before its start time is skipped (LOGIC-B4)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 43 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m startTime[33m:[39m [32m'11am'[39m[33m,[39m endTime[33m:[39m [32m'10am'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
-     [90m    |[39m                                                                                         [31m[1m^[22m[39m
-     [90m 44 |[39m   })[33m;[39m
-     [90m 45 |[39m   test([32m'LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)'[39m[33m,[39m () [33m=>[39m {
-     [90m 46 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m capacity[33m:[39m [32m'abc'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m[0m
-
-      at Object.toBeTruthy (tests/logic/sessionImport.test.js:43:89)
-
-  ● prepareImportRow (one CSV row) › LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)
-
-    expect(received).toBeTruthy()
-
-    Received: null
-
-    [0m [90m 44 |[39m   })[33m;[39m
-     [90m 45 |[39m   test([32m'LG-189: capacity or tutor count that is not a number is skipped, not sent to the database (LOGIC-B7)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 46 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m capacity[33m:[39m [32m'abc'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
-     [90m    |[39m                                                                      [31m[1m^[22m[39m
-     [90m 47 |[39m     expect(prepareImportRow({ [33m...[39mrow[33m,[39m requiredTutors[33m:[39m [32m'two'[39m })[33m.[39mskipReason)[33m.[39mtoBeTruthy()[33m;[39m
-     [90m 48 |[39m   })[33m;[39m
-     [90m 49 |[39m })[33m;[39m[0m
-
-      at Object.toBeTruthy (tests/logic/sessionImport.test.js:46:70)
-
-FAIL tests/logic/tutorRules.test.js
-  ● cleanTagList › LG-416: a tag that is not text does not crash the save (LOGIC-B16)
-
-    expect(received).not.toThrow()
-
-    Error name:    "TypeError"
-    Error message: "t.trim is not a function"
-
-        [0m [90m 20 |[39m
-         [90m 21 |[39m [36mconst[39m cleanTagList [33m=[39m (tags) [33m=>[39m ([33mArray[39m[33m.[39misArray(tags)
-        [31m[1m>[22m[39m[90m 22 |[39m   [33m?[39m tags[33m.[39mmap(t [33m=>[39m t[33m.[39mtrim())[33m.[39mfilter(t [33m=>[39m t[33m.[39mlength [33m>[39m [35m0[39m)
-         [90m    |[39m                     [31m[1m^[22m[39m
-         [90m 23 |[39m   [33m:[39m [])[33m;[39m
-         [90m 24 |[39m
-         [90m 25 |[39m module[33m.[39mexports [33m=[39m { formatTutor[33m,[39m cleanTagList }[33m;[39m[0m
-
-      at trim (utils/tutorRules.js:22:21)
-                at Array.map (<anonymous>)
-      at map (utils/tutorRules.js:22:10)
-      at cleanTagList (tests/logic/tutorRules.test.js:23:18)
-      at Object.<anonymous> (node_modules/expect/build/index.js:1824:9)
-      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:2235:93)
-      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
-      at Object.toThrow (tests/logic/tutorRules.test.js:23:53)
-
-FAIL tests/logic/applicationRules.test.js
-  ● resolveInviteName › LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)
-
-    expect(received).toEqual(expected) // deep equality
-
-    - Expected  - 1
-    + Received  + 1
-
-      Object {
-    -   "firstName": "Alex",
-    +   "firstName": "Alex Lee",
-        "lastName": "Lee",
-      }
-
-    [0m [90m 61 |[39m   })[33m;[39m
-     [90m 62 |[39m   test([32m'LG-411: an old full name "Alex Lee" is split, not repeated (LOGIC-B15)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 63 |[39m     expect(resolveInviteName({ name[33m:[39m [32m'Alex Lee'[39m[33m,[39m last_name[33m:[39m [36mnull[39m }[33m,[39m [32m''[39m[33m,[39m [32m''[39m))[33m.[39mtoEqual({ firstName[33m:[39m [32m'Alex'[39m[33m,[39m lastName[33m:[39m [32m'Lee'[39m })[33m;[39m
-     [90m    |[39m                                                                              [31m[1m^[22m[39m
-     [90m 64 |[39m   })[33m;[39m
-     [90m 65 |[39m })[33m;[39m
-     [90m 66 |[39m[0m
-
-      at Object.toEqual (tests/logic/applicationRules.test.js:63:78)
-
-FAIL tests/logic/authRules.test.js
-  ● normaliseRegisterRole › LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12)
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: "coordinator"
-    Received: "tutor"
-
-    [0m [90m  8 |[39m   })[33m;[39m
-     [90m  9 |[39m   test([32m'LG-306: lowercase "coordinator" also registers a coordinator (LOGIC-B12)'[39m[33m,[39m () [33m=>[39m {
-    [31m[1m>[22m[39m[90m 10 |[39m     expect(normaliseRegisterRole([32m'coordinator'[39m))[33m.[39mtoBe([32m'coordinator'[39m)[33m;[39m
-     [90m    |[39m                                                  [31m[1m^[22m[39m
-     [90m 11 |[39m   })[33m;[39m
-     [90m 12 |[39m })[33m;[39m
-     [90m 13 |[39m[0m
-
-      at Object.toBe (tests/logic/authRules.test.js:10:50)
-
 
 Test Suites: 12 failed, 19 passed, 31 total
-Tests:       17 failed, 451 passed, 468 total
+Tests:       16 failed, 452 passed, 468 total
 Snapshots:   0 total
-Time:        3.456 s
+Time:        3.314 s
 Ran all test suites.
