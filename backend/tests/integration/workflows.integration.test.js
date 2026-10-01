@@ -25,7 +25,6 @@ describe('Integration workflows', () => {
     const notes = await api('get', '/notifications', ctx.tokens.other);
     expect(notes.body.notifications.some(item => item.type === 'session_assigned')).toBe(true);
     expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: true })).status).toBe(200);
-    await query('UPDATE sessions SET is_assigned = TRUE, tutor_confirmed = TRUE WHERE id = $1', [session.body.id]);
     expect((await api('patch', `/units/${unit.body.id}/lock-schedule`, token, {})).status).toBe(200);
     expect((await api('delete', `/units/${unit.body.id}/sessions/${session.body.id}/assign/${ctx.u.other.id}`, token)).status).toBe(409);
     expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: false, reason: 'too late' })).status).toBe(409);
@@ -457,5 +456,47 @@ describe('Integration workflows', () => {
 
   test('the bot rejects an empty prompt after a unit exists', async () => {
     expect((await api('post', '/bot/chat', ctx.tokens.uc, { message: '' })).status).toBe(400);
+  });
+
+  test('a tutor cannot accept their own swap request', async () => {
+    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
+      unitCode: 'API101', requestType: 'Session Swap', reason: 'prefer Tuesday',
+      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
+    });
+    expect((await api('patch', `/requests/${submitted.body.id}`, ctx.tokens.tutor, { status: 'Accepted' })).status).toBe(403);
+    const held = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
+    expect(held.rows.map(row => row.tutor_id)).toContain(ctx.u.tutor.id);
+  });
+
+  test('an outsider cannot join a unit by submitting a request', async () => {
+    expect((await api('post', '/requests', ctx.tokens.outsider, {
+      unitCode: 'API101', requestType: 'Session Swap', reason: 'join',
+      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
+    })).status).toBe(403);
+    const member = await query(
+      `SELECT 1 FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor')`,
+      [ctx.unitA.id, ctx.u.outsider.id]
+    );
+    expect(member.rows).toHaveLength(0);
+  });
+
+  test('register rejects a short password', async () => {
+    expect((await api('post', '/auth/register', null, {
+      firstName: 'Short', lastName: 'Pass', email: 'short.reg@api.test', role: 'tutor',
+      password: '123', confirmPassword: '123'
+    })).status).toBe(400);
+  });
+
+  test('the main coordinator can delete a unit that still has sessions', async () => {
+    expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc)).status).toBe(200);
+    expect((await query('SELECT id FROM units WHERE id = $1', [ctx.unitA.id])).rows).toHaveLength(0);
+  });
+
+  test('an API-assigned tutor cannot claim cover for that session', async () => {
+    expect((await assign(ctx, ctx.s.open, ctx.tokens.uc, ctx.u.other.id)).status).toBe(200);
+    const broadcast = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
+      sessionIds: [ctx.s.open], startDate: '2026-10-05', endDate: '2026-10-05'
+    });
+    expect((await api('post', `/cover-requests/${broadcast.body.requests[0].id}/claim`, ctx.tokens.other)).status).toBe(400);
   });
 });

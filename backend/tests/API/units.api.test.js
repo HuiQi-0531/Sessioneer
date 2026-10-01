@@ -1,4 +1,4 @@
-const { api, query, defineApiCases } = require('./harness');
+const { api, query, sessionBody, defineApiCases } = require('./harness');
 
 defineApiCases('API units', (add) => {
   add('unit list contains only the coordinator own unit', async (ctx) => {
@@ -42,14 +42,25 @@ defineApiCases('API units', (add) => {
     expect(blocked.body.unassignedCount).toBeGreaterThan(0);
   });
   add('lock fails while a confirmation is still pending', async (ctx) => {
-    await query(`UPDATE sessions SET is_assigned = TRUE, tutor_confirmed = NULL WHERE unit_id = $1`, [ctx.unitA.id]);
-    const pending = await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.uc, {});
+    const unit = await api('post', '/units', ctx.tokens.uc, {
+      unitCode: 'lockp1', unitName: 'Pending lock', semester: 'Semester 1', year: 2027
+    });
+    const session = await api('post', `/units/${unit.body.id}/sessions`, ctx.tokens.uc, sessionBody({ day: 'Monday' }));
+    expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id })).status).toBe(200);
+    const pending = await api('patch', `/units/${unit.body.id}/lock-schedule`, ctx.tokens.uc, {});
     expect(pending.status).toBe(409);
     expect(pending.body.pendingCount).toBeGreaterThan(0);
   });
   add('lock succeeds when every session is assigned and confirmed', async (ctx) => {
-    await query(`UPDATE sessions SET is_assigned = TRUE, tutor_confirmed = TRUE WHERE unit_id = $1`, [ctx.unitA.id]);
-    expect((await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.uc, {})).body.scheduleLocked).toBe(true);
+    const unit = await api('post', '/units', ctx.tokens.uc, {
+      unitCode: 'lockok', unitName: 'Ready lock', semester: 'Semester 1', year: 2027
+    });
+    const session = await api('post', `/units/${unit.body.id}/sessions`, ctx.tokens.uc, sessionBody({ day: 'Monday' }));
+    expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id })).status).toBe(200);
+    expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: true })).status).toBe(200);
+    const locked = await api('patch', `/units/${unit.body.id}/lock-schedule`, ctx.tokens.uc, {});
+    expect(locked.status).toBe(200);
+    expect(locked.body.scheduleLocked).toBe(true);
   });
   add('force lock succeeds while the timetable is unfinished', async (ctx) => {
     expect((await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.uc, { force: true })).body.scheduleLocked).toBe(true);
@@ -78,7 +89,7 @@ defineApiCases('API units', (add) => {
   add('only the main coordinator can delete the unit', async (ctx) => {
     expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc2)).status).toBe(404);
   });
-  add('the main coordinator can delete the unit', async (ctx) => {
+  add('the main coordinator can delete the unit even when sessions exist', async (ctx) => {
     expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc)).status).toBe(200);
     expect((await query('SELECT id FROM units WHERE id = $1', [ctx.unitA.id])).rows).toHaveLength(0);
   });

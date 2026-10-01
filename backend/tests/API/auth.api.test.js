@@ -19,6 +19,11 @@ defineApiCases('API auth', (add) => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/do not match/i);
   });
+  add('register rejects a short password', async () => {
+  expect((await api('post', '/auth/register', null, registerBody({
+    email: 'shortp@api.test', password: '123', confirmPassword: '123'
+  }))).status).toBe(400);
+});
   add('register stores tutor when the client asks for admin', async () => {
     const res = await api('post', '/auth/register', null, registerBody({ email: 'evil.admin@api.test', role: 'admin' }));
     expect(res.status).toBe(201);

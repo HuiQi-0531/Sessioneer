@@ -72,10 +72,17 @@ describe('API /units/:id/sessions', () => {
 
     const first = await api('patch', url(`/${ctx.s.open}/assign`), T('uc'), { tutorId: ctx.u.tutor.id });
     expect(first.status).toBe(200);
+    expect(first.body.isAssigned).toBe(true);
+    const stored = await query('SELECT is_assigned, assigned_tutor_id FROM sessions WHERE id = $1', [ctx.s.open]);
+    expect(stored.rows[0].is_assigned).toBe(true);
+    expect(stored.rows[0].assigned_tutor_id).toBe(ctx.u.tutor.id);
     expect((await api('patch', url(`/${ctx.s.open}/assign`), T('uc'), { tutorId: ctx.u.tutor.id })).status).toBe(409);
     expect((await api('patch', url(`/${ctx.s.overlap}/assign`), T('uc'), { tutorId: ctx.u.tutor.id })).status).toBe(409);
 
-    await query('DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2', [ctx.s.open, ctx.u.tutor.id]);
+    await query(
+      'DELETE FROM session_tutors WHERE tutor_id = $1 AND session_id IN ($2, $3)',
+      [ctx.u.tutor.id, ctx.s.open, ctx.s.held]
+    );
     const tooLong = await api('patch', url(`/${ctx.s.long}/assign`), T('uc'), { tutorId: ctx.u.tutor.id });
     expect(tooLong.status).toBe(200);
     const overHours = await api('patch', url(`/${ctx.s.open}/assign`), T('uc'), { tutorId: ctx.u.tutor.id });
@@ -89,6 +96,9 @@ describe('API /units/:id/sessions', () => {
   test('unassign and confirm update the assignment and notify rules', async () => {
     expect((await api('delete', url(`/${ctx.s.held}/assign/${ctx.u.tutor.id}`), T('uc'))).status).toBe(200);
     expect(await assigned(ctx.s.held, ctx.u.tutor.id)).toBe(false);
+    const cleared = await query('SELECT is_assigned, assigned_tutor_id FROM sessions WHERE id = $1', [ctx.s.held]);
+    expect(cleared.rows[0].is_assigned).toBe(false);
+    expect(cleared.rows[0].assigned_tutor_id).toBeNull();
 
     await api('patch', url(`/${ctx.s.open}/assign`), T('uc'), { tutorId: ctx.u.other.id });
     const noReason = await api('patch', url(`/${ctx.s.open}/confirm`), T('other'), { confirmed: false });
@@ -99,6 +109,8 @@ describe('API /units/:id/sessions', () => {
     await api('patch', url(`/${ctx.s.open2}/assign`), T('uc'), { tutorId: ctx.u.other.id });
     const accepted = await api('patch', url(`/${ctx.s.open2}/confirm`), T('other'), { confirmed: true });
     expect(accepted.status).toBe(200);
+    const confirmed = await query('SELECT tutor_confirmed FROM sessions WHERE id = $1', [ctx.s.open2]);
+    expect(confirmed.rows[0].tutor_confirmed).toBe(true);
     expect((await api('patch', url(`/${ctx.s.open2}/confirm`), T('tutor'), { confirmed: true })).status).toBe(404);
 
     await query('UPDATE units SET schedule_locked = TRUE WHERE id = $1', [ctx.unitA.id]);
@@ -110,7 +122,7 @@ describe('API /units/:id/sessions', () => {
     expect((await api('get', url(), T('tutor'))).status).toBe(200);
     const candidates = await api('get', url(`/${ctx.s.lecture}/candidates`), T('uc'));
     expect(candidates.status).toBe(200);
-    expect((await api('get', '/units/my-assigned-unused', T('tutor'))).status).toBe(404);
+    expect((await api('get', '/units/my-assigned-unused', T('tutor'))).status).toBe(403);
     expect((await api('get', url('/my-assigned'), T('tutor'))).status).toBe(200);
   });
 });

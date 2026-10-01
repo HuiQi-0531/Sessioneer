@@ -71,29 +71,30 @@ describe('API tutor applications', () => {
   });
 
   test('accept-invite creates the account and refuses a used, expired, or short password', async () => {
-    const invite = await api('post', '/tutor-applications/direct-invite', T('uc'), {
-      unitId: ctx.unitA.id, email: 'brand.new@api.test', role: 'tutor'
-    });
-    const token = invite.body.inviteToken;
-    const preview = await api('get', `/tutor-applications/verify-invite/${token}`);
-    expect(preview.body.requiresName).toBe(true);
-
-    expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: '123' })).status).toBe(400);
-    const accepted = await api('post', '/tutor-applications/accept-invite', null, {
-      token, password: 'abcdef', firstName: 'Brand', lastName: 'New'
-    });
-    expect(accepted.status).toBe(200);
-    expect((await api('post', '/auth/login', null, { email: 'brand.new@api.test', password: 'abcdef' })).status).toBe(200);
-    expect((await api('get', `/tutor-applications/verify-invite/${token}`)).status).toBe(409);
-    expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: 'abcdef', firstName: 'Brand', lastName: 'New' })).status).toBe(409);
-
-    await query(
-      `UPDATE tutor_applications SET status = 'invited', invite_token_expires_at = NOW() - INTERVAL '1 day'
-       WHERE invite_token = $1`,
-      [token]
-    );
-    expect((await api('get', `/tutor-applications/verify-invite/${token}`)).status).toBe(409);
-    expect((await api('get', '/tutor-applications/verify-invite/missing')).status).toBe(404);
-    expect(PASSWORD).toEqual(expect.any(String));
+  const invite = await api('post', '/tutor-applications/direct-invite', T('uc'), {
+    unitId: ctx.unitA.id, email: 'brand.new@api.test', role: 'tutor'
   });
+  const token = invite.body.inviteToken;
+  const preview = await api('get', `/tutor-applications/verify-invite/${token}`);
+  expect(preview.body.requiresName).toBe(true);
+
+  expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: '123' })).status).toBe(400);
+  const accepted = await api('post', '/tutor-applications/accept-invite', null, {
+    token, password: 'abcdef', firstName: 'Brand', lastName: 'New'
+  });
+  expect(accepted.status).toBe(201);
+  expect((await api('post', '/auth/login', null, { email: 'brand.new@api.test', password: 'abcdef' })).status).toBe(200);
+  expect((await api('get', `/tutor-applications/verify-invite/${token}`)).status).toBe(409);
+  expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: 'abcdef', firstName: 'Brand', lastName: 'New' })).status).toBe(409);
+
+  const expiredInvite = await api('post', '/tutor-applications/direct-invite', T('uc'), {
+    unitId: ctx.unitA.id, email: 'expired.invite@api.test', role: 'tutor'
+  });
+  await query(
+    `UPDATE tutor_applications SET invite_token_expires_at = NOW() - INTERVAL '1 day' WHERE invite_token = $1`,
+    [expiredInvite.body.inviteToken]
+  );
+  expect((await api('get', `/tutor-applications/verify-invite/${expiredInvite.body.inviteToken}`)).status).toBe(410);
+  expect((await api('get', '/tutor-applications/verify-invite/missing')).status).toBe(404);
+  expect(PASSWORD).toEqual(expect.any(String));
 });
