@@ -345,15 +345,6 @@ router.delete('/:sessionId', verifyToken, requireRole('coordinator'), async (req
       return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
     }
 
-    // M-5: the session must belong to this unit, not just the unit in the URL.
-    const sessionCheck = await pool.query(
-      'SELECT id FROM sessions WHERE id = $1 AND unit_id = $2',
-      [sessionId, unitId]
-    );
-    if (sessionCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Session not found in this unit' });
-    }
-
     // Tutors who declined (tutor_confirmed = false) no longer hold the session,
     // so only pending or confirmed tutors block deletion.
     const activeTutors = await pool.query(
