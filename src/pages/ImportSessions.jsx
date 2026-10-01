@@ -22,6 +22,14 @@ const SYSTEM_FIELDS = [
 
 const NONE_VALUE = '__none__';
 
+// "tutorial" -> "Tutorial", so imported sessions match the Sessions page filters.
+const KNOWN_SESSION_TYPES = ['Lecture', 'Tutorial', 'Workshop', 'Practical', 'Consultation'];
+const canonicalSessionType = (value) => {
+  if (!value) return null;
+  const match = KNOWN_SESSION_TYPES.find(t => t.toLowerCase() === String(value).trim().toLowerCase());
+  return match || value;
+};
+
 const ImportSessions = () => {
   const { unitId } = useParams();
   const navigate = useNavigate();
@@ -147,20 +155,21 @@ const ImportSessions = () => {
       const fallbackType = sessionTypeOverrides[blockIndex];
 
       block.rows.forEach(row => {
-        const capacityRaw = resolveRowValue(block, mapping, row, 'capacity');
-        const capacity = capacityRaw ? parseInt(capacityRaw, 10) : null;
-
-        const requiredTutorsRaw = resolveRowValue(block, mapping, row, 'requiredTutors');
-        const requiredTutors = requiredTutorsRaw ? parseInt(requiredTutorsRaw, 10) : null;
+        // LOGIC-B7: send the CSV value as typed. The backend skips the row with a
+        // reason if it is not a whole number, instead of silently blanking it.
+        const capacity = resolveRowValue(block, mapping, row, 'capacity') || null;
+        const requiredTutors = resolveRowValue(block, mapping, row, 'requiredTutors') || null;
+        const rawType = resolveRowValue(block, mapping, row, 'sessionType') || fallbackType || null;
         sessions.push({
           day: resolveRowValue(block, mapping, row, 'day'),
           startTime: resolveRowValue(block, mapping, row, 'startTime'),
           endTime: resolveRowValue(block, mapping, row, 'endTime'),
           location: resolveRowValue(block, mapping, row, 'location') || null,
           campus: resolveRowValue(block, mapping, row, 'campus') || null,
-          sessionType: resolveRowValue(block, mapping, row, 'sessionType') || fallbackType || null,
-          capacity: Number.isNaN(capacity) ? null : capacity,
-          requiredTutors: (requiredTutors === null || Number.isNaN(requiredTutors)) ? null : requiredTutors,          staffNote: resolveRowValue(block, mapping, row, 'staffNote') || null,
+          sessionType: canonicalSessionType(rawType),
+          capacity,
+          requiredTutors,
+          staffNote: resolveRowValue(block, mapping, row, 'staffNote') || null,
           status: 'Confirmed'
         });
       });

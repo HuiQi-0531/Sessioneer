@@ -19,7 +19,12 @@ const CODE_PREFIXES = {
   Lecture: 'LEC',
   Workshop: 'WOR'
 };
-const codePrefixForType = (sessionType) => CODE_PREFIXES[sessionType] || 'SES';
+
+const codePrefixForType = (sessionType) => {
+  const key = String(sessionType || '').trim().toLowerCase();
+  const match = Object.keys(CODE_PREFIXES).find(type => type.toLowerCase() === key);
+  return match ? CODE_PREFIXES[match] : 'SES';
+};
 
 // Given the codes already used in a unit, returns the next free one,
 // e.g. TUT01..TUT03 exist -> TUT04. (Was the second half of generateNextSessionCode.)
@@ -73,6 +78,23 @@ const getMissingAdminSessionFields = (session) => {
     .map(([, label]) => label);
 };
 
+// End time must be later than start time.
+const toMinutesOfDay = (time) => {
+  const [h, m] = String(time || '').split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+const endsAfterStart = (start, end) => {
+  const s = toMinutesOfDay(start);
+  const e = toMinutesOfDay(end);
+  if (Number.isNaN(s) || Number.isNaN(e)) return true; // unreadable times are rejected elsewhere
+  return e > s;
+};
+
+// A count from a CSV must be blank or a whole number.
+const isValidCount = (value) => value === undefined || value === null
+  || String(value).trim() === '' || /^\d+$/.test(String(value).trim());
+
+
 // Checks for creating one session (was inline in POST /units/:unitId/sessions).
 const validateSessionInput = (input) => {
   const missingFields = getMissingSessionFields(input);
@@ -89,6 +111,10 @@ const validateSessionInput = (input) => {
 
   if (Number.isNaN(requiredTutorsNumber) || requiredTutorsNumber < 1) {
     return { error: 'Tutor must be at least 1' };
+  }
+
+  if (!endsAfterStart(input.startTime, input.endTime)) {
+    return { error: 'End time must be after start time' };
   }
 
   return { error: null, capacityNumber, requiredTutorsNumber };
@@ -148,6 +174,14 @@ const prepareImportRow = (row) => {
     return { skipReason: 'Could not read day or time' };
   }
 
+  if (!endsAfterStart(normalisedStart, normalisedEnd)) {
+    return { skipReason: 'End time must be after start time' };
+  }
+
+  if (!isValidCount(row.capacity) || !isValidCount(row.requiredTutors)) {
+    return { skipReason: 'Capacity and tutor count must be whole numbers' };
+  }
+
   return {
     skipReason: null,
     sessionCode: row.sessionCode ? String(row.sessionCode).trim().toUpperCase() : null,
@@ -168,6 +202,9 @@ const prepareImportRow = (row) => {
 
 // Tutor accepting or declining an assigned session (was inline in PATCH /:sessionId/confirm).
 const buildConfirmationUpdate = (confirmed, reason) => {
+  if (typeof confirmed !== 'boolean') {
+    return { error: 'Please choose to accept or decline the session' };
+  }
   if (confirmed === false && (!reason || !reason.trim())) {
     return { error: 'Please provide a reason for declining' };
   }

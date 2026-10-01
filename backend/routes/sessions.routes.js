@@ -13,23 +13,17 @@ const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 
-// Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
-// students triggers one more suggested tutor. Used as a fallback whenever a
-// caller doesn't explicitly set required_tutors, instead of silently
-// defaulting to 1 regardless of capacity.
-const STUDENTS_PER_TUTOR = 30;
-const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
-
-// Session code prefix per type - e.g. Tutorial sessions get TUT01, TUT02...
-// Falls back to 'SES' for any type not in this list (custom/unlisted types).
-const CODE_PREFIXES = {
-  Tutorial: 'TUT',
-  Consultation: 'CON',
-  Practical: 'PRC',
-  Lecture: 'LEC',
-  Workshop: 'WOR'
-};
-const codePrefixForType = (sessionType) => CODE_PREFIXES[sessionType] || 'SES';
+const {
+  suggestedTutorCount,
+  codePrefixForType,
+  nextSessionCode,
+  validateSessionInput,
+  formatSessionRow,
+  formatCoveringSessionRow,
+  prepareImportRow,
+  buildConfirmationUpdate,
+  checkAssignSlot
+} = require('../utils/sessionRules');
 
 // Finds the next free code for this unit + type, e.g. if TUT01..TUT03 exist,
 // returns TUT04. Scans existing codes with this prefix and picks max+1.
@@ -42,37 +36,11 @@ const generateNextSessionCode = async (client, unitId, sessionType) => {
     `,
     [unitId, `${prefix}%`]
   );
-  let maxNum = 0;
-  result.rows.forEach(r => {
-    const match = String(r.session_code || '').match(new RegExp(`^${prefix}(\\d+)$`));
-    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
-  });
-  const nextNum = maxNum + 1;
-  return `${prefix}${String(nextNum).padStart(2, '0')}`;
+  return nextSessionCode(prefix, result.rows.map(r => r.session_code));
 };
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
-
-const isBlank = (value) => value === undefined || value === null || String(value).trim() === '';
-
-const getMissingSessionFields = (session) => {
-  const requiredFields = [
-    ['day', 'Day'],
-    ['startTime', 'Start time'],
-    ['endTime', 'End time'],
-    ['location', 'Location'],
-    ['campus', 'Campus'],
-    ['sessionType', 'Type'],
-    ['capacity', 'Capacity'],
-    ['requiredTutors', 'Tutor'],
-    ['status', 'Status']
-  ];
-
-  return requiredFields
-    .filter(([field]) => isBlank(session[field]))
-    .map(([, label]) => label);
-};
 
 const getOwnedUnitId = async (unitId, coordinatorId) => {
   return getCoordinatorUnitId(unitId, coordinatorId);
@@ -118,40 +86,6 @@ const isTutorLinkedToUnit = async (userId, unitId) => {
   return result.rows.length > 0;
 };
 
-const formatSessionRow = (s) => {
-  const allTutors = s.tutors || [];
-  // A declined tutor (confirmed === false) doesn't count as filling the
-  // slot — the session should reappear as needing reassignment. Pending
-  // (confirmed === null) and confirmed (confirmed === true) tutors do.
-  const activeTutors = allTutors.filter(t => t.confirmed !== false);
-  const declinedTutors = allTutors.filter(t => t.confirmed === false);
-
-  return {
-    id: s.id,
-    sessionCode: s.session_code || null,
-    day: s.day,
-    startTime: s.start_time,
-    endTime: s.end_time,
-    location: s.location,
-    campus: s.campus,
-    sessionType: s.session_type,
-    capacity: s.capacity,
-    requiredTutors: s.required_tutors,
-    status: s.status,
-    staffNote: s.staff_note,
-    tutors: activeTutors,
-    declinedTutors,
-    isAssigned: activeTutors.length > 0,
-    // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
-    // Reflects the first active (non-declined) tutor, if any.
-    assignedTutorId: activeTutors[0]?.tutorId || null,
-    assignedTutorName: activeTutors[0]?.tutorName || null,
-    tutorConfirmed: activeTutors[0]?.confirmed ?? null,
-    tutorRejectReason: activeTutors[0]?.rejectReason || null,
-    unitCode: s.unit_code || null
-  };
-};
-
 // A tutor's claimed-but-still-active cover requests: covering periods that
 // haven't ended yet. These aren't in session_tutors (that table is the
 // permanent weekly assignment) - covering is temporary, so it's layered on
@@ -176,31 +110,6 @@ const getActiveCoverSessions = async (tutorId) => {
   );
   return result.rows;
 };
-
-const countWeekdayOccurrences = (day, startDate, endDate) => {
-  const WEEKDAY_INDEX = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
-  const targetIdx = WEEKDAY_INDEX[String(day).toUpperCase()];
-  if (targetIdx === undefined || !startDate || !endDate) return 0;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
-  const cursor = new Date(start);
-  cursor.setDate(cursor.getDate() + ((targetIdx - cursor.getDay() + 7) % 7));
-  let count = 0;
-  while (cursor <= end) {
-    count++;
-    cursor.setDate(cursor.getDate() + 7);
-  }
-  return count;
-};
-
-const formatCoveringSessionRow = (s) => ({
-  ...formatSessionRow(s),
-  isCovering: true,
-  coverStartDate: s.cover_start_date,
-  coverEndDate: s.cover_end_date,
-  coverOccurrenceCount: countWeekdayOccurrences(s.day, s.cover_start_date, s.cover_end_date)
-});
 
 // Get all sessions for a unit. Coordinators must own the unit; tutors
 // must be linked to it (via availability or an assigned session).
@@ -330,21 +239,12 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
     const requestedCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
     const normalisedDay = normaliseDay(day) || day;
 
-    const missingFields = getMissingSessionFields({ day: normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status });
-    if (missingFields.length > 0) {
-      return res.status(400).json({ error: `Please fill in all fields before saving: ${missingFields.join(', ')}` });
+    const validation = validateSessionInput({ day: normalisedDay, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status });
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error });
     }
-
-    const capacityNumber = parseInt(capacity, 10);
-    const requiredTutorsNumber = parseInt(requiredTutors, 10);
-
-    if (Number.isNaN(capacityNumber) || capacityNumber < 1) {
-      return res.status(400).json({ error: 'Capacity must be at least 1' });
-    }
-
-    if (Number.isNaN(requiredTutorsNumber) || requiredTutorsNumber < 1) {
-      return res.status(400).json({ error: 'Tutor must be at least 1' });
-    }
+    const { capacityNumber, requiredTutorsNumber } = validation;
+    
 
     let sessionCode = requestedCode;
     if (sessionCode) {
@@ -445,6 +345,15 @@ router.delete('/:sessionId', verifyToken, requireRole('coordinator'), async (req
       return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
     }
 
+    // M-5: the session must belong to this unit, not just the unit in the URL.
+    const sessionCheck = await pool.query(
+      'SELECT id FROM sessions WHERE id = $1 AND unit_id = $2',
+      [sessionId, unitId]
+    );
+    if (sessionCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found in this unit' });
+    }
+
     // Tutors who declined (tutor_confirmed = false) no longer hold the session,
     // so only pending or confirmed tutors block deletion.
     const activeTutors = await pool.query(
@@ -515,17 +424,16 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
 
     for (let i = 0; i < sessions.length; i++) {
       const row = sessions[i];
-      const normalisedDay = normaliseDay(row.day);
-      const normalisedStart = normaliseTime(row.startTime);
-      const normalisedEnd = normaliseTime(row.endTime);
+      const prepared = prepareImportRow(row);
 
-      if (!normalisedDay || !normalisedStart || !normalisedEnd) {
-        skipped.push({ rowIndex: i, reason: 'Could not read day or time', row });
+      if (prepared.skipReason) {
+        skipped.push({ rowIndex: i, reason: prepared.skipReason, row });
         continue;
       }
+      const v = prepared.values;
 
-      const sessionCode = row.sessionCode
-        ? String(row.sessionCode).trim().toUpperCase()
+      const sessionCode = prepared.sessionCode !== null
+        ? prepared.sessionCode
         : await generateNextSessionCode(client, unitId, row.sessionType);
 
       const result = await client.query(
@@ -536,9 +444,9 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
         RETURNING id
         `,
         [
-          unitId, normalisedDay, normalisedStart, normalisedEnd,
-          row.location || null, row.campus || null, row.sessionType || null,
-          row.capacity || null, row.requiredTutors || suggestedTutorCount(row.capacity), row.status || 'Confirmed', row.staffNote || null, sessionCode
+          unitId, v.day, v.startTime, v.endTime,
+          v.location, v.campus, v.sessionType,
+          v.capacity, v.requiredTutors, v.status, v.staffNote, sessionCode
         ]
       );
       imported.push(result.rows[0].id);
@@ -782,14 +690,9 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       'SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1',
       [sessionId]
     );
-    const activeExistingTutors = existingTutorsResult.rows.filter(r => r.tutor_confirmed !== false);
-
-    if (activeExistingTutors.some(r => r.tutor_id === tutorId)) {
-      return res.status(409).json({ error: 'This tutor is already assigned to this session' });
-    }
-    const requiredTutors = session.required_tutors || 1;
-    if (activeExistingTutors.length >= requiredTutors) {
-      return res.status(409).json({ error: `This session already has its required ${requiredTutors} tutor(s) assigned` });
+    const slotError = checkAssignSlot(existingTutorsResult.rows, tutorId, session.required_tutors);
+    if (slotError) {
+      return res.status(409).json({ error: slotError });
     }
 
     const isCoordinatorSelfAssignment = tutorId === req.user.id && Boolean(ownedUnitId);
@@ -988,8 +891,9 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
     }
     const session = sessionResult.rows[0];
 
-    if (confirmed === false && (!reason || !reason.trim())) {
-      return res.status(400).json({ error: 'Please provide a reason for declining' });
+    const confirmation = buildConfirmationUpdate(confirmed, reason);
+    if (confirmation.error) {
+      return res.status(400).json({ error: confirmation.error });
     }
 
     const result = await pool.query(
@@ -999,8 +903,7 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
       WHERE session_id = $3 AND tutor_id = $4
       RETURNING *
       `,
-      [confirmed, confirmed ? null : reason.trim(), sessionId, req.user.id]
-    );
+      [confirmation.confirmed, confirmation.rejectReason, sessionId, req.user.id]    );
 
     const unitResult = await pool.query('SELECT unit_code FROM units WHERE id = $1', [unitId]);
     const unit = unitResult.rows[0];
