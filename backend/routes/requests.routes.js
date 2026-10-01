@@ -8,6 +8,7 @@ const {
   applyApprovedChangeRequest,
   resolveSessionId
 } = require('../utils/applyChangeRequest');
+const { isUserLinkedToUnit, LINKED_UNITS_SQL } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -213,20 +214,29 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     );
     const unit = unitResult.rows[0];
     const unit_id = unit?.id;
-    const coordinators = unit_id ? await getUnitCoordinators(unit_id) : [];
+    if (!unit_id) {
+      return res.status(404).json({ error: 'Unit not found' });
+    }
+
+    // Only people who already belong to this unit can raise a request in it.
+    // (Previously the caller was silently added as a tutor of whatever unit
+    // code they sent, which let anyone join any unit.)
+    if (!(await isUserLinkedToUnit(tutor_id, unit_id))) {
+      return res.status(403).json({ error: 'You are not part of this unit' });
+    }
+
+    const coordinators = await getUnitCoordinators(unit_id);
 
     const priorityValue = priority || 'Normal';
 
-    if (unit_id) {
-      await pool.query(
-        `
-        INSERT INTO unit_memberships (unit_id, user_id, role)
-        VALUES ($1, $2, 'tutor')
-        ON CONFLICT (unit_id, user_id, role) DO NOTHING
-        `,
-        [unit_id, tutor_id]
-      );
-    }
+    await pool.query(
+      `
+      INSERT INTO unit_memberships (unit_id, user_id, role)
+      VALUES ($1, $2, 'tutor')
+      ON CONFLICT (unit_id, user_id, role) DO NOTHING
+      `,
+      [unit_id, tutor_id]
+    );
 
     const resolvedCurrentId = await resolveSessionId(pool, unit_id, currentSessionId || null, currentSession);
     const resolvedPreferredId = await resolveSessionId(pool, unit_id, preferredSessionId || null, preferredSwapTo);
@@ -311,9 +321,16 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
       return res.status(404).json({ error: 'Request not found' });
     }
     const existing = existingResult.rows[0];
+    const existingStatus = String(existing.status || '').toLowerCase();
+
+    // A tutor can only "accept" an alternative the coordinator suggested.
+    // Approving their own pending request is the coordinator's job.
+    if (String(status || '').toLowerCase() === 'accepted' && existingStatus !== 'suggested') {
+      return res.status(403).json({ error: 'Only the unit coordinator can approve this request' });
+    }
 
     if (
-      String(existing.status || '').toLowerCase() === 'suggested' &&
+      existingStatus === 'suggested' &&
       String(status || '').toLowerCase() === 'rejected'
     ) {
       status = 'Pending';
@@ -412,8 +429,10 @@ router.get('/sessions', verifyToken, async (req, res) => {
       FROM sessions s
       LEFT JOIN users u ON s.assigned_tutor_id = u.id
       LEFT JOIN units un ON s.unit_id = un.id
+      -- Only units the caller belongs to (this used to return every unit's sessions).
+      WHERE s.unit_id IN (${LINKED_UNITS_SQL})
       ORDER BY s.day, s.start_time
-    `);
+    `, [req.user.id]);
 
     res.json(result.rows);
   } catch (error) {

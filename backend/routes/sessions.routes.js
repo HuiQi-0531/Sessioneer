@@ -921,6 +921,16 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
+    // The session must belong to this unit, otherwise a coordinator could
+    // remove tutors from another unit's session by putting their own unit in the URL.
+    const sessionInUnit = await pool.query(
+      'SELECT 1 FROM sessions WHERE id = $1 AND unit_id = $2',
+      [sessionId, unitId]
+    );
+    if (sessionInUnit.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
     if (await isScheduleLocked(unitId)) {
       return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
     }

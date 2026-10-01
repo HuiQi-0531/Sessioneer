@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { splitDisplayName } = require('../utils/userNames');
-const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { getCoordinatorUnitId, LINKED_UNITS_SQL } = require('../utils/unitAccess');
 const { LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
 
 const router = express.Router();
@@ -209,10 +209,14 @@ router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, r
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT resume_filename, resume_mime_type, resume_data FROM tutor_applications WHERE id = $1',
+      'SELECT unit_id, resume_filename, resume_mime_type, resume_data FROM tutor_applications WHERE id = $1',
       [id]
     );
-    if (result.rows.length === 0 || !result.rows[0].resume_data) {
+    // Resumes are personal data: only a coordinator of the unit applied to may open one.
+    if (result.rows.length === 0 || !(await getOwnedUnitId(result.rows[0].unit_id, req.user.id))) {
+      return res.status(404).json({ error: 'No resume found' });
+    }
+    if (!result.rows[0].resume_data) {
       return res.status(404).json({ error: 'No resume found' });
     }
     const { resume_filename, resume_mime_type, resume_data } = result.rows[0];
@@ -491,6 +495,32 @@ router.post('/accept-invite', async (req, res) => {
 router.get('/user/:userId/resume', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { userId } = req.params;
+
+    // Only a coordinator of a unit this person belongs to (or applied to) may open their resume.
+    const allowed = await pool.query(
+      `
+      SELECT 1
+      FROM units u
+      WHERE (
+          u.unit_coordinator_id = $2
+          OR EXISTS (SELECT 1 FROM unit_memberships cm WHERE cm.unit_id = u.id AND cm.user_id = $2 AND cm.role = 'coordinator')
+        )
+        AND (
+          u.id IN (${LINKED_UNITS_SQL})
+          OR EXISTS (
+            SELECT 1 FROM tutor_applications ta
+            WHERE ta.unit_id = u.id
+              AND (ta.created_user_id = $1 OR LOWER(ta.email) = (SELECT LOWER(email) FROM users WHERE id = $1))
+          )
+        )
+      LIMIT 1
+      `,
+      [userId, req.user.id]
+    );
+    if (allowed.rows.length === 0) {
+      return res.status(404).json({ error: 'No resume found' });
+    }
+
     const result = await pool.query(
       'SELECT resume_filename, resume_mime_type, resume_data FROM users WHERE id = $1',
       [userId]
