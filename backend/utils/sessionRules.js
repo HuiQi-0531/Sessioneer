@@ -11,7 +11,6 @@ const STUDENTS_PER_TUTOR = 30;
 const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
 
 // Session code prefix per type - e.g. Tutorial sessions get TUT01, TUT02...
-// Falls back to 'SES' for any type not in this list (custom/unlisted types).
 const CODE_PREFIXES = {
   Tutorial: 'TUT',
   Consultation: 'CON',

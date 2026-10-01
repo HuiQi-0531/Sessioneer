@@ -41,6 +41,8 @@ const parseAvailabilitySlot = (key, preference) => {
   if (!timeMatch) return null;
   let hour = parseInt(timeMatch[1]);
   const period = timeMatch[3];
+  // A 12-hour clock only goes from 1 to 12, so anything else is not a real time.
+  if (hour < 1 || hour > 12) return null;
   if (period === 'pm' && hour !== 12) hour += 12;
   if (period === 'am' && hour === 12) hour = 0;
   const startTime = `${String(hour).padStart(2, '0')}:00:00`;

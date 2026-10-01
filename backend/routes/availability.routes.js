@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { parseAvailabilitySlot } = require('../utils/availabilityRules');
 
 const router = express.Router();
 
@@ -212,28 +213,14 @@ router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (
     );
 
     for (const [key, preference] of Object.entries(slots)) {
-      const dashIdx = key.indexOf('-');
-      if (dashIdx === -1) continue;
-      const dayRaw = key.slice(0, dashIdx);
-      const timeRaw = key.slice(dashIdx + 1);
-
-      const day = AVAILABILITY_DAY_MAP[dayRaw];
-      if (!day) continue;
-      if (!['preferred', 'available', 'avoid'].includes(preference)) continue;
-
-      const timeMatch = timeRaw.match(/^(\d+):(\d+)(am|pm)$/);
-      if (!timeMatch) continue;
-      let hour = parseInt(timeMatch[1]);
-      const period = timeMatch[3];
-      if (period === 'pm' && hour !== 12) hour += 12;
-      if (period === 'am' && hour === 12) hour = 0;
-      const startTime = `${String(hour).padStart(2, '0')}:00:00`;
-      const endTime = `${String(hour + 1).padStart(2, '0')}:00:00`;
+      // Slots that cannot be read are skipped, the rest are still saved.
+      const slot = parseAvailabilitySlot(key, preference);
+      if (!slot) continue;
 
       await client.query(`
         INSERT INTO availability (tutor_id, unit_id, day, start_time, end_time, preference, is_submitted, submitted_at)
         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
-      `, [tutor_id, unit_id, day, startTime, endTime, preference]);
+      `, [tutor_id, unit_id, slot.day, slot.startTime, slot.endTime, slot.preference]);
     }
 
     await client.query('COMMIT');

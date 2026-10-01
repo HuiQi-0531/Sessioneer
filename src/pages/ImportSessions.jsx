@@ -155,8 +155,8 @@ const ImportSessions = () => {
       const fallbackType = sessionTypeOverrides[blockIndex];
 
       block.rows.forEach(row => {
-        // LOGIC-B7: send the CSV value as typed. The backend skips the row with a
-        // reason if it is not a whole number, instead of silently blanking it.
+        // Send the CSV value as typed. The backend skips the row with a reason
+        // if it is not a whole number, instead of silently leaving it blank.
         const capacity = resolveRowValue(block, mapping, row, 'capacity') || null;
         const requiredTutors = resolveRowValue(block, mapping, row, 'requiredTutors') || null;
         const rawType = resolveRowValue(block, mapping, row, 'sessionType') || fallbackType || null;

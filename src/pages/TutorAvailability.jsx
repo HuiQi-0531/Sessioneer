@@ -105,8 +105,10 @@ const TutorAvailability = () => {
     '6:00pm', '7:00pm', '8:00pm', '9:00pm'
   ];
 
+  // Only units from the current semester. Older units should not appear in the
+  // list or receive a submission when "All Units" is chosen.
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
+    () => allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive),
     [allUnits]
   );
 
