@@ -5,7 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { getCoordinatorUnitId, shareAnyUnit } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -234,6 +234,18 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
     const cleanContent = (content || '').trim();
     if (!recipientId || (!cleanContent && !req.file)) {
       return res.status(400).json({ error: 'recipientId and message content or attachment are required' });
+    }
+
+    // Direct messages are only between people who share a unit (the same
+    // people the contacts list shows). Admin accounts are exempt for support.
+    const recipientResult = await pool.query('SELECT role FROM users WHERE id = $1', [recipientId]);
+    const recipient = recipientResult.rows[0];
+    if (!recipient) {
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+    const involvesAdmin = req.user.role === 'admin' || recipient.role === 'admin';
+    if (!involvesAdmin && !(await shareAnyUnit(req.user.id, recipientId))) {
+      return res.status(403).json({ error: 'You can only message people in your units' });
     }
 
     const attachment = await uploadAttachment(req.file, req.user.id, req);

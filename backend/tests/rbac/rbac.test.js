@@ -393,9 +393,11 @@ const tutorCases = [
       const id = (await query('SELECT id FROM cover_requests WHERE unit_id = $1 LIMIT 1', [B()])).rows[0].id;
       return call('post', `/cover-requests/${id}/claim`, T('tutorA'));
     } },
-  { id: 'TU-27', role: 'Tutor', action: 'List all sessions of every unit (legacy GET /sessions)', expected: 'Deny',
+  { id: 'TU-27', role: 'Tutor', action: 'Legacy GET /sessions must list only own units\' sessions', expected: 'Allow',
     run: () => call('get', '/sessions', T('tutorA')),
-    verify: async (res) => !(Array.isArray(res.body) && res.body.some((s) => s.unit_id === B())),
+    verify: async (res) => Array.isArray(res.body)
+      && !res.body.some((s) => s.unit_id === B())
+      && res.body.some((s) => s.unit_id === A()),
     verifyNote: 'Returned sessions from unit B the tutor has no access to' },
   { id: 'TU-28', role: 'Tutor', action: 'Join another unit by submitting a request with its unit code', expected: 'Deny',
     run: () => call('post', '/requests', T('tutorA'), {
