@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { escapeHtml, sendEmail } = require('../utils/email');
+const { frontendUrl } = require('../utils/urls');
 
 const router = express.Router();
 
@@ -21,8 +22,6 @@ const verifyCronSecret = (req, res, next) => {
 
   next();
 };
-
-const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
 
 const formatTime = (value) => {
   if (!value) return '';

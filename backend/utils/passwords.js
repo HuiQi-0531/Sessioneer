@@ -1,6 +1,5 @@
 // Password helpers shared by auth, admin, profile and tutor application routes.
-// Moved here unchanged from auth.routes.js so every route uses (and the logic
-// unit tests check) one copy instead of four.
+// Every route uses (and the logic unit tests check) this one copy instead of four.
 const crypto = require('crypto');
 
 const hashPassword = (password) => {
@@ -16,6 +15,8 @@ const verifyPassword = (password, storedHash) => {
   const [salt, originalHash] = storedHash.split(':');
   const originalHashBuffer = Buffer.from(originalHash, 'hex');
   const inputHashBuffer = crypto.scryptSync(password, salt, 64);
+  // A damaged stored hash has the wrong length, so treat it as a wrong password.
+  if (originalHashBuffer.length !== inputHashBuffer.length) return false;
   return crypto.timingSafeEqual(originalHashBuffer, inputHashBuffer);
 };
 

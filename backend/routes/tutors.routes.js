@@ -3,6 +3,7 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { TUTOR_LIKE_ROLES } = require('../utils/roles');
+const { formatTutor, cleanTagList } = require('../utils/tutorRules');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -44,26 +45,7 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       [unitId, TUTOR_LIKE_ROLES]
     );
 
-    const tutors = result.rows.map(t => ({
-      id: t.id,
-      name: t.name,
-      email: t.email,
-      avatarUrl: t.avatar_url,
-      phoneNumber: t.phone_number,
-      workExperience: t.work_experience,
-      maximumHours: t.maximum_hours,
-      contractType: t.contract_type,
-      role: t.membership_role || 'tutor',
-      isSuperTutor: t.membership_role === 'super_tutor',
-      priorityTag: t.priority_tag || 'Standard',
-      internalNotes: t.internal_notes || '',
-      tags: t.tags || [],
-      earlyAccess: t.early_access || false,
-      starred: t.starred || false,
-      flagged: t.flagged || false
-    }));
-
-    res.json(tutors);
+  res.json(result.rows.map(formatTutor));
   } catch (error) {
     console.error('Error fetching tutors:', error);
     res.status(500).json({ error: 'Failed to fetch tutors' });
@@ -78,9 +60,7 @@ router.put('/:tutorId/marker', verifyToken, requireRole('coordinator'), async (r
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const { priorityTag, internalNotes, tags } = req.body;
-    const cleanTags = Array.isArray(tags)
-      ? tags.map(t => t.trim()).filter(t => t.length > 0)
-      : [];
+    const cleanTags = cleanTagList(tags);
 
     const result = await pool.query(
       `

@@ -1,7 +1,6 @@
-// Frontend link base, moved here unchanged.
-// admin, cover and requests routes all used this version:
+// Frontend link base. A trailing "/" is removed so links never end up with "//".
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-// jobs.routes.js used this version (does not remove a trailing "/"):
-const jobsFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:3000';
+// The reminder job uses the same link base as every other route.
+const jobsFrontendUrl = frontendUrl;
 
 module.exports = { frontendUrl, jobsFrontendUrl };

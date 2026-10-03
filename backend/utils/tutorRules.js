@@ -1,4 +1,4 @@
-// Moved here unchanged from tutors.routes.js.
+// Tutor list formatting and tag cleanup used by tutors.routes.js.
 const formatTutor = (t) => ({
   id: t.id,
   name: t.name,
@@ -18,8 +18,10 @@ const formatTutor = (t) => ({
   flagged: t.flagged || false
 });
 
+// Keep only text tags, trimmed, with empty ones removed. A tag that is not
+// text (for example a number) is skipped instead of crashing the save.
 const cleanTagList = (tags) => (Array.isArray(tags)
-  ? tags.map(t => t.trim()).filter(t => t.length > 0)
+  ? tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => t.length > 0)
   : []);
 
 module.exports = { formatTutor, cleanTagList };
