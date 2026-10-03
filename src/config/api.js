@@ -44,6 +44,7 @@ const getAvailabilityCacheKey = (unitCode) => {
 };
 
 const clearAvailabilityCache = (unitCode) => {
+  clearDashboardCache();
   if (unitCode) {
     availabilityCache.delete(getAvailabilityCacheKey(unitCode));
     return;
@@ -67,6 +68,7 @@ const assignedSessionsCache = new Map();
 const getSessionsCacheKey = (unitId) => String(unitId || '');
 
 const clearSessionsCache = (unitId) => {
+  clearDashboardCache();
   if (unitId) {
     const cacheKey = getSessionsCacheKey(unitId);
     sessionsCache.delete(cacheKey);
@@ -133,6 +135,13 @@ const clearProfileCache = () => {
 const DASHBOARD_CACHE_TTL_MS = 30000;
 let ucDashboardCache = null;
 let tutorDashboardCache = null;
+
+// Sessions, requests and availability all feed the dashboard numbers, so
+// any change to them should make the dashboard fetch fresh numbers.
+const clearDashboardCache = () => {
+  ucDashboardCache = null;
+  tutorDashboardCache = null;
+};
 
 const NOTIFICATIONS_CACHE_TTL_MS = 15000;
 let notificationsCache = null;

@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { isUnitActive } = require('../utils/normalise');
+const { countDashboardUnits } = require('../utils/dashboardRules');
 
 const router = express.Router();
 
@@ -25,7 +26,9 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
       WHERE u.id IN (
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
-        SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
+        SELECT s.unit_id FROM session_tutors st
+        JOIN sessions s ON s.id = st.session_id
+        WHERE st.tutor_id = $1
         UNION
         SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
       )
@@ -45,8 +48,11 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
         [tutorId, unit.id]
       );
       const assignedResult = await pool.query(
-        'SELECT COUNT(*) FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2',
-        [tutorId, unit.id]
+        // Count sessions given to this tutor, leaving out ones they turned down.
+        `SELECT COUNT(*) FROM session_tutors st
+         JOIN sessions s ON s.id = st.session_id
+         WHERE st.tutor_id = $1 AND s.unit_id = $2
+           AND st.tutor_confirmed IS DISTINCT FROM FALSE`,        [tutorId, unit.id]
       );
 
       return {
@@ -61,11 +67,12 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
     }));
 
     const totalSessionsResult = await pool.query(
-      'SELECT COUNT(*) FROM sessions WHERE assigned_tutor_id = $1',
+      `SELECT COUNT(*) FROM session_tutors
+       WHERE tutor_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`,
       [tutorId]
     );
     const confirmedSessionsResult = await pool.query(
-      'SELECT COUNT(*) FROM sessions WHERE assigned_tutor_id = $1 AND tutor_confirmed = TRUE',
+      'SELECT COUNT(*) FROM session_tutors WHERE tutor_id = $1 AND tutor_confirmed = TRUE',
       [tutorId]
     );
     const pendingRequestsResult = await pool.query(
@@ -76,8 +83,7 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
     res.json({
       unitStatuses,
       totalUnits: unitsResult.rows.length,
-      activeUnitCount: unitStatuses.filter(u => u.isActive).length,
-      availabilitySubmittedCount: unitStatuses.filter(u => u.availabilitySubmitted).length,
+      ...countDashboardUnits(unitStatuses),
       totalSessions: parseInt(totalSessionsResult.rows[0].count, 10),
       confirmedSessions: parseInt(confirmedSessionsResult.rows[0].count, 10),
       pendingRequestsCount: parseInt(pendingRequestsResult.rows[0].count, 10)
@@ -119,8 +125,10 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       const unassignedResult = await pool.query(
         `SELECT COUNT(*) FROM sessions s
         WHERE s.unit_id = $1
-          AND NOT EXISTS (SELECT 1 FROM session_tutors st WHERE st.session_id = s.id)
-        `,
+          AND NOT EXISTS (
+            SELECT 1 FROM session_tutors st
+            WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
+          )        `,
         [unit.id]
       );
   
@@ -165,8 +173,11 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
         `
         SELECT COUNT(*) FROM sessions s
         WHERE s.unit_id = ANY($1::uuid[])
-          AND NOT EXISTS (SELECT 1 FROM session_tutors st WHERE st.session_id = s.id)
-        `,
+          AND NOT EXISTS (
+            -- A tutor who turned the session down no longer counts as covering it.
+            SELECT 1 FROM session_tutors st
+            WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
+          )        `,
         [unitIds]
       );
       unassignedSessions = parseInt(unassignedSessionsResult.rows[0].count, 10);
@@ -188,7 +199,7 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
     res.json({
       unitStatuses,
       totalUnits: unitsResult.rows.length,
-      activeUnitCount: unitStatuses.filter(u => u.isActive).length,
+      activeUnitCount: countDashboardUnits(unitStatuses).activeUnitCount,
       pendingRequestsCount,
       totalSessions,
       unassignedSessions,
