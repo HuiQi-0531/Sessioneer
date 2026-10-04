@@ -233,4 +233,55 @@ defineApiCases('API admin jobs bot', (add) => {
     expect(res.body.reply).toMatch(/API101/);
     global.fetch = originalFetch;
   });
+
+  add('API-AD01 admin session edit refuses an end time before the start', async (ctx) => {
+    expect((await api('put', `/admin/sessions/${ctx.s.open}`, ctx.tokens.admin, adminSession(ctx, { startTime: '11:00', endTime: '10:00' }))).status).toBe(400);
+  });
+
+  add('API-AD02 admin cannot move a staffed session onto its tutor\'s other session', async (ctx) => {
+    // tutor holds WED 11-12 (held) and is put on TUE 09-10 (open2); moving open2 to WED 11-12 must fail
+    await query('UPDATE users SET maximum_hours = 10 WHERE id = $1', [ctx.u.tutor.id]);
+    await query('INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES ($1, $2, TRUE)', [ctx.s.open2, ctx.u.tutor.id]);
+    const res = await api('put', `/admin/sessions/${ctx.s.open2}`, ctx.tokens.admin, adminSession(ctx, { day: 'WED', startTime: '11:00', endTime: '12:00' }));
+    expect(res.status).toBe(409);
+    expect((await query('SELECT day FROM sessions WHERE id = $1', [ctx.s.open2])).rows[0].day).toBe('TUE');
+  });
+
+  add('API-AD03 admin assignment writes to session_tutors and appears on the UC timetable', async (ctx) => {
+    expect((await api('post', `/admin/sessions/${ctx.s.lecture}/assignments`, ctx.tokens.admin, { tutorId: ctx.u.super.id })).status).toBe(201);
+    const row = (await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.uc)).body.find(s => s.id === ctx.s.lecture);
+    expect(row.tutors.map(t => t.tutorId)).toEqual([ctx.u.super.id]);
+  });
+
+  add('API-AD04 admin assignment refuses a cross-unit clash', async (ctx) => {
+    await query(`INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor')`, [ctx.unitB.id, ctx.u.other.id]);
+    await query('INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES ($1, $2, TRUE)', [ctx.s.unitB, ctx.u.other.id]);
+    expect((await api('post', `/admin/sessions/${ctx.s.open}/assignments`, ctx.tokens.admin, { tutorId: ctx.u.other.id })).status).toBe(409);
+  });
+
+  add('API-AD05 the bot only counts availability submitted for THAT unit', async (ctx) => {
+    // tutor submits for unit B only; they must still be listed as missing for API101
+    await query(`INSERT INTO availability (tutor_id, unit_id, day, start_time, end_time, preference, is_submitted, submitted_at)
+                 VALUES ($1, $2, 'MON', '09:00', '10:00', 'preferred', TRUE, NOW())`, [ctx.u.tutor.id, ctx.unitB.id]);
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ message: { tool_calls: [{ function: { name: 'list_unsubmitted_tutors', arguments: { unitCode: 'API101' } } }] } })
+    }));
+    const res = await api('post', '/bot/chat', ctx.tokens.uc, { message: 'who is missing availability?' });
+    global.fetch = originalFetch;
+    expect(res.body.reply).toMatch(/tutor Test/);
+  });
+
+  add('API-AD06 the bot accepts tool arguments sent as a JSON string', async (ctx) => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ message: { tool_calls: [{ function: { name: 'list_unsubmitted_tutors', arguments: '{"unitCode":"API101"}' } }] } })
+    }));
+    const res = await api('post', '/bot/chat', ctx.tokens.uc, { message: 'who is missing availability?' });
+    global.fetch = originalFetch;
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/API101/);
+  });
 });

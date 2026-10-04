@@ -314,10 +314,10 @@ const TutorAvailability = () => {
     try {
       if (isAllUnitsMode) {
         await Promise.all(
-          openTutorUnits.map(unit => availabilityAPI.submit(unit.unitCode, availabilityData))
+          openTutorUnits.map(unit => availabilityAPI.submit(unit.unitCode, availabilityData, unit.id))
         );
       } else {
-        await availabilityAPI.submit(selectedUnit.unitCode, availabilityData);
+        await availabilityAPI.submit(selectedUnit.unitCode, availabilityData, selectedUnit.id);
       }
       localStorage.setItem(storageKey, JSON.stringify(availabilityData));
 

@@ -1,4 +1,4 @@
-// Bot logic moved here unchanged from bot.routes.js.
+// Bot rules used by bot.routes.js.
 const { OVERVIEW, searchKnowledge } = require('../bot/knowledge');
 
 // How the bot should behave. The facts about Sessioneer come from

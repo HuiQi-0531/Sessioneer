@@ -20,11 +20,13 @@ const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_
   return `${hour}am`;
 });
 
+// Same rule as Finalise on the backend: a session only counts as confirmed
+// when every tutor on it has accepted. One tutor still to answer = pending.
 const getSessionState = (session) => {
   const tutors = session.tutors || [];
   if (tutors.length === 0) return 'unassigned';
-  const anyConfirmed = tutors.some(t => t.confirmed === true);
-  return anyConfirmed ? 'confirmed' : 'pending';
+  const allConfirmed = tutors.every(t => t.confirmed === true);
+  return allConfirmed ? 'confirmed' : 'pending';
 };
 
 const getTutorDisplayLines = (session) => {
@@ -32,6 +34,38 @@ const getTutorDisplayLines = (session) => {
   if (tutors.length === 0) return ['Unassigned'];
   return tutors.map(t => t.confirmed === true ? t.tutorName : `${t.tutorName} (pending)`);
 };
+
+// Each tutor holding the session, with whether they have answered yet.
+const TutorStatusPills = ({ session }) => (
+  <div className="sb-pill-row">
+    {(session.tutors || []).map(t => (
+      <span
+        key={t.tutorId}
+        className={`sb-assigned-pill ${t.confirmed === true ? 'confirmed' : 'pending'}`}
+        title={t.confirmed === true ? 'Accepted' : 'Waiting for the tutor to accept or decline'}
+      >
+        {t.tutorName}
+        <span className="sb-pill-status">{t.confirmed === true ? 'Confirmed' : 'Awaiting'}</span>
+      </span>
+    ))}
+  </div>
+);
+
+// Who declined this session and why, so the UC does not have to dig
+// through notifications to find out why a session is empty again.
+const DeclinedNotes = ({ session }) => (
+  <>
+    {(session.declinedTutors || []).map(t => (
+      <div key={t.tutorId} className="sb-declined-note">
+        Declined by {t.tutorName}{t.rejectReason ? `: "${t.rejectReason}"` : ''}
+      </div>
+    ))}
+  </>
+);
+
+// "Needs 1 more tutor" when a multi-tutor session is only partly staffed.
+const missingTutorCount = (session) =>
+  Math.max(0, Number(session.requiredTutors || 1) - (session.tutors || []).length);
 
 const ScheduleBuilder = () => {
   const { unitId: unitIdFromUrl } = useParams();
@@ -422,14 +456,14 @@ const renderThreeColorGrid = () => (
                 ) : (
                   <table className="sb-table">
                      <colgroup>
-                      <col style={{ width: '9%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '24%' }} />
+                      <col style={{ width: '12%' }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -439,7 +473,7 @@ const renderThreeColorGrid = () => (
                         <th>Location</th>
                         <th>Type</th>
                         <th>Capacity</th>
-                        <th></th>
+                        <th>Status</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -461,7 +495,9 @@ const renderThreeColorGrid = () => (
                                </span>
                              )}
                            </td>
-                           <td></td>
+                           <td className="sb-td-status">
+                             <DeclinedNotes session={session} />
+                           </td>
                            <td>
                              <button
                                className="sb-assign-btn"
@@ -486,14 +522,14 @@ const renderThreeColorGrid = () => (
                 ) : (
                   <table className="sb-table">
                     <colgroup>
-                      <col style={{ width: '9%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '24%' }} />
+                      <col style={{ width: '12%' }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -525,12 +561,15 @@ const renderThreeColorGrid = () => (
                                </span>
                              )}
                            </td>
-                           <td>
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                               {(session.tutors || []).map(t => (
-                                 <span key={t.tutorId} className="sb-assigned-pill">{t.tutorName}</span>
-                               ))}
-                             </div>                            </td>
+                           <td className="sb-td-status">
+                              <TutorStatusPills session={session} />
+                              {missingTutorCount(session) > 0 && (
+                                <div className="sb-needs-more">
+                                  Needs {missingTutorCount(session)} more tutor{missingTutorCount(session) === 1 ? '' : 's'}
+                                </div>
+                              )}
+                              <DeclinedNotes session={session} />
+                            </td>
                             <td>
                              {!isLocked && (
                                <button className="sb-change-link" onClick={() => openAssignModal(session)}>
@@ -656,6 +695,13 @@ const renderThreeColorGrid = () => (
                         {isTopPick && <span className="sb-priority-badge preferred">Top Pick</span>}
                       </div>
                       <div className="sb-candidate-warnings">
+                        {(modalSession.declinedTutors || [])
+                          .filter(d => d.tutorId === candidate.id)
+                          .map(d => (
+                            <span key="declined" className="sb-warning-text">
+                              Declined this session{d.rejectReason ? `: "${d.rejectReason}"` : ''}
+                            </span>
+                          ))}
                         {candidate.allPreferred && (
                           <span className="sb-availability-text">Marked this whole time as preferred</span>
                         )}

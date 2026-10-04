@@ -1,7 +1,11 @@
-// Registration logic moved here unchanged from auth.routes.js.
+// Registration rules used by auth.routes.js.
 const { splitDisplayName } = require('./userNames');
+const { isValidPassword } = require('./passwords');
 
-const normaliseRegisterRole = (role) => (role === 'Coordinator' ? 'coordinator' : 'tutor');
+// Only "coordinator" (any capitalisation) registers a coordinator. Anything
+// else, including "admin", registers a tutor: admins are never self-made.
+const normaliseRegisterRole = (role) =>
+  (String(role || '').trim().toLowerCase() === 'coordinator' ? 'coordinator' : 'tutor');
 
 // First/last name from the register form; older forms sent one fullName instead.
 const resolveRegisterName = (firstName, lastName, fullName) => {
@@ -12,4 +16,24 @@ const resolveRegisterName = (firstName, lastName, fullName) => {
   };
 };
 
-module.exports = { normaliseRegisterRole, resolveRegisterName };
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isValidEmail = (email) => EMAIL_PATTERN.test(String(email || '').trim());
+
+// All register checks in order. Returns the error message or null.
+const validateRegistration = ({ firstName, lastName, email, role, password, confirmPassword }) => {
+  if (!firstName || !lastName || !email || !role || !password || !confirmPassword) {
+    return 'Please fill in all fields';
+  }
+  if (!isValidEmail(email)) {
+    return 'Please enter a valid email address';
+  }
+  if (password !== confirmPassword) {
+    return 'Passwords do not match';
+  }
+  if (!isValidPassword(password)) {
+    return 'Password must be at least 6 characters';
+  }
+  return null;
+};
+
+module.exports = { normaliseRegisterRole, resolveRegisterName, isValidEmail, validateRegistration };

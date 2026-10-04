@@ -68,7 +68,56 @@ const shareAnyUnit = async (userIdA, userIdB, clientOrPool = pool) => {
   return result.rows.length > 0;
 };
 
+// Finds the unit a request is about. unitId wins. A unit code is not unique
+// (the same code is reused every semester, and two coordinators can both
+// run "CAB201"), so a code is matched to the newest unit the user belongs
+// to, falling back to the newest unit with that code.
+const resolveUnitForUser = async ({ unitId, unitCode }, userId, clientOrPool = pool) => {
+  if (unitId) {
+    const byId = await clientOrPool.query(
+      'SELECT id, unit_code, unit_name, unit_coordinator_id, availability_locked, availability_deadline FROM units WHERE id = $1',
+      [unitId]
+    );
+    return byId.rows[0] || null;
+  }
+  if (!unitCode) return null;
+  const result = await clientOrPool.query(
+    `
+    SELECT u.id, u.unit_code, u.unit_name, u.unit_coordinator_id, u.availability_locked, u.availability_deadline,
+           (u.id IN (${LINKED_UNITS_SQL.replace(/\$1/g, '$$2')})) AS is_linked
+    FROM units u
+    WHERE UPPER(TRIM(u.unit_code)) = UPPER(TRIM($1))
+    ORDER BY is_linked DESC, u.year DESC, u.created_at DESC
+    LIMIT 1
+    `,
+    [unitCode, userId]
+  );
+  return result.rows[0] || null;
+};
+
+// True when the user is on the unit as a tutor/super tutor: a membership,
+// submitted availability, or an assignment in session_tutors.
+const isTutorLinkedToUnit = async (userId, unitId, clientOrPool = pool) => {
+  if (!userId || !unitId) return false;
+  const result = await clientOrPool.query(
+    `
+    SELECT 1 WHERE EXISTS (
+      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role IN ('tutor', 'super_tutor')
+      UNION
+      SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
+      UNION
+      SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id
+      WHERE st.tutor_id = $1 AND s.unit_id = $2
+    )
+    `,
+    [userId, unitId]
+  );
+  return result.rows.length > 0;
+};
+
 module.exports = {
+  resolveUnitForUser,
+  isTutorLinkedToUnit,
   ensureUnitMembership,
   getCoordinatorUnitId,
   isUserLinkedToUnit,

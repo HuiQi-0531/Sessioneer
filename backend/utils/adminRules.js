@@ -1,4 +1,4 @@
-// Admin logic moved here unchanged from admin.routes.js.
+// Admin logic used by admin.routes.js.
 const { formatUserNameFields, joinUserName } = require('./userNames');
 
 const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor']);

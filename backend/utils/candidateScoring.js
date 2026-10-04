@@ -1,8 +1,8 @@
-// Tutor ranking for "Assign Staff" (was inline in GET /units/:unitId/sessions/:sessionId/candidates).
-// Moved here unchanged so it can be unit tested.
+// Tutor ranking for "Assign Staff", used by GET /units/:unitId/sessions/:sessionId/candidates.
 const { sessionDurationHours, timeRangesOverlap, timeToSlot } = require('./normalise');
+const { findCoverConflicts, describeCoverConflict } = require('./allocationRules');
 
-const scoreCandidate = (tutor, { session, coveredSlots, thisDuration, availRows, otherSessions, sessionNeedsSuperTutor, currentTutorIds }) => {
+const scoreCandidate = (tutor, { session, coveredSlots, thisDuration, availRows, otherSessions, sessionNeedsSuperTutor, currentTutorIds, activeCovers = [] }) => {
   const isCoordinatorCandidate = tutor.membership_role === 'coordinator';
   const tutorAvail = availRows.filter(a => a.tutor_id === tutor.id);
   const slotPreferences = coveredSlots.map(slot => {
@@ -37,7 +37,11 @@ const scoreCandidate = (tutor, { session, coveredSlots, thisDuration, availRows,
   const isSuperTutor = tutor.membership_role === 'super_tutor';
   const notEligibleForType = !isCoordinatorCandidate && sessionNeedsSuperTutor && !isSuperTutor;
 
-  const hardBlocked = conflict || overMaxHours || notEligibleForType;
+  // A cover the tutor is doing right now at the same time also blocks them.
+  const coverConflicts = findCoverConflicts(session, activeCovers.filter(c => c.tutor_id === tutor.id));
+  const coverConflict = coverConflicts.length > 0;
+
+  const hardBlocked = conflict || coverConflict || overMaxHours || notEligibleForType;
   const warnings = [];
   if (notEligibleForType) warnings.push(`Only Super Tutors can be assigned to ${session.session_type} sessions`);
   if (confirmedConflict) {
@@ -45,6 +49,7 @@ const scoreCandidate = (tutor, { session, coveredSlots, thisDuration, availRows,
   } else if (tentativeConflict) {
     warnings.push(`Tentatively assigned to an overlapping session in ${conflictUnitCodes.join(', ')} — awaiting their confirmation`);
   }
+  if (coverConflict) warnings.push(describeCoverConflict(coverConflicts[0]));
   if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
   if (hasAvoid) warnings.push('Marked "avoid" for this time');
   if (isCoordinatorCandidate) warnings.push('Unit coordinator assignment; availability not required');
@@ -80,6 +85,7 @@ const scoreCandidate = (tutor, { session, coveredSlots, thisDuration, availRows,
     allKnown,
     hardBlocked,
     tentativeConflict,
+    coverConflict,
     warnings,
     isAssignedToThisSession: currentTutorIds.has(tutor.id),
     score

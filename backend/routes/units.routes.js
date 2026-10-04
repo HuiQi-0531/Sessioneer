@@ -1,72 +1,22 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { isUnitActive } = require('../utils/normalise');
 const { createNotification } = require('../utils/notify');
 const { ensureUnitMembership, getCoordinatorUnitId } = require('../utils/unitAccess');
 
 const router = express.Router();
 
-const formatUnit = (u) => ({
-  id: u.id,
-  unitCode: u.unit_code,
-  unitName: u.unit_name,
-  semester: u.semester,
-  year: u.year,
-  campus: u.campus,
-  deliveryMode: u.delivery_mode,
-  enrolmentSize: u.enrolment_size,
-  availabilityDeadline: u.availability_deadline,
-  availabilityLocked: u.availability_locked,
-  scheduleLocked: u.schedule_locked || false,
-  scheduleLockedAt: u.schedule_locked_at || null,
-  draftReleased: u.draft_released || false,
-  isActive: isUnitActive(u.semester, u.year)
-});
-
-const formatUnitAccess = (u) => ({
-  ...formatUnit(u),
-  roles: u.roles || []
-});
-
-const normaliseUnitCode = (unitCode) => String(unitCode || '').trim().toUpperCase();
-
-const normaliseEmails = (emails) => {
-  if (!Array.isArray(emails)) return [];
-
-  return [...new Set(
-    emails
-      .map(email => String(email || '').trim().toLowerCase())
-      .filter(Boolean)
-  )];
-};
-
-const loadCoordinatorUsersByEmail = async (emails, currentUserEmail = null, clientOrPool = pool) => {
-  const cleanEmails = normaliseEmails(emails)
-    .filter(email => email !== String(currentUserEmail || '').trim().toLowerCase());
-
-  if (cleanEmails.length === 0) {
-    return { users: [], missingEmails: [], nonCoordinatorEmails: [] };
-  }
-
-  const result = await clientOrPool.query(
-    `
-    SELECT id, name, last_name, email, role
-    FROM users
-    WHERE LOWER(email) = ANY($1::text[])
-    `,
-    [cleanEmails]
-  );
-
-  const foundByEmail = new Map(result.rows.map(user => [user.email.toLowerCase(), user]));
-  const missingEmails = cleanEmails.filter(email => !foundByEmail.has(email));
-  const nonCoordinatorEmails = result.rows
-    .filter(user => user.role !== 'coordinator')
-    .map(user => user.email);
-  const users = result.rows.filter(user => user.role === 'coordinator');
-
-  return { users, missingEmails, nonCoordinatorEmails };
-};
+const {
+  formatUnit,
+  formatUnitAccess,
+  normaliseUnitCode,
+  loadCoordinatorUsersByEmail,
+  canLockSchedule,
+  resolveDuplicateUnitName,
+  SCHEDULE_READINESS_SQL,
+  summariseScheduleReadiness,
+  deleteUnitCascade
+} = require('../utils/unitRules');
 
 const findDuplicateUnit = async ({ coordinatorId, unitCode, semester, year, excludeUnitId = null }) => {
   const params = [coordinatorId, normaliseUnitCode(unitCode), semester, year];
@@ -122,7 +72,7 @@ router.get('/my-units', verifyToken, requireRole('tutor', 'coordinator'), async 
         UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
-        SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
+        SELECT s.unit_id FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1
       )
       ORDER BY u.year DESC, u.semester DESC
       `,
@@ -548,14 +498,17 @@ router.post('/:id/coordinators', verifyToken, requireRole('coordinator'), async 
 router.delete('/:id', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      'DELETE FROM units WHERE id = $1 AND unit_coordinator_id = $2 RETURNING id',
+    const owner = await pool.query(
+      'SELECT id FROM units WHERE id = $1 AND unit_coordinator_id = $2',
       [id, req.user.id]
     );
-
-    if (result.rows.length === 0) {
+    if (owner.rows.length === 0) {
       return res.status(404).json({ error: 'Unit not found' });
     }
+
+    // Several older tables point at units/sessions without ON DELETE CASCADE,
+    // so the unit's rows are removed child-first inside one transaction.
+    await deleteUnitCascade(pool, id);
 
     res.json({ success: true, message: 'Unit deleted successfully' });
   } catch (error) {
@@ -578,18 +531,14 @@ router.patch('/:id/lock-schedule', verifyToken, requireRole('coordinator'), asyn
     const coordinatorUnitId = await getCoordinatorUnitId(id, req.user.id);
     if (!coordinatorUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const unassignedResult = await pool.query(
-      'SELECT COUNT(*) FROM sessions WHERE unit_id = $1 AND is_assigned = FALSE',
-      [id]
-    );
-    const pendingResult = await pool.query(
-      'SELECT COUNT(*) FROM sessions WHERE unit_id = $1 AND is_assigned = TRUE AND tutor_confirmed IS NOT TRUE',
-      [id]
-    );
-    const unassignedCount = parseInt(unassignedResult.rows[0].count, 10);
-    const pendingCount = parseInt(pendingResult.rows[0].count, 10);
+    // Readiness is read from session_tutors (the one assignment table):
+    // a session is "unassigned" while it has fewer active (pending or
+    // confirmed) tutors than it needs, and "pending" while any of its
+    // tutors has not answered yet.
+    const readinessResult = await pool.query(SCHEDULE_READINESS_SQL, [id]);
+    const { unassignedCount, pendingCount } = summariseScheduleReadiness(readinessResult.rows);
 
-    if (!force && (unassignedCount > 0 || pendingCount > 0)) {
+    if (!canLockSchedule(unassignedCount, pendingCount, force)) {
       return res.status(409).json({
         error: 'Schedule is not fully ready yet',
         unassignedCount,
@@ -785,7 +734,7 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
     const source = sourceResult.rows[0];
 
     const nextUnitCode = normaliseUnitCode(unitCode || source.unit_code);
-    const nextUnitName = (unitName || source.unit_name || '').trim() || source.unit_name;
+    const nextUnitName = resolveDuplicateUnitName(unitName, source.unit_name);
 
     const duplicateUnit = await findDuplicateUnit({
       coordinatorId: req.user.id,
@@ -836,40 +785,20 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
         [newUnitId, id]
       );
 
-      // Copy sessions. Column list is read from information_schema at
-      // runtime rather than hardcoded, since the exact sessions schema
-      // wasn't available when this was written -- swap this block for a
-      // fixed column list once confirmed. Assignment/confirmation columns
-      // (is_assigned, assigned_tutor_id, tutor_confirmed, id, unit_id,
-      // created_at, updated_at) are excluded so each copied session starts
-      // unassigned in the new unit, even though tutors were carried over.
-      const EXCLUDED_SESSION_COLUMNS = [
-        'id', 'unit_id', 'is_assigned', 'assigned_tutor_id',
-        'tutor_confirmed', 'created_at', 'updated_at'
-      ];
-      const columnsResult = await client.query(
+      // Copy the timetable only. Assignments live in session_tutors and are
+      // deliberately not copied, so every copied session starts unassigned.
+      await client.query(
         `
-        SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'sessions'
-          AND column_name != ALL($1::text[])
-        ORDER BY ordinal_position
+        INSERT INTO sessions
+          (unit_id, day, start_time, end_time, location, campus, session_type,
+           capacity, required_tutors, status, staff_note, session_code)
+        SELECT $1, day, start_time, end_time, location, campus, session_type,
+               capacity, required_tutors, status, staff_note, session_code
+        FROM sessions
+        WHERE unit_id = $2
         `,
-        [EXCLUDED_SESSION_COLUMNS]
+        [newUnitId, id]
       );
-      const sessionColumns = columnsResult.rows.map(r => r.column_name);
-
-      if (sessionColumns.length > 0) {
-        const colList = sessionColumns.map(c => `"${c}"`).join(', ');
-        await client.query(
-          `
-          INSERT INTO sessions (unit_id, ${colList})
-          SELECT $1, ${colList}
-          FROM sessions
-          WHERE unit_id = $2
-          `,
-          [newUnitId, id]
-        );
-      }
 
       await client.query('COMMIT');
       res.status(201).json(formatUnit(insertResult.rows[0]));

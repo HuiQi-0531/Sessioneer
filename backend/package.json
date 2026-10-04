@@ -6,9 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "db:migrate": "node scripts/migrate.js",
     "json-server": "json-server --watch db.json --port 5000",
-    "test:rbac": "jest --runInBand --config jest.rbac.config.js",
-    "test:logic": "jest --config jest.logic.config.js"
+    "test": "npm run test:logic && npm run test:api && npm run test:integration && npm run test:rbac",
+    "test:logic": "jest --config jest.logic.config.js",
+    "test:api": "jest --runInBand --config jest.api.config.js",
+    "test:integration": "jest --runInBand --config jest.integration.config.js",
+    "test:rbac": "jest --runInBand --config jest.rbac.config.js"
   },
   "keywords": [],
   "author": "",

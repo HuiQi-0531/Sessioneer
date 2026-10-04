@@ -3,15 +3,24 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const {
   normaliseDay,
-  normaliseTime,
   getHourlySlotsInRange,
-  sessionDurationHours,
-  timeRangesOverlap,
-  timeToSlot
+  sessionDurationHours
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
+const { scoreCandidate, sortCandidates } = require('../utils/candidateScoring');
+const {
+  findOverlappingSessions,
+  calcHoursIfAssigned,
+  exceedsMaxHours,
+  violatesSuperTutorRule,
+  findEditClash,
+  ACTIVE_COVERS_SQL,
+  findCoverConflicts,
+  describeCoverConflict
+} = require('../utils/allocationRules');
+const { findAcceptClash, checkSessionEdit } = require('../utils/sessionRules');
 
 const {
   suggestedTutorCount,
@@ -144,7 +153,21 @@ router.get('/', verifyToken, async (req, res) => {
             )
           ) FILTER (WHERE st.tutor_id IS NOT NULL),
           '[]'
-        ) AS tutors
+        ) AS tutors,
+        (
+          SELECT COALESCE(json_agg(json_build_object(
+            'coverRequestId', cr.id,
+            'claimedById', cr.claimed_by_id,
+            'claimedByName', TRIM(CONCAT(cu.name, ' ', COALESCE(cu.last_name, ''))),
+            'originalTutorId', cr.original_tutor_id,
+            'startDate', cb.start_date,
+            'endDate', cb.end_date
+          ) ORDER BY cb.start_date), '[]')
+          FROM cover_requests cr
+          JOIN cover_batches cb ON cb.id = cr.batch_id
+          LEFT JOIN users cu ON cu.id = cr.claimed_by_id
+          WHERE cr.session_id = s.id AND cr.status = 'claimed' AND cb.end_date >= CURRENT_DATE
+        ) AS active_covers
       FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id      
@@ -177,7 +200,8 @@ router.get('/', verifyToken, async (req, res) => {
 /**
  * GET /units/:unitId/sessions/my-assigned (tutor only)
  * The logged-in tutor's own assigned sessions in this unit, including
- * ones still awaiting their confirmation.
+ * ones still awaiting their confirmation. ?includeDeclined=true also returns
+ * the ones they declined (My Schedule shows those with the reason).
  */
 router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
@@ -202,7 +226,8 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
       WHERE s.unit_id = $1 AND s.id IN (
-        SELECT session_id FROM session_tutors WHERE tutor_id = $2 AND tutor_confirmed IS DISTINCT FROM false
+        SELECT session_id FROM session_tutors
+        WHERE tutor_id = $2 AND ($3::boolean OR tutor_confirmed IS DISTINCT FROM false)
       )
       GROUP BY s.id, un.unit_code      ORDER BY
         CASE s.day
@@ -211,7 +236,7 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
         END,
         s.start_time
       `,
-      [unitId, req.user.id]
+      [unitId, req.user.id, req.query.includeDeclined === 'true']
     );
 
     const formatted = result.rows.map(formatSessionRow);
@@ -287,8 +312,64 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;    const normalisedDay = day ? (normaliseDay(day) || day) : null;
-    
+    if (await isScheduleLocked(unitId)) {
+      return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
+    }
+
+    const { day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status } = req.body;
+    const normalisedDay = day ? (normaliseDay(day) || day) : null;
+
+    const currentResult = await pool.query(
+      `
+      SELECT s.*,
+        COUNT(st.id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM FALSE)::int AS assigned_count
+      FROM sessions s
+      LEFT JOIN session_tutors st ON st.session_id = s.id
+      WHERE s.id = $1 AND s.unit_id = $2
+      GROUP BY s.id
+      `,
+      [sessionId, unitId]
+    );
+    if (currentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const current = currentResult.rows[0];
+    const editError = checkSessionEdit(current, {
+      day: normalisedDay, startTime, endTime, sessionType, capacity, requiredTutors
+    });
+    if (editError) {
+      return res.status(editError.status).json({ error: editError.error });
+    }
+    if (current.assigned_count > 0 && sessionType && requiresSuperTutor(sessionType)) {
+      // Same rule as assigning: a plain Tutor cannot hold a Lecture/Consultation.
+      const ineligible = await pool.query(
+        `
+        SELECT 1
+        FROM session_tutors st
+        JOIN units un ON un.id = $2
+        WHERE st.session_id = $1
+          AND st.tutor_confirmed IS DISTINCT FROM FALSE
+          AND st.tutor_id <> un.unit_coordinator_id
+          AND NOT EXISTS (
+            SELECT 1 FROM unit_memberships um
+            WHERE um.unit_id = $2 AND um.user_id = st.tutor_id AND um.role IN ('super_tutor', 'coordinator')
+          )
+        LIMIT 1
+        `,
+        [sessionId, unitId]
+      );
+      if (ineligible.rows.length > 0) {
+        return res.status(409).json({ error: 'Unassign Tutors before changing this session to a lecture or consultation' });
+      }
+    }
+    if (current.assigned_count > 0) {
+      const clash = await findEditClash(
+        pool, sessionId,
+        normalisedDay || current.day, startTime || current.start_time, endTime || current.end_time
+      );
+      if (clash) return res.status(409).json({ error: clash });
+    }
+
     let sessionCode = undefined;
     if (req.body.sessionCode !== undefined) {
       sessionCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
@@ -549,98 +630,24 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [sessionId]
     );
 
-    const candidates = Array.from(candidateMap.values()).map(tutor => {
-      const isCoordinatorCandidate = tutor.membership_role === 'coordinator';
-      const tutorAvail = availResult.rows.filter(a => a.tutor_id === tutor.id);
-      const slotPreferences = coveredSlots.map(slot => {
-        const match = tutorAvail.find(a => timeToSlot(a.start_time) === slot);
-        return match ? match.preference : null;
-      });
+    const activeCoversResult = await pool.query(ACTIVE_COVERS_SQL, [null]);
 
-      const hasAnyAvailabilityData = isCoordinatorCandidate || tutorAvail.length > 0;
-      const hasAvoid = slotPreferences.includes('avoid');
-      const allPreferred = slotPreferences.length > 0 && slotPreferences.every(p => p === 'preferred');
-      const allKnown = slotPreferences.every(p => p !== null);
-
-            const overlappingSessions = otherSessionsResult.rows.filter(other =>
-        other.tutor_id === tutor.id &&
-        other.day === session.day &&
-        timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
-      );
-      const conflict = overlappingSessions.length > 0;
-      // A conflict where the OTHER assignment is still pending (not yet
-      // confirmed by the tutor) gets a distinct "tentative" warning, since
-      // it may resolve itself if the tutor declines that other session.
-      const tentativeConflict = overlappingSessions.some(other => other.tutor_confirmed === null);
-      const confirmedConflict = overlappingSessions.some(other => other.tutor_confirmed === true);
-      const conflictUnitCodes = [...new Set(overlappingSessions.map(other => other.unit_code))];
-
-      const existingHours = otherSessionsResult.rows
-        .filter(other => other.tutor_id === tutor.id)
-        .reduce((sum, other) => sum + sessionDurationHours(other.start_time, other.end_time), 0);
-      const hoursIfAssigned = existingHours + thisDuration;
-      const overMaxHours = tutor.maximum_hours != null && hoursIfAssigned > tutor.maximum_hours;
-
-      const isSuperTutor = tutor.membership_role === 'super_tutor';
-      const notEligibleForType = !isCoordinatorCandidate && sessionNeedsSuperTutor && !isSuperTutor;
-
-      const hardBlocked = conflict || overMaxHours || notEligibleForType;
-      const warnings = [];
-      if (notEligibleForType) warnings.push(`Only Super Tutors can be assigned to ${session.session_type} sessions`);
-      if (confirmedConflict) {
-        warnings.push(`Already confirmed on an overlapping session in ${conflictUnitCodes.join(', ')}`);
-      } else if (tentativeConflict) {
-        warnings.push(`Tentatively assigned to an overlapping session in ${conflictUnitCodes.join(', ')} — awaiting their confirmation`);
-      }
-      if (overMaxHours) warnings.push(`Would exceed max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`);
-      if (hasAvoid) warnings.push('Marked "avoid" for this time');
-      if (isCoordinatorCandidate) warnings.push('Unit coordinator assignment; availability not required');
-      if (!isCoordinatorCandidate && !hasAnyAvailabilityData) warnings.push('No availability submitted');
-      if ((tutor.priority_tag || 'Standard') === 'Risk') warnings.push('Flagged as risk');
-
-      let availabilityScore = 0;
-      slotPreferences.forEach(p => {
-        if (p === 'preferred') availabilityScore += 2;
-        else if (p === 'available') availabilityScore += 1;
-        else if (p === 'avoid') availabilityScore -= 2;
-      });
-
-      const priorityTag = isCoordinatorCandidate ? 'Coordinator' : (tutor.priority_tag || 'Standard');
-      const priorityBonus = {
-        Preferred: 2, Standard: 0, Backup: -1, Risk: -1, Coordinator: 0
-      }[priorityTag] || 0;
-
-      const score = availabilityScore + priorityBonus;
-
-            return {
-        id: tutor.id,
-        name: tutor.name,
-        email: tutor.email,
-        maximumHours: tutor.maximum_hours,
-        isSuperTutor,
-        roleLabel: isCoordinatorCandidate ? 'Unit Coordinator' : (isSuperTutor ? 'Super Tutor' : 'Tutor'),
-        priorityTag,
-        starred: tutor.starred || false,
-        flagged: tutor.flagged || false,
-        hoursIfAssigned,
-        allPreferred,
-        allKnown,
-        hardBlocked,
-        tentativeConflict,
-        warnings,
-        isAssignedToThisSession: currentTutorIds.has(tutor.id),
-        score
-      };
-    });
-
-    candidates.sort((a, b) => {
-        if (a.isAssignedToThisSession !== b.isAssignedToThisSession) return a.isAssignedToThisSession ? -1 : 1;
-      if (a.hardBlocked !== b.hardBlocked) return a.hardBlocked ? 1 : -1;
-      return b.score - a.score;
-    });
+    const scoringContext = {
+      activeCovers: activeCoversResult.rows,
+      session,
+      coveredSlots,
+      thisDuration,
+      availRows: availResult.rows,
+      otherSessions: otherSessionsResult.rows,
+      sessionNeedsSuperTutor,
+      currentTutorIds
+    };
+    const candidates = sortCandidates(
+      Array.from(candidateMap.values()).map(tutor => scoreCandidate(tutor, scoringContext))
+    );
 
     res.json({
-      session: formatSessionRow({ ...session, assigned_tutor_name: null }),
+      session: formatSessionRow(session),
       candidates
     });
   } catch (error) {
@@ -703,11 +710,11 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Staff member not found' });
     const tutor = tutorResult.rows[0];
 
-    if (!isCoordinatorSelfAssignment && requiresSuperTutor(session.session_type) && !tutor.is_super_tutor) {
+    if (violatesSuperTutorRule(session.session_type, tutor.is_super_tutor, isCoordinatorSelfAssignment)) {
       return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
     }
 
-        const otherSessionsResult = await pool.query(
+    const otherSessionsResult = await pool.query(
       `
       SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code
       FROM sessions s
@@ -718,22 +725,21 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       [sessionId, tutorId]
     );
 
-    const conflictingSession = otherSessionsResult.rows.find(other =>
-      other.day === session.day &&
-      timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
-    );
+    const [conflictingSession] = findOverlappingSessions(session, otherSessionsResult.rows);
     if (conflictingSession) {
       return res.status(409).json({
         error: `This tutor is already assigned to an overlapping session in ${conflictingSession.unit_code}`
       });
     }
 
-    const thisDuration = sessionDurationHours(session.start_time, session.end_time);
-    const existingHours = otherSessionsResult.rows
-      .reduce((sum, other) => sum + sessionDurationHours(other.start_time, other.end_time), 0);
-    const hoursIfAssigned = existingHours + thisDuration;
+    const coversResult = await pool.query(ACTIVE_COVERS_SQL, [tutorId]);
+    const [coverConflict] = findCoverConflicts(session, coversResult.rows);
+    if (coverConflict) {
+      return res.status(409).json({ error: `This tutor is ${describeCoverConflict(coverConflict).replace(/^C/, "c")}` });
+    }
 
-    if (tutor.maximum_hours != null && hoursIfAssigned > tutor.maximum_hours) {
+    const hoursIfAssigned = calcHoursIfAssigned(session, otherSessionsResult.rows);
+    if (exceedsMaxHours(tutor.maximum_hours, hoursIfAssigned)) {
       return res.status(409).json({
         error: `Assigning this tutor would exceed their max hours (${hoursIfAssigned}/${tutor.maximum_hours} hrs)`
       });
@@ -773,7 +779,21 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
             )
           ) FILTER (WHERE st.tutor_id IS NOT NULL),
           '[]'
-        ) AS tutors
+        ) AS tutors,
+        (
+          SELECT COALESCE(json_agg(json_build_object(
+            'coverRequestId', cr.id,
+            'claimedById', cr.claimed_by_id,
+            'claimedByName', TRIM(CONCAT(cu.name, ' ', COALESCE(cu.last_name, ''))),
+            'originalTutorId', cr.original_tutor_id,
+            'startDate', cb.start_date,
+            'endDate', cb.end_date
+          ) ORDER BY cb.start_date), '[]')
+          FROM cover_requests cr
+          JOIN cover_batches cb ON cb.id = cr.batch_id
+          LEFT JOIN users cu ON cu.id = cr.claimed_by_id
+          WHERE cr.session_id = s.id AND cr.status = 'claimed' AND cb.end_date >= CURRENT_DATE
+        ) AS active_covers
       FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
@@ -847,8 +867,22 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
             )
           ) FILTER (WHERE st.tutor_id IS NOT NULL),
           '[]'
-        ) AS tutors
-     FROM sessions s
+        ) AS tutors,
+        (
+          SELECT COALESCE(json_agg(json_build_object(
+            'coverRequestId', cr.id,
+            'claimedById', cr.claimed_by_id,
+            'claimedByName', TRIM(CONCAT(cu.name, ' ', COALESCE(cu.last_name, ''))),
+            'originalTutorId', cr.original_tutor_id,
+            'startDate', cb.start_date,
+            'endDate', cb.end_date
+          ) ORDER BY cb.start_date), '[]')
+          FROM cover_requests cr
+          JOIN cover_batches cb ON cb.id = cr.batch_id
+          LEFT JOIN users cu ON cu.id = cr.claimed_by_id
+          WHERE cr.session_id = s.id AND cr.status = 'claimed' AND cb.end_date >= CURRENT_DATE
+        ) AS active_covers
+      FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id
       WHERE s.id = $1
@@ -881,7 +915,7 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
 
     const sessionResult = await pool.query(
       `
-      SELECT s.* FROM sessions s
+      SELECT s.*, st.tutor_confirmed AS my_confirmation FROM sessions s
       JOIN session_tutors st ON st.session_id = s.id
       WHERE s.id = $1 AND s.unit_id = $2 AND st.tutor_id = $3
       `,
@@ -895,6 +929,42 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
     const confirmation = buildConfirmationUpdate(confirmed, reason);
     if (confirmation.error) {
       return res.status(400).json({ error: confirmation.error });
+    }
+
+    // A declined slot may already have been given to someone else, so a
+    // decline is final: the coordinator has to assign the tutor again.
+    if (session.my_confirmation === false) {
+      return res.status(409).json({ error: 'You already declined this session. Ask the coordinator to assign you again.' });
+    }
+
+    // Accepting is the last chance to stop a double booking that slipped in
+    // another way (two UCs at the same instant, an admin edit, a claimed
+    // cover). A tutor cannot accept a session that overlaps one they have
+    // already accepted, or a cover they are currently doing.
+    if (confirmation.confirmed) {
+      const commitments = await pool.query(
+        `
+        SELECT s.id AS session_id, s.day, s.start_time, s.end_time, un.unit_code,
+               NULL::date AS start_date, NULL::date AS end_date
+        FROM session_tutors st
+        JOIN sessions s ON s.id = st.session_id
+        JOIN units un ON un.id = s.unit_id
+        WHERE st.tutor_id = $1 AND st.tutor_confirmed = TRUE AND s.id <> $2
+        UNION ALL
+        SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code, cb.start_date, cb.end_date
+        FROM cover_requests cr
+        JOIN cover_batches cb ON cb.id = cr.batch_id
+        JOIN sessions s ON s.id = cr.session_id
+        JOIN units un ON un.id = s.unit_id
+        WHERE cr.claimed_by_id = $1 AND cr.status = 'claimed' AND cb.end_date >= CURRENT_DATE
+          AND s.id <> $2
+        `,
+        [req.user.id, sessionId]
+      );
+      const clash = findAcceptClash(session, commitments.rows);
+      if (clash) {
+        return res.status(409).json({ error: clash });
+      }
     }
 
     const result = await pool.query(
@@ -950,7 +1020,21 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
             )
           ) FILTER (WHERE st.tutor_id IS NOT NULL),
           '[]'
-        ) AS tutors
+        ) AS tutors,
+        (
+          SELECT COALESCE(json_agg(json_build_object(
+            'coverRequestId', cr.id,
+            'claimedById', cr.claimed_by_id,
+            'claimedByName', TRIM(CONCAT(cu.name, ' ', COALESCE(cu.last_name, ''))),
+            'originalTutorId', cr.original_tutor_id,
+            'startDate', cb.start_date,
+            'endDate', cb.end_date
+          ) ORDER BY cb.start_date), '[]')
+          FROM cover_requests cr
+          JOIN cover_batches cb ON cb.id = cr.batch_id
+          LEFT JOIN users cu ON cu.id = cr.claimed_by_id
+          WHERE cr.session_id = s.id AND cr.status = 'claimed' AND cb.end_date >= CURRENT_DATE
+        ) AS active_covers
       FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
       LEFT JOIN users u ON st.tutor_id = u.id

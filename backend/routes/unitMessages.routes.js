@@ -18,7 +18,7 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
       UNION
       SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
       UNION
-      SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+      SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1 AND s.unit_id = $2
     )
     `,
     [tutorId, unitId]
@@ -77,7 +77,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
           AND (
             EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $1)
-            OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $1)
+            OR EXISTS (SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = u.id AND s.unit_id = $1)
           )
         ORDER BY name
         `,
@@ -124,7 +124,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
           AND (
             EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $2 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $2)
-            OR EXISTS (SELECT 1 FROM sessions s WHERE s.assigned_tutor_id = u.id AND s.unit_id = $2)
+            OR EXISTS (SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = u.id AND s.unit_id = $2)
           )
         ORDER BY name
         `,

@@ -1,4 +1,4 @@
-// Reminder-job logic moved here unchanged from jobs.routes.js.
+// Reminder-job logic used by jobs.routes.js.
 
 const verifyCronSecret = (req, res, next) => {
   const configuredSecret = process.env.CRON_SECRET;

@@ -1,4 +1,4 @@
-// Moved here unchanged from notifications.routes.js.
+// Used by notifications.routes.js.
 const { joinUserName } = require('./userNames');
 
 const replaceEmailsWithNames = (content, users) => {

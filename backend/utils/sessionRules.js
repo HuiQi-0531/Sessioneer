@@ -1,7 +1,6 @@
-// Session logic moved here unchanged from sessions.routes.js and admin.routes.js
-// so it can be unit tested. The routes now call these functions.
+// Session rules used by sessions.routes.js and admin.routes.js.
 const { normaliseDay, normaliseTime } = require('./normalise');
-const { countWeekdayOccurrences } = require('./coverRules');
+const { countWeekdayOccurrences, findCoverClash } = require('./coverRules');
 
 // Same suggestion rule as the frontend (ScheduleBuilder.jsx): every 30
 // students triggers one more suggested tutor. Used as a fallback whenever a
@@ -143,8 +142,11 @@ const formatSessionRow = (s) => {
     tutors: activeTutors,
     declinedTutors,
     isAssigned: activeTutors.length > 0,
-    // Legacy fields kept for any frontend code not yet updated to use `tutors[]`.
-    // Reflects the first active (non-declined) tutor, if any.
+    // Claimed cover requests whose cover period has not ended yet. A cover
+    // is temporary, so it is shown here instead of changing tutors[].
+    activeCovers: s.active_covers || [],
+    // Convenience fields for screens that only show one tutor. They are
+    // derived from tutors[] (session_tutors), never from a separate column.
     assignedTutorId: activeTutors[0]?.tutorId || null,
     assignedTutorName: activeTutors[0]?.tutorName || null,
     tutorConfirmed: activeTutors[0]?.confirmed ?? null,
@@ -225,12 +227,52 @@ const checkAssignSlot = (existingRows, tutorId, sessionRequiredTutors) => {
   return null;
 };
 
+// Editing an existing session (PUT /units/:unitId/sessions/:sessionId).
+// `current` is the stored row plus assigned_count (active tutors); `changes`
+// holds only the fields sent. Returns { status, error } or null.
+const checkSessionEdit = (current, changes) => {
+  const start = changes.startTime || current.start_time;
+  const end = changes.endTime || current.end_time;
+  if (!endsAfterStart(start, end)) {
+    return { status: 400, error: 'End time must be after start time' };
+  }
+  if (changes.capacity !== undefined && changes.capacity !== null && changes.capacity !== '') {
+    const capacity = Number(changes.capacity);
+    if (!Number.isInteger(capacity) || capacity < 1) return { status: 400, error: 'Capacity must be at least 1' };
+  }
+  if (changes.requiredTutors !== undefined && changes.requiredTutors !== null && changes.requiredTutors !== '') {
+    const required = Number(changes.requiredTutors);
+    if (!Number.isInteger(required) || required < 1) return { status: 400, error: 'Tutor must be at least 1' };
+    if (required < Number(current.assigned_count || 0)) {
+      return { status: 409, error: 'Tutors required cannot be lower than the number already assigned' };
+    }
+  }
+  if (changes.day && !['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].includes(changes.day)) {
+    return { status: 400, error: 'Day must be a weekday such as MON' };
+  }
+  return null;
+};
+
+// Accepting a session: returns an error message when it overlaps another
+// session the tutor has already accepted (or a cover they are doing),
+// otherwise null. `commitments` rows have session_id, day, start_time,
+// end_time, unit_code and optional start_date/end_date (covers).
+const findAcceptClash = (session, commitments) => {
+  const target = { session_id: session.id, day: session.day, start_time: session.start_time, end_time: session.end_time };
+  const other = (commitments || []).find(c => Boolean(findCoverClash(target, [c])));
+  if (!other) return null;
+  return `You have already accepted an overlapping session in ${other.unit_code}. Decline one of them first.`;
+};
+
 module.exports = {
   STUDENTS_PER_TUTOR,
+  findAcceptClash,
+  checkSessionEdit,
   suggestedTutorCount,
   codePrefixForType,
   nextSessionCode,
   isBlank,
+  endsAfterStart,
   getMissingSessionFields,
   getMissingAdminSessionFields,
   validateSessionInput,

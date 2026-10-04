@@ -131,4 +131,41 @@ defineApiCases('API units', (add) => {
   add('my-access loads for a user with no unit', async (ctx) => {
     expect((await api('get', '/units/my-access', ctx.tokens.outsider)).status).toBe(200);
   });
+  add('API-U01 deleting a unit removes its sessions, assignments, availability, covers and requests', async (ctx) => {
+    await api('post', '/availability/submit', ctx.tokens.tutor, { unitCode: 'API101', slots: { 'Monday-9:00am': 'preferred' } });
+    await api('post', '/uc/cover-requests', ctx.tokens.uc, { sessionIds: [ctx.s.held], startDate: '2026-10-05', endDate: '2026-10-06' });
+    await query(`INSERT INTO change_requests (tutor_id, unit_id, request_type, reason, status, current_session_id)
+                 VALUES ($1, $2, 'Session Swap', 'x', 'Pending', $3)`, [ctx.u.tutor.id, ctx.unitA.id, ctx.s.held]);
+    expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc)).status).toBe(200);
+    for (const [table, col] of [['sessions', 'unit_id'], ['availability', 'unit_id'], ['cover_requests', 'unit_id'], ['change_requests', 'unit_id']]) {
+      expect((await query(`SELECT 1 FROM ${table} WHERE ${col} = $1`, [ctx.unitA.id])).rows).toHaveLength(0);
+    }
+    expect((await query('SELECT 1 FROM session_tutors WHERE session_id = $1', [ctx.s.held])).rows).toHaveLength(0);
+    expect((await query('SELECT 1 FROM units WHERE id = $1', [ctx.unitB.id])).rows).toHaveLength(1);
+  });
+  add('API-U02 a duplicated unit starts with no assignments', async (ctx) => {
+    const copy = await api('post', `/units/${ctx.unitA.id}/duplicate`, ctx.tokens.uc, { semester: 'Semester 1', year: 2027, unitCode: 'api101d' });
+    const staffed = await query(
+      'SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE s.unit_id = $1', [copy.body.id]
+    );
+    expect(staffed.rows).toHaveLength(0);
+    const codes = (await query('SELECT session_code FROM sessions WHERE unit_id = $1 ORDER BY session_code', [copy.body.id])).rows.map(r => r.session_code);
+    expect(codes).toContain('LEC01');
+  });
+  add('API-U03 lock counts a two-tutor session with one tutor as unassigned', async (ctx) => {
+    const unit = await api('post', '/units', ctx.tokens.uc, { unitCode: 'lock2', unitName: 'Two tutors', semester: 'Semester 1', year: 2027 });
+    const session = await api('post', `/units/${unit.body.id}/sessions`, ctx.tokens.uc, sessionBody({ requiredTutors: 2 }));
+    await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id });
+    await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: true });
+    const res = await api('patch', `/units/${unit.body.id}/lock-schedule`, ctx.tokens.uc, {});
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ unassignedCount: 1, pendingCount: 0 });
+  });
+  add('API-U04 a declined tutor makes the session unassigned again for the lock check', async (ctx) => {
+    const unit = await api('post', '/units', ctx.tokens.uc, { unitCode: 'lock3', unitName: 'Declined', semester: 'Semester 1', year: 2027 });
+    const session = await api('post', `/units/${unit.body.id}/sessions`, ctx.tokens.uc, sessionBody());
+    await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id });
+    await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: false, reason: 'no' });
+    expect((await api('patch', `/units/${unit.body.id}/lock-schedule`, ctx.tokens.uc, {})).body).toMatchObject({ unassignedCount: 1, pendingCount: 0 });
+  });
 });

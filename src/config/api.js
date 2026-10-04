@@ -73,6 +73,7 @@ const clearSessionsCache = (unitId) => {
     const cacheKey = getSessionsCacheKey(unitId);
     sessionsCache.delete(cacheKey);
     assignedSessionsCache.delete(cacheKey);
+    assignedSessionsCache.delete(`${cacheKey}:withDeclined`);
     return;
   }
   sessionsCache.clear();
@@ -313,11 +314,13 @@ export const requestsAPI = {
 
 export const coverAPI = {
   // UC: broadcast selected sessions to every other tutor on the unit
-  broadcast: async (sessionIds, reason) => {
+  // startDate/endDate are required by the backend; originalTutorId says
+  // which tutor is away (needed when a session has more than one tutor).
+  broadcast: async (sessionIds, reason, startDate, endDate, originalTutorId) => {
     const response = await fetch(`${API_URL}/uc/cover-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ sessionIds, reason })
+      body: JSON.stringify({ sessionIds, reason, startDate, endDate, originalTutorId: originalTutorId || undefined })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to broadcast cover request');
@@ -490,12 +493,15 @@ export const availabilityAPI = {
     return availabilityAPI.get(unitCode);
   },
 
-  submit: async (unitCode, slots) => {
+  // unitId is optional but preferred: the same unit code can exist in
+  // several semesters.
+  submit: async (unitCode, slots, unitId) => {
     const response = await fetch(`${API_URL}/availability/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({
         unitCode,
+        unitId: unitId || undefined,
         slots
       })
     });
@@ -669,8 +675,10 @@ export const unitsAPI = {
 };
 
 export const sessionsAPI = {
-  getMyAssigned: async (unitId) => {
-    const cacheKey = getSessionsCacheKey(unitId);
+  // includeDeclined: also return sessions this tutor declined (My Schedule
+  // shows them with the reason). Other pages leave them out.
+  getMyAssigned: async (unitId, { includeDeclined = false } = {}) => {
+    const cacheKey = `${getSessionsCacheKey(unitId)}${includeDeclined ? ':withDeclined' : ''}`;
     const cached = assignedSessionsCache.get(cacheKey);
     const now = Date.now();
 
@@ -682,7 +690,7 @@ export const sessionsAPI = {
       return cached.promise;
     }
 
-    const promise = fetch(`${API_URL}/units/${unitId}/sessions/my-assigned`, {
+    const promise = fetch(`${API_URL}/units/${unitId}/sessions/my-assigned${includeDeclined ? '?includeDeclined=true' : ''}`, {
       headers: authHeader()
     })
       .then(async (response) => {

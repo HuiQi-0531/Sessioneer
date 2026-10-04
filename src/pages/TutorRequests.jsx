@@ -118,8 +118,14 @@ const TutorRequests = () => {
       });
       setCoverRequests(prev => prev.filter(r => r.id !== request.id));
     } catch (err) {
-      if (err.status === 409) {
-        setCoverMessage({ type: 'error', text: 'Too slow — someone else already claimed that session.' });
+      // 409 means either "someone else got it first" or "this clashes with
+      // your own session". Only the first one removes the card.
+      const alreadyTaken = err.status === 409 && /already claimed|no longer open|already ended/i.test(err.message || '');
+      if (alreadyTaken) {
+        setCoverMessage({
+          type: 'error',
+          text: /already ended/i.test(err.message) ? err.message : 'Too slow — someone else already claimed that session.'
+        });
         setCoverRequests(prev => prev.filter(r => r.id !== request.id));
       } else {
         setCoverMessage({ type: 'error', text: err.message || 'Failed to claim session.' });

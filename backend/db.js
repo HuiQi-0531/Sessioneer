@@ -1,9 +1,11 @@
 const { Pool, types } = require('pg');
 require('dotenv').config();
 
+const { parseTimestampAsUtc } = require('./utils/dbTypes');
+
 // Supabase stores these project timestamps in UTC, but many tables use
 // TIMESTAMP without timezone. Parse that Postgres type as UTC in Node.
-types.setTypeParser(1114, (value) => new Date(`${value}Z`));
+types.setTypeParser(1114, parseTimestampAsUtc);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

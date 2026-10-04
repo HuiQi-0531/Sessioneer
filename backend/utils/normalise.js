@@ -106,7 +106,9 @@ const getHourlySlotsInRange = (startTime, endTime) => {
   const startMin = timeToMinutes(startTime);
   const endMin = timeToMinutes(endTime);
   const slots = [];
-  for (let m = startMin; m < endMin; m += 60) {
+  // Start from the top of the starting hour, so 08:30-09:15 covers both the
+  // 8am and the 9am slot (it used to miss 9am).
+  for (let m = Math.floor(startMin / 60) * 60; m < endMin; m += 60) {
     const hourStr = `${String(Math.floor(m / 60)).padStart(2, '0')}:00:00`;
     slots.push(timeToSlot(hourStr));
   }

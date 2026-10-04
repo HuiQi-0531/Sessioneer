@@ -50,24 +50,6 @@ const resolveSessionId = async (client, unitId, storedId, storedValue) => {
   return match?.id || null;
 };
 
-const syncAssignedTutorId = async (client, sessionId) => {
-  const result = await client.query(
-    `
-    SELECT tutor_id
-    FROM session_tutors
-    WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM false
-    ORDER BY assigned_at ASC NULLS LAST
-    LIMIT 1
-    `,
-    [sessionId]
-  );
-  const tutorId = result.rows[0]?.tutor_id || null;
-  await client.query(
-    'UPDATE sessions SET assigned_tutor_id = $1, is_assigned = $2 WHERE id = $3',
-    [tutorId, Boolean(tutorId), sessionId]
-  );
-};
-
 const unassignTutor = async (client, sessionId, tutorId) => {
   await client.query(
     'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2',
@@ -222,7 +204,6 @@ const applyApprovedChangeRequest = async (client, request) => {
   // Session change: drop this tutor from the current session only.
   if (isChange) {
     await unassignTutor(client, currentSessionId, tutorId);
-    await syncAssignedTutorId(client, currentSessionId);
     return { action: 'unassigned', fromSessionId: currentSessionId };
   }
 
@@ -243,8 +224,6 @@ const applyApprovedChangeRequest = async (client, request) => {
   // Already on Friday: still remove the original session from this tutor.
   if (targetTutors.includes(tutorId)) {
     await unassignTutor(client, currentSessionId, tutorId);
-    await syncAssignedTutorId(client, currentSessionId);
-    await syncAssignedTutorId(client, targetSessionId);
     return { action: 'already_on_target', fromSessionId: currentSessionId, toSessionId: targetSessionId };
   }
 
@@ -271,8 +250,6 @@ const applyApprovedChangeRequest = async (client, request) => {
     `,
     [unitId, tutorId]
   );
-  await syncAssignedTutorId(client, currentSessionId);
-  await syncAssignedTutorId(client, targetSessionId);
 
   return { action: 'moved', fromSessionId: currentSessionId, toSessionId: targetSessionId };
 };

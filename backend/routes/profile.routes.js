@@ -5,13 +5,13 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { verifyToken } = require('../middleware/auth');
-const { formatUserNameFields } = require('../utils/userNames');
+const { formatProfile, parseMaximumHours, buildProfileUpdateParams } = require('../utils/profileRules');
+const { ALLOWED_AVATAR_TYPES, getSupabaseConfig, buildRequestBaseUrl } = require('../utils/uploadRules');
 
 const router = express.Router();
 
 const AVATAR_BUCKET = process.env.SUPABASE_AVATAR_BUCKET || 'profile-avatars';
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
-const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,32 +25,6 @@ const upload = multer({
 });
 
 const { hashPassword, verifyPassword, isValidPassword } = require('../utils/passwords');
-
-const formatProfile = (u) => ({
-  id: u.id,
-  ...formatUserNameFields(u),
-  email: u.email,
-  role: u.role,
-  avatarUrl: u.avatar_url || null,
-  phoneNumber: u.phone_number,
-  workExperience: u.work_experience,
-  maximumHours: u.maximum_hours,
-  contractType: u.contract_type,
-  notifySessionUpdates: u.notify_session_updates,
-  notifyRequestUpdates: u.notify_request_updates
-});
-
-const getSupabaseConfig = () => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    return null;
-  }
-  return {
-    supabaseUrl: supabaseUrl.replace(/\/$/, ''),
-    serviceKey
-  };
-};
 
 const ensureAvatarBucket = async () => {
   const { supabaseUrl, serviceKey } = getSupabaseConfig();
@@ -73,12 +47,6 @@ const ensureAvatarBucket = async () => {
     const text = await response.text();
     throw new Error(text || 'Failed to prepare avatar storage');
   }
-};
-
-const buildRequestBaseUrl = (req) => {
-  const forwardedProto = req.get('x-forwarded-proto');
-  const protocol = forwardedProto ? forwardedProto.split(',')[0] : req.protocol;
-  return `${protocol}://${req.get('host')}`;
 };
 
 const uploadAvatarLocally = async (file, userId, req) => {
@@ -150,14 +118,11 @@ router.get('/', verifyToken, async (req, res) => {
 // PUT /profile - update editable fields (first/last name, phone, and tutor-only fields for tutors)
 router.put('/', verifyToken, async (req, res) => {
   try {
-    const { name, firstName, lastName, phoneNumber, workExperience, maximumHours, contractType } = req.body;
-    const cleanFirstName = String(firstName || name || '').trim();
-    const cleanLastName = String(lastName || '').trim();
-    const hasLastNameField = Object.prototype.hasOwnProperty.call(req.body, 'lastName');
-
-    // Tutor-only fields are only ever written if the logged-in user is a tutor,
-    // regardless of what a coordinator's request body might contain.
-    const isTutor = req.user.role === 'tutor';
+    const hours = parseMaximumHours(req.body.maximumHours);
+    if (hours.error) {
+      return res.status(400).json({ error: hours.error });
+    }
+    const params = buildProfileUpdateParams(req.body, req.user.role, req.user.id);
 
     const result = await pool.query(
       `
@@ -173,7 +138,7 @@ router.put('/', verifyToken, async (req, res) => {
       RETURNING id, name, last_name, email, role, phone_number, work_experience,
                 maximum_hours, contract_type, avatar_url, notify_session_updates, notify_request_updates
       `,
-      [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, maximumHours ?? null, contractType || null, req.user.id]
+      params
     );
 
     res.json(formatProfile(result.rows[0]));

@@ -3,22 +3,65 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { formatUserNameFields, joinUserName } = require('../utils/userNames');
-const { normaliseDay, sessionDurationHours, timeRangesOverlap } = require('../utils/normalise');
+const { normaliseDay } = require('../utils/normalise');
 const { createNotification } = require('../utils/notify');
 const { escapeHtml, sendEmail } = require('../utils/email');
 const { requiresSuperTutor } = require('../utils/roles');
 
-const router = express.Router();
+const {
+  VALID_ROLES,
+  VALID_ACCOUNT_STATUSES,
+  VALID_MEMBERSHIP_ROLES,
+  TUTOR_MEMBERSHIP_ROLES,
+  MEMBERSHIP_ROLE_LABELS,
+  normaliseRole,
+  normaliseMembershipRole,
+  isTutorMembershipRole,
+  normaliseAccountStatus,
+  formatAdminUser,
+  formatAdminUnit,
+  formatAdminUnitTutor,
+  formatAdminUserUnitAccess,
+  formatAdminSession,
+  formatAdminStaff,
+  formatAdminApplication,
+  formatAdminRequest,
+  isUuid,
+  isValidEmail,
+  getSelfEditError,
+  checkAdminSessionEdit,
+  hasIneligibleForSuperTutorType,
+  checkAdminAssignSlot
+} = require('../utils/adminRules');
+const {
+  labelFromSessionValue,
+  normaliseSessionLabel,
+  getSessionComparableLabel,
+  buildSuggestionSessions,
+  buildReviewEmailSubject,
+  buildAdminReviewNotification,
+  isValidReviewStatus
+} = require('../utils/requestLabels');
+const { isBlank, endsAfterStart, getMissingAdminSessionFields: getMissingSessionFields } = require('../utils/sessionRules');
+const {
+  findOverlappingSessions,
+  calcHoursIfAssigned,
+  exceedsMaxHours,
+  violatesSuperTutorRule,
+  findEditClash,
+  ACTIVE_COVERS_SQL,
+  findCoverConflicts,
+  describeCoverConflict
+} = require('../utils/allocationRules');
+const { normaliseUnitCode, deleteUnitCascade } = require('../utils/unitRules');
+const { shouldApplyChange } = require('../utils/changeRequestRules');
+const {
+  AllocationError,
+  applyApprovedChangeRequest,
+  resolveSessionId
+} = require('../utils/applyChangeRequest');
 
-const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor']);
-const VALID_ACCOUNT_STATUSES = new Set(['active', 'pending', 'disabled']);
-const VALID_MEMBERSHIP_ROLES = new Set(['coordinator', 'tutor', 'super_tutor']);
-const TUTOR_MEMBERSHIP_ROLES = ['tutor', 'super_tutor'];
-const MEMBERSHIP_ROLE_LABELS = {
-  coordinator: 'unit coordinator',
-  tutor: 'tutor',
-  super_tutor: 'super tutor'
-};
+const router = express.Router();
 
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -75,111 +118,6 @@ const createPasswordResetLink = async (userId) => {
   return resetLink;
 };
 
-const normaliseRole = (role) => {
-  const value = String(role || '').trim().toLowerCase();
-
-  if (value === 'unit coordinator' || value === 'uc') return 'coordinator';
-  if (value === 'administrator') return 'admin';
-  if (VALID_ROLES.has(value)) return value;
-
-  return '';
-};
-
-const normaliseMembershipRole = (role) => {
-  const value = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-
-  if (value === 'unit_coordinator' || value === 'uc') return 'coordinator';
-  if (value === 'supertutor') return 'super_tutor';
-  if (VALID_MEMBERSHIP_ROLES.has(value)) return value;
-
-  return '';
-};
-
-const isTutorMembershipRole = (role) => TUTOR_MEMBERSHIP_ROLES.includes(role);
-
-const normaliseAccountStatus = (status) => {
-  const value = String(status || 'active').trim().toLowerCase();
-  return VALID_ACCOUNT_STATUSES.has(value) ? value : '';
-};
-
-const formatAdminUser = (user) => ({
-  id: user.id,
-  ...formatUserNameFields(user),
-  email: user.email,
-  role: user.role,
-  accountStatus: user.account_status || 'active',
-  avatarUrl: user.avatar_url || null,
-  phoneNumber: user.phone_number || '',
-  unitCount: Number(user.unit_count || 0),
-  coordinatorUnitCount: Number(user.coordinator_unit_count || 0),
-  tutorUnitCount: Number(user.tutor_unit_count || 0),
-  unitSummary: user.unit_summary || '',
-  createdAt: user.created_at || null
-});
-
-const formatAdminUnit = (unit) => ({
-  id: unit.id,
-  unitCode: unit.unit_code,
-  unitName: unit.unit_name,
-  semester: unit.semester,
-  year: unit.year,
-  enrolmentSize: unit.enrolment_size,
-  availabilityDeadline: unit.availability_deadline,
-  availabilityLocked: unit.availability_locked,
-  scheduleLocked: unit.schedule_locked,
-  draftReleased: unit.draft_released,
-  mainCoordinatorName: joinUserName(unit.main_coordinator_name, unit.main_coordinator_last_name),
-  mainCoordinatorEmail: unit.main_coordinator_email || '',
-  coordinators: unit.coordinators || '',
-  coordinatorCount: Number(unit.coordinator_count || 0),
-  tutorCount: Number(unit.tutor_count || 0),
-  sessionCount: Number(unit.session_count || 0)
-});
-
-const formatAdminUnitTutor = (tutor) => ({
-  id: tutor.id,
-  ...formatUserNameFields(tutor),
-  email: tutor.email,
-  role: tutor.role,
-  membershipRole: tutor.membership_role || 'tutor',
-  isSuperTutor: tutor.membership_role === 'super_tutor',
-  avatarUrl: tutor.avatar_url || null,
-  assignedSessionCount: Number(tutor.assigned_session_count || 0)
-});
-
-const formatAdminUserUnitAccess = (membership) => ({
-  unitId: membership.unit_id,
-  unitCode: membership.unit_code,
-  unitName: membership.unit_name,
-  semester: membership.semester,
-  year: membership.year,
-  role: membership.access_role,
-  isPrimaryCoordinator: !!membership.is_primary_coordinator,
-  assignedSessionCount: Number(membership.assigned_session_count || 0)
-});
-
-const formatAdminSession = (session) => ({
-  id: session.id,
-  unitId: session.unit_id,
-  unitCode: session.unit_code,
-  unitName: session.unit_name,
-  semester: session.semester,
-  year: session.year,
-  day: session.day,
-  startTime: session.start_time,
-  endTime: session.end_time,
-  location: session.location || '',
-  campus: session.campus || '',
-  sessionType: session.session_type || '',
-  capacity: session.capacity,
-  requiredTutors: session.required_tutors,
-  status: session.status || 'Draft',
-  assignedTutorCount: Number(session.assigned_tutor_count || 0),
-  assignedTutors: session.assigned_tutors || '',
-  tutorConfirmationState: session.tutor_confirmation_state || 'Unassigned',
-  scheduleLocked: !!session.schedule_locked
-});
-
 const getAdminSessionStaff = async (query, unitId) => {
   const result = await query(`
     SELECT u.id, u.name, u.last_name, u.email, u.maximum_hours,
@@ -207,96 +145,10 @@ const getAdminSessionStaff = async (query, unitId) => {
       )
     ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
   `, [unitId]);
-  return result.rows.map(staff => ({
-    id: staff.id,
-    name: joinUserName(staff.name, staff.last_name) || staff.email,
-    email: staff.email,
-    role: staff.access_role,
-    maximumHours: staff.maximum_hours == null ? null : Number(staff.maximum_hours)
-  }));
+  return result.rows.map(formatAdminStaff);
 };
 
 const sessionAssignmentError = (status, message) => Object.assign(new Error(message), { status });
-const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
-
-const formatAdminApplication = (application) => ({
-  id: application.id,
-  unitId: application.unit_id,
-  unitCode: application.unit_code || '',
-  unitName: application.unit_name || '',
-  firstName: application.name || '',
-  lastName: application.last_name || '',
-  fullName: [application.name, application.last_name].filter(Boolean).join(' ') || 'Pending profile',
-  email: application.email,
-  phoneNumber: application.phone_number || '',
-  workExperience: application.work_experience || '',
-  maximumHours: application.maximum_hours,
-  contractType: application.contract_type || '',
-  hasResume: !!application.resume_filename,
-  resumeFilename: application.resume_filename || '',
-  status: application.status || 'pending',
-  appliedAt: application.applied_at,
-  invitedAt: application.invited_at,
-  inviteExpiresAt: application.invite_token_expires_at,
-  createdUserId: application.created_user_id || null,
-  invitedByName: [application.invited_by_name, application.invited_by_last_name].filter(Boolean).join(' '),
-  invitedByEmail: application.invited_by_email || '',
-  coordinatorName: [application.coordinator_name, application.coordinator_last_name].filter(Boolean).join(' '),
-  coordinatorEmail: application.coordinator_email || ''
-});
-
-const formatAdminRequest = (request) => ({
-  id: request.id,
-  requestGroup: request.request_group,
-  requestType: request.request_type,
-  unitId: request.unit_id,
-  unitCode: request.unit_code || '',
-  unitName: request.unit_name || '',
-  tutorName: [request.tutor_name, request.tutor_last_name].filter(Boolean).join(' ') || request.tutor_email || 'Unknown tutor',
-  tutorEmail: request.tutor_email || '',
-  coordinatorName: [request.coordinator_name, request.coordinator_last_name].filter(Boolean).join(' '),
-  coordinatorEmail: request.coordinator_email || '',
-  priority: request.priority || '',
-  status: request.status || '',
-  reason: request.reason || '',
-  currentSession: request.current_session || '',
-  preferredSwapTo: request.preferred_swap_to || '',
-  reviewNotes: request.review_notes || '',
-  submittedAt: request.submitted_at,
-  reviewedAt: request.reviewed_at,
-  sessionLabel: request.session_label || '',
-  location: request.location || '',
-  claimedByName: [request.claimed_by_name, request.claimed_by_last_name].filter(Boolean).join(' '),
-  claimedByEmail: request.claimed_by_email || '',
-  claimedAt: request.claimed_at
-});
-
-const normaliseUnitCode = (unitCode) => String(unitCode || '').trim().toUpperCase();
-
-const isBlank = (value) => value === undefined || value === null || String(value).trim() === '';
-
-const labelFromSessionValue = (value) => {
-  if (!value) return 'Not specified';
-  const parts = String(value).split('::');
-  if (parts.length !== 2) return value;
-  return parts[1].replace(/\|/g, ' | ');
-};
-
-const normaliseSessionLabel = (value) => {
-  return labelFromSessionValue(value)
-    .replace(/\s*\|\s*/g, '|')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-};
-
-const getSessionComparableLabel = (session) => {
-  const start = session.start_time ? String(session.start_time).slice(0, 5) : 'TBC';
-  const end = session.end_time ? String(session.end_time).slice(0, 5) : 'TBC';
-  const room = session.location || 'TBA';
-  return normaliseSessionLabel(`${session.day || 'TBC'} ${start}-${end}|${room}`);
-};
-
 const sendAdminRequestReviewEmail = async ({
   tutorEmail,
   tutorName,
@@ -310,11 +162,7 @@ const sendAdminRequestReviewEmail = async ({
 }) => {
   if (!tutorEmail) return;
 
-  const statusLower = String(status || '').toLowerCase();
-  const displayStatus = statusLower === 'accepted' ? 'approved' : statusLower || 'updated';
-  const subject = statusLower === 'suggested'
-    ? `Alternative session suggested for ${unitCode}`
-    : `Your ${unitCode} request was ${displayStatus}`;
+  const { displayStatus, subject } = buildReviewEmailSubject(status, unitCode);
   const unitLabel = unitName ? `${unitCode} - ${unitName}` : unitCode;
   const requestsUrl = `${frontendUrl()}/requests`;
 
@@ -348,25 +196,6 @@ const sendAdminRequestReviewEmail = async ({
       `View request: ${requestsUrl}`
     ].join('\n')
   });
-};
-
-const getMissingSessionFields = (session) => {
-  const requiredFields = [
-    ['unitId', 'Unit'],
-    ['day', 'Day'],
-    ['startTime', 'Start time'],
-    ['endTime', 'End time'],
-    ['location', 'Location'],
-    ['campus', 'Campus'],
-    ['sessionType', 'Type'],
-    ['capacity', 'Capacity'],
-    ['requiredTutors', 'Tutor'],
-    ['status', 'Status']
-  ];
-
-  return requiredFields
-    .filter(([field]) => isBlank(session[field]))
-    .map(([, label]) => label);
 };
 
 const findCoordinatorByEmail = async (email) => {
@@ -482,7 +311,7 @@ router.post('/users', async (req, res) => {
       return res.status(400).json({ error: 'First name, last name, email, role and account status are required' });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address' });
     }
 
@@ -525,16 +354,13 @@ router.put('/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'First name, last name, email, role and account status are required' });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address' });
     }
 
-    if (req.params.id === req.user.id && role !== 'admin') {
-      return res.status(400).json({ error: 'You cannot remove admin access from your own account' });
-    }
-
-    if (req.params.id === req.user.id && accountStatus === 'disabled') {
-      return res.status(400).json({ error: 'You cannot disable your own admin account' });
+    const selfEditError = getSelfEditError(req.params.id, req.user.id, role, accountStatus);
+    if (selfEditError) {
+      return res.status(400).json({ error: selfEditError });
     }
 
     const result = await pool.query(
@@ -1592,7 +1418,7 @@ router.get('/requests/:id/suggestion-sessions', async (req, res) => {
               'tutorName', TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))),
               'confirmed', st.tutor_confirmed
             )
-          ) FILTER (WHERE st.tutor_id IS NOT NULL),
+          ) FILTER (WHERE st.tutor_id IS NOT NULL AND st.tutor_confirmed IS DISTINCT FROM FALSE),
           '[]'
         ) AS tutors
       FROM sessions s
@@ -1621,46 +1447,11 @@ router.get('/requests/:id/suggestion-sessions', async (req, res) => {
       [request.unit_id, id]
     );
 
-    const currentRequestLabel = normaliseSessionLabel(request.current_session);
-    const swapOpenSessionLabels = new Set(
-      requestLabelsResult.rows
-        .map(row => normaliseSessionLabel(row.current_session))
-        .filter(Boolean)
+    const sessions = buildSuggestionSessions(
+      sessionsResult.rows,
+      request.current_session,
+      requestLabelsResult.rows.map(row => row.current_session)
     );
-
-    const sessions = sessionsResult.rows
-      .map((session) => {
-        const comparableLabel = getSessionComparableLabel(session);
-        const assignedCount = Array.isArray(session.tutors) ? session.tutors.length : 0;
-        const requiredTutors = Number(session.required_tutors || 1);
-        const isSwapOpen = swapOpenSessionLabels.has(comparableLabel);
-
-        return {
-          id: session.id,
-          day: session.day,
-          startTime: session.start_time,
-          endTime: session.end_time,
-          location: session.location,
-          campus: session.campus,
-          sessionType: session.session_type,
-          capacity: session.capacity,
-          requiredTutors: session.required_tutors,
-          status: session.status,
-          tutors: session.tutors || [],
-          comparableLabel,
-          availabilityLabel: isSwapOpen
-            ? 'Swap/change requested'
-            : assignedCount === 0
-              ? 'Unassigned'
-              : 'Space available'
-        };
-      })
-      .filter(session => session.comparableLabel && session.comparableLabel !== currentRequestLabel)
-      .filter(session => {
-        const assignedCount = Array.isArray(session.tutors) ? session.tutors.length : 0;
-        const requiredTutors = Number(session.requiredTutors || 1);
-        return assignedCount < requiredTutors || swapOpenSessionLabels.has(session.comparableLabel);
-      });
 
     res.json(sessions);
   } catch (error) {
@@ -1670,24 +1461,44 @@ router.get('/requests/:id/suggestion-sessions', async (req, res) => {
 });
 
 router.patch('/requests/:id/review', async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
     const statusLower = String(status || '').trim().toLowerCase();
-    const allowedStatuses = new Set(['accepted', 'rejected', 'suggested']);
 
-    if (!allowedStatuses.has(statusLower)) {
+    if (!isValidReviewStatus(statusLower)) {
       return res.status(400).json({ error: 'Status must be accepted, rejected, or suggested.' });
     }
 
-    const result = await pool.query(
+    const existingResult = await client.query('SELECT * FROM change_requests WHERE id = $1', [id]);
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    const existing = existingResult.rows[0];
+
+    await client.query('BEGIN');
+
+    let suggestedSessionId = existing.suggested_session_id;
+    if (statusLower === 'suggested' && reviewNotes) {
+      suggestedSessionId = await resolveSessionId(client, existing.unit_id, null, reviewNotes);
+    }
+
+    // Approving must also move the tutor on the timetable (session_tutors),
+    // exactly like a coordinator approval. It used to only change the label.
+    if (shouldApplyChange(statusLower, existing.status)) {
+      await applyApprovedChangeRequest(client, existing);
+    }
+
+    const result = await client.query(
       `
       UPDATE change_requests
       SET
         status = $1,
         review_notes = $2,
         reviewed_by_id = $3,
-        reviewed_at = NOW()
+        reviewed_at = NOW(),
+        suggested_session_id = COALESCE($5, suggested_session_id)
       WHERE id = $4
       RETURNING
         id,
@@ -1702,12 +1513,10 @@ router.patch('/requests/:id/review', async (req, res) => {
         tutor_id,
         unit_id
       `,
-      [statusLower, reviewNotes || '', req.user.id, id]
+      [statusLower, reviewNotes || '', req.user.id, id, suggestedSessionId || null]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Request not found' });
-    }
+    await client.query('COMMIT');
 
     const updated = result.rows[0];
     const detailsResult = await pool.query(
@@ -1727,18 +1536,7 @@ router.patch('/requests/:id/review', async (req, res) => {
     const details = detailsResult.rows[0] || {};
     const unitCode = details.unit_code || 'your unit';
 
-    let title = 'Request updated';
-    let content = `Your request in ${unitCode} was updated.`;
-    if (statusLower === 'accepted') {
-      title = 'Request approved';
-      content = `Your request in ${unitCode} was approved by an administrator.`;
-    } else if (statusLower === 'rejected') {
-      title = 'Request rejected';
-      content = `Your request in ${unitCode} was rejected by an administrator.${reviewNotes ? ` Note: ${reviewNotes}` : ''}`;
-    } else if (statusLower === 'suggested') {
-      title = 'Alternative session suggested';
-      content = `An administrator suggested an alternative session for your request in ${unitCode}.`;
-    }
+    const { title, content } = buildAdminReviewNotification(statusLower, unitCode, reviewNotes);
 
     if (updated.tutor_id) {
       await createNotification({
@@ -1769,8 +1567,14 @@ router.patch('/requests/:id/review', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error instanceof AllocationError) {
+      return res.status(error.status || 400).json({ error: error.message });
+    }
     console.error('Admin request review error:', error);
     res.status(500).json({ error: 'Failed to review request' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1898,6 +1702,10 @@ router.post('/sessions', async (req, res) => {
       return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
+    if (!endsAfterStart(startTime, endTime)) {
+      return res.status(400).json({ error: 'End time must be after start time' });
+    }
+
     const unit = await pool.query('SELECT id FROM units WHERE id = $1', [unitId]);
     if (unit.rows.length === 0) {
       return res.status(404).json({ error: 'Unit not found' });
@@ -1963,6 +1771,10 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(400).json({ error: 'Tutor must be at least 1' });
     }
 
+    if (!endsAfterStart(startTime, endTime)) {
+      return res.status(400).json({ error: 'End time must be after start time' });
+    }
+
     const currentResult = await pool.query(`
       SELECT s.unit_id,
         COUNT(st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false)::int AS assigned_count
@@ -1975,11 +1787,9 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
     const current = currentResult.rows[0];
-    if (current.assigned_count > 0 && unitId !== current.unit_id) {
-      return res.status(409).json({ error: 'Unassign staff before moving this session to another unit' });
-    }
-    if (requiredTutors < current.assigned_count) {
-      return res.status(409).json({ error: 'Tutors required cannot be lower than the number already assigned' });
+    const editError = checkAdminSessionEdit(current, unitId, requiredTutors);
+    if (editError) {
+      return res.status(409).json({ error: editError });
     }
     if (current.assigned_count > 0 && requiresSuperTutor(sessionType)) {
       const assignedResult = await pool.query(`
@@ -1988,10 +1798,13 @@ router.put('/sessions/:id', async (req, res) => {
         WHERE st.session_id = $1 AND st.tutor_confirmed IS DISTINCT FROM false
       `, [id]);
       const staff = await getAdminSessionStaff(pool.query.bind(pool), unitId);
-      const eligibleIds = new Set(staff.filter(member => member.role !== 'tutor').map(member => member.id));
-      if (assignedResult.rows.some(item => !eligibleIds.has(item.tutor_id))) {
+      if (hasIneligibleForSuperTutorType(assignedResult.rows, staff)) {
         return res.status(409).json({ error: 'Unassign Tutors before changing this session to a lecture or consultation' });
       }
+    }
+    if (current.assigned_count > 0) {
+      const clash = await findEditClash(pool, id, day, startTime, endTime);
+      if (clash) return res.status(409).json({ error: clash });
     }
 
     const result = await pool.query(
@@ -2137,20 +1950,15 @@ router.post('/sessions/:id/assignments', async (req, res) => {
       'SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1',
       [id]
     );
-    const activeAssignments = existingResult.rows.filter(item => item.tutor_confirmed !== false);
-    if (activeAssignments.some(item => item.tutor_id === tutorId)) {
-      throw sessionAssignmentError(409, 'This staff member is already assigned to the session');
-    }
-    if (activeAssignments.length >= Number(session.required_tutors || 1)) {
-      throw sessionAssignmentError(409, 'This session already has its required number of staff assigned');
-    }
+    const slotError = checkAdminAssignSlot(existingResult.rows, tutorId, session.required_tutors);
+    if (slotError) throw sessionAssignmentError(409, slotError);
 
     const candidates = await getAdminSessionStaff(client.query.bind(client), session.unit_id);
     const staff = candidates.find(candidate => candidate.id === tutorId);
     if (!staff) {
       throw sessionAssignmentError(409, 'This staff member does not have active access to the unit');
     }
-    if (staff.role !== 'coordinator' && requiresSuperTutor(session.session_type) && staff.role !== 'super_tutor') {
+    if (violatesSuperTutorRule(session.session_type, staff.role === 'super_tutor', staff.role === 'coordinator')) {
       throw sessionAssignmentError(409, `Only Super Tutors can be assigned to ${session.session_type} sessions`);
     }
 
@@ -2161,19 +1969,19 @@ router.post('/sessions/:id/assignments', async (req, res) => {
       JOIN units un ON un.id = s.unit_id
       WHERE s.id <> $1 AND st.tutor_id = $2 AND st.tutor_confirmed IS DISTINCT FROM false
     `, [id, tutorId]);
-    const overlap = otherResult.rows.find(other =>
-      other.day === session.day &&
-      timeRangesOverlap(session.start_time, session.end_time, other.start_time, other.end_time)
-    );
+    const [overlap] = findOverlappingSessions(session, otherResult.rows);
     if (overlap) {
       throw sessionAssignmentError(409, `This staff member has an overlapping session in ${overlap.unit_code}`);
     }
 
-    const hours = otherResult.rows.reduce(
-      (total, other) => total + sessionDurationHours(other.start_time, other.end_time),
-      sessionDurationHours(session.start_time, session.end_time)
-    );
-    if (staff.maximumHours != null && hours > staff.maximumHours) {
+    const coversResult = await client.query(ACTIVE_COVERS_SQL, [tutorId]);
+    const [coverConflict] = findCoverConflicts(session, coversResult.rows);
+    if (coverConflict) {
+      throw sessionAssignmentError(409, `This staff member is ${describeCoverConflict(coverConflict).replace(/^C/, "c")}`);
+    }
+
+    const hours = calcHoursIfAssigned(session, otherResult.rows);
+    if (exceedsMaxHours(staff.maximumHours, hours)) {
       throw sessionAssignmentError(409, `This assignment would exceed the staff member's maximum hours (${hours}/${staff.maximumHours})`);
     }
 

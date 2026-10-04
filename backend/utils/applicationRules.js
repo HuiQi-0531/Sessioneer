@@ -1,4 +1,4 @@
-// Tutor application logic moved here unchanged from tutorApplications.routes.js.
+// Tutor application rules used by tutorApplications.routes.js.
 const { splitDisplayName } = require('./userNames');
 const { LEGACY_FIELD_KEYS } = require('./applicationFields');
 
@@ -25,9 +25,9 @@ const formatApplication = (a) => ({
   appliedAt: a.applied_at,
   invitedAt: a.invited_at,
   invitedRole: a.invited_role || 'tutor',
-  // Only meaningful while status === 'invited' - accept-invite nulls this
-  // out, and it's how the "Copy link" button on an already-invited card
-  // can still work after the one-time success modal has been closed.
+  // Only shown while status === 'invited' (the token is kept after use so a
+  // reused link says "already used"); it's how the "Copy link" button on an
+  // already-invited card still works after the success modal is closed.
   inviteToken: a.status === 'invited' ? a.invite_token : null,
   customAnswers: a.custom_answers || {}
 });
@@ -40,11 +40,26 @@ const filterCustomAnswers = (customAnswers) => (customAnswers && typeof customAn
 const isInviteExpired = (expiresAt) => new Date() > new Date(expiresAt);
 
 // Name for the new account when an invite is accepted.
+//  - application has first + last name: use them
+//  - older applications stored the whole name in `name` ("Alex Lee") with
+//    no last name: split it, instead of saving "Alex Lee Lee"
+//  - direct invites have no name: use what the person typed on the form
 const resolveInviteName = (application, inviteFirstName, inviteLastName) => {
-  const splitName = splitDisplayName(application.name);
+  const storedFirst = String(application.name || '').trim();
+  const storedLast = String(application.last_name || '').trim();
+  if (storedFirst && storedLast) {
+    return { firstName: storedFirst, lastName: storedLast };
+  }
+  if (storedFirst) {
+    const split = splitDisplayName(storedFirst);
+    return {
+      firstName: split.firstName,
+      lastName: split.lastName || String(inviteLastName || '').trim()
+    };
+  }
   return {
-    firstName: application.name || splitName.firstName || inviteFirstName,
-    lastName: application.last_name || splitName.lastName || inviteLastName
+    firstName: String(inviteFirstName || '').trim(),
+    lastName: String(inviteLastName || '').trim()
   };
 };
 

@@ -1,5 +1,5 @@
-// Session labels and review messages for swap/change requests
-// (from admin.routes.js and requests.routes.js). Moved here unchanged.
+// Session labels and review messages for swap/change requests,
+// used by admin.routes.js and requests.routes.js.
 
 const labelFromSessionValue = (value) => {
   if (!value) return 'Not specified';
@@ -8,8 +8,12 @@ const labelFromSessionValue = (value) => {
   return parts[1].replace(/\|/g, ' | ');
 };
 
+// Comparable form of a label. "MON 10:00 - 12:00 | GP-P512" and
+// "MON 10:00-12:00|GP-P512" are the same session, so spacing around "-"
+// and "|" is removed before comparing.
 const normaliseSessionLabel = (value) => {
-  return labelFromSessionValue(value)
+  return String(labelFromSessionValue(value))
+    .replace(/\s*[-–]\s*/g, '-')
     .replace(/\s*\|\s*/g, '|')
     .replace(/\s+/g, ' ')
     .trim()

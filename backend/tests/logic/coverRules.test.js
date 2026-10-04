@@ -49,15 +49,18 @@ describe('validateCoverDates', () => {
 });
 
 describe('getCoverRecipients', () => {
+  // The away tutor(s) now come from session_tutors (resolveOriginalTutors),
+  // not from the old sessions.assigned_tutor_id column.
   const tutors = [{ id: 't1' }, { id: 't2' }, { id: 't3' }];
   test('LG-351: the tutor who cannot make it is not notified', () => {
-    expect(c.getCoverRecipients(tutors, [{ assigned_tutor_id: 't1' }]).map(t => t.id)).toEqual(['t2', 't3']);
+    expect(c.getCoverRecipients(tutors, ['t1']).map(t => t.id)).toEqual(['t2', 't3']);
   });
-  test('LG-352: several sessions exclude each original tutor', () => {
-    expect(c.getCoverRecipients(tutors, [{ assigned_tutor_id: 't1' }, { assigned_tutor_id: 't3' }]).map(t => t.id)).toEqual(['t2']);
+  test('LG-352: several away tutors are all excluded', () => {
+    expect(c.getCoverRecipients(tutors, new Set(['t1', 't3'])).map(t => t.id)).toEqual(['t2']);
   });
-  test('LG-353: sessions with no tutor notify everyone', () => {
-    expect(c.getCoverRecipients(tutors, [{ assigned_tutor_id: null }])).toHaveLength(3);
+  test('LG-353: no away tutor notifies everyone', () => {
+    expect(c.getCoverRecipients(tutors, [])).toHaveLength(3);
+    expect(c.getCoverRecipients(tutors, undefined)).toHaveLength(3);
   });
 });
 

@@ -1,4 +1,5 @@
-// Availability logic moved here unchanged from availability.routes.js.
+// Availability rules used by availability.routes.js.
+const { timeToMinutes } = require('./normalise');
 
 // Helper: convert TIME string "08:00:00" back to "8:00am"
 // (this page's own slot format - different from normalise.js timeToSlot)
@@ -79,7 +80,45 @@ const buildAvailabilityGrid = (tutorRows, submittedRows, availRows) => {
   return { tutors, submissionStatus, availability };
 };
 
+// Hour slots ("8:00am", "9:00am" ...) that a session from start to end touches.
+const sessionAvailabilitySlots = (startTime, endTime) => {
+  const startMin = timeToMinutes(String(startTime));
+  const endMin = timeToMinutes(String(endTime));
+  const slots = [];
+  for (let m = Math.floor(startMin / 60) * 60; m < endMin; m += 60) {
+    slots.push(availabilityTimeToSlot(`${String(Math.floor(m / 60)).padStart(2, '0')}:00:00`));
+  }
+  return slots;
+};
+
+// Once a tutor ACCEPTS a session, that time is no longer free for any other
+// unit. This marks those hours as "avoid" in the grid for other units and
+// records why in `committed`, e.g. committed.MON[tutorId]["8:00am"] = "CAB201".
+// It is worked out when the grid is read (nothing is written to the
+// availability table), so it stays correct if the tutor later declines or
+// is unassigned, and survives the tutor re-submitting their availability.
+// committedRows: { tutor_id, day, start_time, end_time, unit_code } from
+// session_tutors where tutor_confirmed = TRUE, in units other than this one.
+const applyCommittedSessions = (grid, committedRows) => {
+  const visible = new Set((grid.tutors || []).map(t => t.id));
+  const committed = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
+  for (const row of committedRows || []) {
+    if (!visible.has(row.tutor_id)) continue;
+    const day = AVAILABILITY_DAY_MAP[row.day];
+    if (!day) continue;
+    for (const slot of sessionAvailabilitySlots(row.start_time, row.end_time)) {
+      if (!grid.availability[day][row.tutor_id]) grid.availability[day][row.tutor_id] = {};
+      grid.availability[day][row.tutor_id][slot] = 'avoid';
+      if (!committed[day][row.tutor_id]) committed[day][row.tutor_id] = {};
+      committed[day][row.tutor_id][slot] = row.unit_code;
+    }
+  }
+  return { ...grid, committed };
+};
+
 module.exports = {
+  sessionAvailabilitySlots,
+  applyCommittedSessions,
   AVAILABILITY_DAY_MAP,
   availabilityTimeToSlot,
   isAvailabilityLocked,

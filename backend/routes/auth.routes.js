@@ -3,7 +3,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const { sendEmail } = require('../utils/email');
-const { formatUserNameFields, splitDisplayName } = require('../utils/userNames');
+const { formatUserNameFields } = require('../utils/userNames');
+const { normaliseRegisterRole, resolveRegisterName, validateRegistration } = require('../utils/authRules');
 
 const router = express.Router();
 
@@ -41,19 +42,16 @@ const sendPasswordResetEmail = async (email, resetLink) => {
 router.post('/register', async (req, res) => {
   try {
     const { firstName, lastName, fullName, email, role, password, confirmPassword } = req.body;
-    const legacyName = splitDisplayName(fullName);
-    const cleanFirstName = String(firstName || legacyName.firstName || '').trim();
-    const cleanLastName = String(lastName || legacyName.lastName || '').trim();
+    const { firstName: cleanFirstName, lastName: cleanLastName } = resolveRegisterName(firstName, lastName, fullName);
 
-    if (!cleanFirstName || !cleanLastName || !email || !role || !password || !confirmPassword) {
-      return res.status(400).json({ error: 'Please fill in all fields' });
+    const validationError = validateRegistration({
+      firstName: cleanFirstName, lastName: cleanLastName, email, role, password, confirmPassword
+    });
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
-    if (password !== confirmPassword) {
-      return res.status(400).json({ error: 'Passwords do not match' });
-    }
-
-    const normalizedRole = role === 'Coordinator' ? 'coordinator' : 'tutor';
+    const normalizedRole = normaliseRegisterRole(role);
     const passwordHash = hashPassword(password);
 
     const result = await pool.query(
@@ -62,7 +60,7 @@ router.post('/register', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, name, last_name, email, role, avatar_url
       `,
-      [cleanFirstName, cleanLastName || null, email.toLowerCase(), normalizedRole, passwordHash]
+      [cleanFirstName, cleanLastName || null, String(email).trim().toLowerCase(), normalizedRole, passwordHash]
     );
 
     res.status(201).json({
@@ -82,7 +80,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ error: 'Please enter your email and password' });
     }
 
@@ -90,10 +88,10 @@ router.post('/login', async (req, res) => {
       `
       SELECT id, name, last_name, email, role, password_hash, avatar_url, account_status
       FROM users
-      WHERE email = $1
+      WHERE LOWER(email) = $1
       LIMIT 1
       `,
-      [email.toLowerCase()]
+      [email.trim().toLowerCase()]
     );
 
     const user = result.rows[0];
@@ -135,12 +133,12 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'Please enter your email address' });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = String(email).trim().toLowerCase();
     const result = await pool.query(
       `
       SELECT id, email
       FROM users
-      WHERE email = $1
+      WHERE LOWER(email) = $1
       LIMIT 1
       `,
       [normalizedEmail]

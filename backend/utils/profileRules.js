@@ -1,4 +1,4 @@
-// Moved here unchanged from profile.routes.js.
+// Profile rules used by profile.routes.js.
 const { formatUserNameFields } = require('./userNames');
 
 const formatProfile = (u) => ({
@@ -15,7 +15,19 @@ const formatProfile = (u) => ({
   notifyRequestUpdates: u.notify_request_updates
 });
 
-// Values for the profile UPDATE query (was inline in PUT /profile).
+// Max hours from the form: "" / null / undefined means "not given" (null,
+// so the stored value is kept); otherwise it must be a whole number 0-168.
+// Returns { value } or { error }.
+const parseMaximumHours = (raw) => {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return { value: null };
+  const text = String(raw).trim();
+  if (!/^\d+$/.test(text) || Number(text) > 168) {
+    return { error: 'Maximum hours must be a whole number between 0 and 168' };
+  }
+  return { value: Number(text) };
+};
+
+// Values for the profile UPDATE query in PUT /profile.
 const buildProfileUpdateParams = (body, role, userId) => {
   const { name, firstName, lastName, phoneNumber, workExperience, maximumHours, contractType } = body;
   const cleanFirstName = String(firstName || name || '').trim();
@@ -25,8 +37,9 @@ const buildProfileUpdateParams = (body, role, userId) => {
   // Tutor-only fields are only ever written if the logged-in user is a tutor,
   // regardless of what a coordinator's request body might contain.
   const isTutor = role === 'tutor';
+  const hours = parseMaximumHours(maximumHours);
 
-  return [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, maximumHours ?? null, contractType || null, userId];
+  return [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, hours.error ? null : hours.value, contractType || null, userId];
 };
 
-module.exports = { formatProfile, buildProfileUpdateParams };
+module.exports = { formatProfile, parseMaximumHours, buildProfileUpdateParams };

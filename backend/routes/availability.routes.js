@@ -1,58 +1,20 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { getCoordinatorUnitId } = require('../utils/unitAccess');
-const { parseAvailabilitySlot } = require('../utils/availabilityRules');
+const {
+  getCoordinatorUnitId,
+  isTutorLinkedToUnit,
+  isUserLinkedToUnit,
+  resolveUnitForUser
+} = require('../utils/unitAccess');
+const {
+  parseAvailabilitySlot,
+  isAvailabilityLocked,
+  buildAvailabilityGrid,
+  applyCommittedSessions
+} = require('../utils/availabilityRules');
 
 const router = express.Router();
-
-// Helper: convert TIME string "08:00:00" back to "8am"
-const timeToSlot = (timeStr) => {
-  const [h] = timeStr.split(':');
-  const hour = parseInt(h);
-  if (hour === 0) return '12:00am';
-  if (hour < 12) return `${hour}:00am`;
-  if (hour === 12) return '12:00pm';
-  return `${hour - 12}:00pm`;
-};
-
-// Normalises day "Monday" -> "MON" for the availability slot key format
-const AVAILABILITY_DAY_MAP = {
-  Monday: 'MON', Tuesday: 'TUE', Wednesday: 'WED', Thursday: 'THU', Friday: 'FRI',
-  MON: 'MON', TUE: 'TUE', WED: 'WED', THU: 'THU', FRI: 'FRI',
-};
-
-// True if the unit's availability window is closed, either because a
-// coordinator locked it manually or because the deadline has passed.
-const isAvailabilityLocked = (unit) => {
-  if (unit.availability_locked) return true;
-  if (unit.availability_deadline && new Date() > new Date(unit.availability_deadline)) return true;
-  return false;
-};
-
-const getUnitForAvailability = async (unitCode) => {
-  const result = await pool.query(
-    'SELECT id FROM units WHERE unit_code = $1 LIMIT 1',
-    [unitCode || 'FIT3077']
-  );
-  return result.rows[0] || null;
-};
-
-const isTutorLinkedToUnit = async (tutorId, unitId) => {
-  const result = await pool.query(
-    `
-    SELECT 1 WHERE EXISTS (
-      SELECT 1 FROM unit_memberships WHERE user_id = $1 AND unit_id = $2 AND role IN ('tutor', 'super_tutor')
-      UNION
-      SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
-      UNION
-      SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
-    )
-    `,
-    [tutorId, unitId]
-  );
-  return result.rows.length > 0;
-};
 
 /**
  * GET /availability?unitCode=FIT3077
@@ -61,9 +23,12 @@ const isTutorLinkedToUnit = async (tutorId, unitId) => {
  */
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { unitCode } = req.query;
+    const { unitCode, unitId } = req.query;
+    if (!unitCode && !unitId) {
+      return res.status(400).json({ error: 'unitCode or unitId is required' });
+    }
 
-    const unit = await getUnitForAvailability(unitCode);
+    const unit = await resolveUnitForUser({ unitId, unitCode }, req.user.id);
     if (!unit) return res.status(404).json({ error: 'Unit not found' });
     const unit_id = unit.id;
 
@@ -138,30 +103,22 @@ router.get('/', verifyToken, async (req, res) => {
         availabilityParams
       ),
     ]);
-    const tutors = tutorResult.rows.map(t => ({ id: t.id, name: t.name, icon: null }));
-    const visibleTutorIds = new Set(tutors.map(t => t.id));
-    const submittedIds = new Set(
-      submittedResult.rows
-        .map(r => r.tutor_id)
-        .filter(id => visibleTutorIds.has(id))
+    const grid = buildAvailabilityGrid(tutorResult.rows, submittedResult.rows, availResult.rows);
+
+    // Sessions these tutors have ACCEPTED in other units show as "avoid".
+    const committedResult = await pool.query(
+      `
+      SELECT st.tutor_id, s.day, s.start_time, s.end_time, un.unit_code
+      FROM session_tutors st
+      JOIN sessions s ON s.id = st.session_id
+      JOIN units un ON un.id = s.unit_id
+      WHERE st.tutor_confirmed = TRUE
+        AND s.unit_id <> $1
+        AND st.tutor_id = ANY($2::uuid[])
+      `,
+      [unit_id, grid.tutors.map(t => t.id)]
     );
-
-    const submissionStatus = tutors.map(t => ({
-      tutorId: t.id,
-      submitted: submittedIds.has(t.id),
-    }));
-
-    const availability = { MON: {}, TUE: {}, WED: {}, THU: {}, FRI: {} };
-    for (const row of availResult.rows) {
-      if (!visibleTutorIds.has(row.tutor_id)) continue;
-      const day = AVAILABILITY_DAY_MAP[row.day];
-      if (!day) continue;
-      const slot = timeToSlot(row.start_time);
-      if (!availability[day][row.tutor_id]) availability[day][row.tutor_id] = {};
-      availability[day][row.tutor_id][slot] = row.preference;
-    }
-
-    res.json({ tutors, submissionStatus, availability });
+    res.json(applyCommittedSessions(grid, committedResult.rows));
   } catch (error) {
     console.error('Error fetching availability:', error);
     res.status(500).json({ error: 'Failed to fetch availability' });
@@ -177,35 +134,32 @@ router.get('/', verifyToken, async (req, res) => {
 router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { unitCode, slots } = req.body;
-    if (!unitCode || !slots) {
-      return res.status(400).json({ error: 'unitCode and slots are required' });
+    const { unitCode, unitId, slots } = req.body;
+    if ((!unitCode && !unitId) || !slots) {
+      return res.status(400).json({ error: 'unitId (or unitCode) and slots are required' });
     }
 
     const tutor_id = req.user.id;
 
-    const unitResult = await client.query(
-      'SELECT id, availability_locked, availability_deadline FROM units WHERE unit_code = $1 LIMIT 1',
-      [unitCode]
-    );
-    if (!unitResult.rows.length) return res.status(404).json({ error: 'Unit not found' });
-    const unit = unitResult.rows[0];
+    const unit = await resolveUnitForUser({ unitId, unitCode }, tutor_id, client);
+    if (!unit) return res.status(404).json({ error: 'Unit not found' });
     const unit_id = unit.id;
+
+    // Only people already on the unit can submit availability for it.
+    // (Submitting used to silently enrol any tutor into any unit.)
+    if (!(await isUserLinkedToUnit(tutor_id, unit_id, client))) {
+      return res.status(403).json({ error: 'You are not part of this unit' });
+    }
 
     if (isAvailabilityLocked(unit)) {
       return res.status(409).json({ error: 'Availability submissions are closed for this unit.' });
     }
 
-    await client.query('BEGIN');
+    if (typeof slots !== 'object' || Array.isArray(slots)) {
+      return res.status(400).json({ error: 'slots must be an object of "Day-time": preference' });
+    }
 
-    await client.query(
-      `
-      INSERT INTO unit_memberships (unit_id, user_id, role)
-      VALUES ($1, $2, 'tutor')
-      ON CONFLICT (unit_id, user_id, role) DO NOTHING
-      `,
-      [unit_id, tutor_id]
-    );
+    await client.query('BEGIN');
 
     await client.query(
       'DELETE FROM availability WHERE tutor_id = $1 AND unit_id = $2',
@@ -224,11 +178,11 @@ router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (
     }
 
     await client.query('COMMIT');
-    console.log(`Availability submitted: ${req.user.email} for ${unitCode}`);
+    console.log(`Availability submitted: ${req.user.email} for ${unit.unit_code}`);
     res.status(201).json({ success: true, message: 'Availability submitted successfully' });
 
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error submitting availability:', error);
     res.status(500).json({ error: 'Failed to submit availability' });
   } finally {

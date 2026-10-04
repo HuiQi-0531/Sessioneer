@@ -1,49 +1,24 @@
-const WEEKDAY_INDEX = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
-
-// Counts how many times `day` (e.g. 'THU') falls between startDate and endDate inclusive.
-const countWeekdayOccurrences = (day, startDate, endDate) => {
-  const targetIdx = WEEKDAY_INDEX[String(day).toUpperCase()];
-  if (targetIdx === undefined || !startDate || !endDate) return 0;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0;
-
-  const cursor = new Date(start);
-  cursor.setDate(cursor.getDate() + ((targetIdx - cursor.getDay() + 7) % 7));
-
-  let count = 0;
-  while (cursor <= end) {
-    count++;
-    cursor.setDate(cursor.getDate() + 7);
-  }
-  return count;
-};
-
-const formatDateRange = (startDate, endDate) => {
-  const opts = { day: 'numeric', month: 'short' };
-  const start = new Date(startDate).toLocaleDateString('en-AU', opts);
-  const end = new Date(endDate).toLocaleDateString('en-AU', opts);
-  return `${start} - ${end}`;
-};
-
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { escapeHtml, sendEmail } = require('../utils/email');
-const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
+const { TUTOR_LIKE_ROLES } = require('../utils/roles');
+const {
+  countWeekdayOccurrences,
+  formatCoverSession,
+  validateCoverDates,
+  getCoverRecipients,
+  buildCoverSummary,
+  checkCoverClaim,
+  resolveOriginalTutors,
+  findCoverClash
+} = require('../utils/coverRules');
 
 const router = express.Router();
 
-const formatTimeRange = (start, end) => `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`;
 const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-
-const formatCoverSession = (session) => {
-  const time = formatTimeRange(session.start_time || session.startTime, session.end_time || session.endTime);
-  const location = session.location ? ` at ${session.location}` : '';
-  return `${session.day} ${time}${location}`;
-};
 
 const sendCoverRequestEmail = async ({ tutorEmail, tutorName, unitCode, sessions, reason }) => {
   if (!tutorEmail) return;
@@ -132,17 +107,15 @@ const sendCoverClaimedEmail = async ({ coordinatorEmail, coordinatorName, claime
 router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { sessionIds, reason, startDate, endDate } = req.body;
+    const { sessionIds, reason, startDate, endDate, originalTutorId } = req.body;
 
     if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
       return res.status(400).json({ error: 'Select at least one session to broadcast.' });
     }
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({ error: 'Select the date range this cover request applies to.' });
-    }
-    if (new Date(startDate) > new Date(endDate)) {
-      return res.status(400).json({ error: 'Start date must be before the end date.' });
+    const dateError = validateCoverDates(startDate, endDate);
+    if (dateError) {
+      return res.status(400).json({ error: dateError });
     }
 
     // Pull the sessions and make sure every single one belongs to a unit this
@@ -150,11 +123,16 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     // else's timetable.
     const sessionsResult = await client.query(
       `
-      SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time, s.location,
-             s.assigned_tutor_id, un.unit_code
+      SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time, s.location, un.unit_code,
+             COALESCE(
+               ARRAY_AGG(st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM FALSE),
+               '{}'
+             ) AS active_tutor_ids
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
+      LEFT JOIN session_tutors st ON st.session_id = s.id
       WHERE s.id = ANY($1::uuid[])
+      GROUP BY s.id, un.unit_code
       `,
       [sessionIds]
     );
@@ -175,6 +153,12 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
 
     const unitCode = sessionsResult.rows[0].unit_code;
 
+    // Who is away is read from session_tutors (the one assignment table).
+    const originals = resolveOriginalTutors(sessionsResult.rows, originalTutorId);
+    if (originals.error) {
+      return res.status(400).json({ error: originals.error });
+    }
+
     await client.query('BEGIN');
 
     const batchResult = await client.query(
@@ -191,16 +175,14 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, session_id, status
         `,
-        [batchId, session.id, unitId, session.assigned_tutor_id, reason || null, req.user.id]
+        [batchId, session.id, unitId, originals.bySession[session.id] || null, reason || null, req.user.id]
       );
       created.push({ ...insertResult.rows[0], day: session.day, startTime: session.start_time, endTime: session.end_time });
     }
 
     await client.query('COMMIT');
 
-    // Notify every tutor on this unit except whoever was originally assigned
-    // to these sessions - they're the one who can't make it.
-    const excludedTutorIds = new Set(sessionsResult.rows.map(s => s.assigned_tutor_id).filter(Boolean));
+    // Notify every tutor on this unit except whoever is away for these sessions.
     const tutorsResult = await pool.query(
       `
       SELECT DISTINCT
@@ -215,16 +197,9 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
       `,
       [unitId, TUTOR_LIKE_ROLES]
     );
-    const recipients = tutorsResult.rows.filter(tutor => tutor.id && !excludedTutorIds.has(tutor.id));
+    const recipients = getCoverRecipients(tutorsResult.rows, originals.awayTutorIds);
     const recipientIds = recipients.map(tutor => tutor.id);
-
-    const sessionSummary = sessionsResult.rows.length === 1
-      ? (() => {
-          const s = sessionsResult.rows[0];
-          const occurrences = countWeekdayOccurrences(s.day, startDate, endDate);
-          return `${formatDateRange(startDate, endDate)} · ${s.day} ${formatTimeRange(s.start_time, s.end_time)} (${occurrences} session${occurrences === 1 ? '' : 's'})`;
-        })()
-      : `${formatDateRange(startDate, endDate)} · ${sessionsResult.rows.length} sessions`;
+    const sessionSummary = buildCoverSummary(sessionsResult.rows, startDate, endDate);
 
     await Promise.all(recipientIds.map(userId => createNotification({
       userId,
@@ -334,6 +309,12 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
           SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = ANY($2)
         )
         AND (cr.original_tutor_id IS NULL OR cr.original_tutor_id != $1)
+        AND cb.end_date >= CURRENT_DATE
+        AND NOT EXISTS (
+          SELECT 1 FROM session_tutors st
+          WHERE st.session_id = cr.session_id AND st.tutor_id = $1
+            AND st.tutor_confirmed IS DISTINCT FROM FALSE
+        )
       ORDER BY cr.created_at DESC
       `,
       [req.user.id, TUTOR_LIKE_ROLES]
@@ -360,13 +341,21 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     const eligible = await client.query(
       `
       SELECT cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status,
-             s.session_type,
-             bool_or(um.role = 'super_tutor') AS is_super_tutor
+             s.session_type, s.day, s.start_time, s.end_time,
+             cb.start_date, cb.end_date,
+             bool_or(um.role = 'super_tutor') AS is_super_tutor,
+             EXISTS (
+               SELECT 1 FROM session_tutors st
+               WHERE st.session_id = cr.session_id AND st.tutor_id = $2
+                 AND st.tutor_confirmed IS DISTINCT FROM FALSE
+             ) AS already_teaches_session
       FROM cover_requests cr
+      JOIN cover_batches cb ON cb.id = cr.batch_id
       JOIN sessions s ON s.id = cr.session_id
       JOIN unit_memberships um ON um.unit_id = cr.unit_id AND um.user_id = $2 AND um.role = ANY($3)
       WHERE cr.id = $1
-      GROUP BY cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status, s.session_type
+      GROUP BY cr.id, cr.session_id, cr.unit_id, cr.original_tutor_id, cr.status,
+               s.session_type, s.day, s.start_time, s.end_time, cb.start_date, cb.end_date
       `,
       [id, req.user.id, TUTOR_LIKE_ROLES]
     );
@@ -376,11 +365,34 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
     }
 
     const request = eligible.rows[0];
-    if (request.original_tutor_id === req.user.id) {
-      return res.status(400).json({ error: "You can't claim your own session." });
+    const claimError = checkCoverClaim(request, req.user.id);
+    if (claimError) {
+      return res.status(claimError.status).json({ error: claimError.error });
     }
-    if (requiresSuperTutor(request.session_type) && !request.is_super_tutor) {
-      return res.status(403).json({ error: `Only Super Tutors can claim ${request.session_type} sessions.` });
+
+    // Everything the claimer already teaches (session_tutors) plus covers
+    // they already claimed, so a cover can never double-book them.
+    const commitments = await client.query(
+      `
+      SELECT s.id AS session_id, s.day, s.start_time, s.end_time, un.unit_code,
+             NULL::date AS start_date, NULL::date AS end_date
+      FROM session_tutors st
+      JOIN sessions s ON s.id = st.session_id
+      JOIN units un ON un.id = s.unit_id
+      WHERE st.tutor_id = $1 AND st.tutor_confirmed IS DISTINCT FROM FALSE
+      UNION ALL
+      SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code, cb.start_date, cb.end_date
+      FROM cover_requests cr
+      JOIN cover_batches cb ON cb.id = cr.batch_id
+      JOIN sessions s ON s.id = cr.session_id
+      JOIN units un ON un.id = s.unit_id
+      WHERE cr.claimed_by_id = $1 AND cr.status = 'claimed'
+      `,
+      [req.user.id]
+    );
+    const clash = findCoverClash(request, commitments.rows);
+    if (clash) {
+      return res.status(clash.status).json({ error: clash.error });
     }
 
     await client.query('BEGIN');
@@ -403,16 +415,10 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
 
     const claimed = claimResult.rows[0];
 
-    await client.query(
-      `UPDATE sessions SET assigned_tutor_id = $1, tutor_confirmed = TRUE, tutor_reject_reason = NULL WHERE id = $2`,
-      [req.user.id, claimed.session_id]
-    );
-
-    await client.query(
-      `INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor') ON CONFLICT (unit_id, user_id, role) DO NOTHING`,
-      [claimed.unit_id, req.user.id]
-    );
-
+    // A cover is temporary, so it lives only in cover_requests (with its
+    // date range). It is NOT written into sessions or session_tutors: the
+    // timetable shows it through activeCovers, and it disappears by itself
+    // once the cover period ends.
     await client.query('COMMIT');
 
     const claimerName = await getUserDisplayName(req.user.id);

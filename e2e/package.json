@@ -1,0 +1,13 @@
+{
+  "name": "sessioneer-e2e",
+  "private": true,
+  "description": "End-to-end acceptance tests: a real browser drives the real frontend and backend against a throwaway test database.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

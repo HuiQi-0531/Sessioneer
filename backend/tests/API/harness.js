@@ -4,6 +4,10 @@ const request = require('supertest');
 const { query } = require('../rbac/testDb');
 
 const { app } = require('../../server');
+const pool = require('../../db');
+
+// Close this test file's database pool so Jest can exit cleanly.
+afterAll(async () => { await pool.end(); });
 
 const PASSWORD = 'Password123!';
 
@@ -61,13 +65,14 @@ const insertUser = async ({ key, role, status = 'active', hours = 10 }) => {
   return row.rows[0];
 };
 
+// Sessions have no tutor columns: an assignment is a row in session_tutors.
 const insertSession = async (unitId, code, day, start, end, type, extra = {}) => {
   const row = await query(
     `INSERT INTO sessions (unit_id, day, start_time, end_time, location, campus, session_type,
-                           capacity, required_tutors, status, session_code, assigned_tutor_id, is_assigned)
-     VALUES ($1, $2, $3, $4, 'GP-P-101', 'GP', $5, 30, $6, 'Confirmed', $7, $8, $9)
+                           capacity, required_tutors, status, session_code)
+     VALUES ($1, $2, $3, $4, 'GP-P-101', 'GP', $5, 30, $6, 'Confirmed', $7)
      RETURNING id`,
-    [unitId, day, start, end, type, extra.requiredTutors || 1, code, extra.assignedTutorId || null, extra.assignedTutorId ? true : false]
+    [unitId, day, start, end, type, extra.requiredTutors || 1, code]
   );
   return row.rows[0].id;
 };
@@ -110,7 +115,7 @@ const seed = async () => {
   const s = {};
   s.open = await insertSession(unitA.id, 'TUT01', 'MON', '09:00', '10:00', 'Tutorial');
   s.open2 = await insertSession(unitA.id, 'TUT02', 'TUE', '09:00', '10:00', 'Tutorial');
-  s.held = await insertSession(unitA.id, 'TUT03', 'WED', '11:00', '12:00', 'Tutorial', { assignedTutorId: u.tutor.id });
+  s.held = await insertSession(unitA.id, 'TUT03', 'WED', '11:00', '12:00', 'Tutorial');
   s.declined = await insertSession(unitA.id, 'TUT04', 'THU', '09:00', '10:00', 'Tutorial');
   s.lecture = await insertSession(unitA.id, 'LEC01', 'FRI', '12:00', '14:00', 'Lecture');
   s.long = await insertSession(unitA.id, 'TUT05', 'MON', '13:00', '15:00', 'Tutorial');

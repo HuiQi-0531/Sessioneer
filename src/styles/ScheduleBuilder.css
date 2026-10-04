@@ -130,6 +130,46 @@
   font-size: 13px;
 }
 
+.sb-table td.sb-td-status {
+  white-space: normal;
+  overflow: visible;
+}
+
+.sb-pill-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Same colours as the grid view: green = accepted, amber = waiting */
+.sb-assigned-pill.pending {
+  background-color: var(--color-warning-bg);
+  color: #78350f;
+  border: 1px solid #fcd34d;
+}
+
+.sb-pill-status {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.sb-pill-status::before {
+  content: '· ';
+}
+
+.sb-declined-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+.sb-needs-more {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #78350f;
+}
+
 .sb-change-link {
   background: none;
   border: none;

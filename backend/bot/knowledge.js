@@ -329,6 +329,16 @@ const STOPWORDS = new Set(('a an the i me my we our you your to of in on for at 
 const tokenize = (text) =>
   text.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOPWORDS.has(w));
 
+// Does the question contain this keyword? English keywords must match whole
+// words ("dm" must not match inside "admin"); Chinese has no spaces between
+// words, so non-ASCII keywords are still matched as plain text.
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const keywordMatches = (lowerQuestion, keyword) => {
+  const kw = keyword.toLowerCase();
+  if (/[^\x00-\x7F]/.test(kw)) return lowerQuestion.includes(kw);
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(kw)}($|[^a-z0-9])`).test(lowerQuestion);
+};
+
 // Returns the top `limit` sections for this question and role.
 const searchKnowledge = (question, role, limit = 3) => {
   const q = question.toLowerCase();
@@ -340,7 +350,7 @@ const searchKnowledge = (question, role, limit = 3) => {
     .map(s => {
       let score = 0;
       for (const kw of s.keywords) {
-        if (q.includes(kw.toLowerCase())) score += kw.includes(' ') || /[^\x00-\x7F]/.test(kw) ? 4 : 3;
+        if (keywordMatches(q, kw)) score += kw.includes(' ') || /[^\x00-\x7F]/.test(kw) ? 4 : 3;
       }
       for (const w of tokenize(s.title)) if (qWords.has(w)) score += 2;
       for (const w of new Set(tokenize(s.content))) if (qWords.has(w)) score += 0.5;
@@ -355,4 +365,4 @@ const searchKnowledge = (question, role, limit = 3) => {
   return scored.map(x => x.s);
 };
 
-module.exports = { OVERVIEW, SECTIONS, searchKnowledge, tokenize };
+module.exports = { OVERVIEW, SECTIONS, searchKnowledge, tokenize, keywordMatches };

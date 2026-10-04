@@ -1,4 +1,4 @@
-// Upload helpers moved here unchanged from messages.routes.js and profile.routes.js
+// Upload helpers used by messages.routes.js and profile.routes.js
 // (both files had identical copies).
 
 const ALLOWED_ATTACHMENT_TYPES = new Set([

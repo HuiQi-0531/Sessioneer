@@ -8,7 +8,18 @@ const {
   applyApprovedChangeRequest,
   resolveSessionId
 } = require('../utils/applyChangeRequest');
-const { isUserLinkedToUnit, LINKED_UNITS_SQL } = require('../utils/unitAccess');
+const { isUserLinkedToUnit, LINKED_UNITS_SQL, resolveUnitForUser } = require('../utils/unitAccess');
+const {
+  resolveTutorRequestStatus,
+  shouldApplyChange,
+  checkTutorStatusChange
+} = require('../utils/changeRequestRules');
+const {
+  labelFromSessionValue,
+  buildReviewEmailSubject,
+  buildCoordinatorReviewNotification,
+  isValidReviewStatus
+} = require('../utils/requestLabels');
 
 const router = express.Router();
 
@@ -39,13 +50,6 @@ const getUnitCoordinators = async (unitId) => {
   );
 
   return result.rows;
-};
-
-const labelFromSessionValue = (value) => {
-  if (!value) return 'Not specified';
-  const parts = String(value).split('::');
-  if (parts.length !== 2) return value;
-  return parts[1].replace(/\|/g, ' | ');
 };
 
 const sendUrgentRequestEmail = async ({
@@ -116,15 +120,11 @@ const sendRequestReviewEmail = async ({
 }) => {
   if (!tutorEmail) return;
 
-  const statusLower = (status || '').toLowerCase();
-  const displayStatus = statusLower === 'accepted' ? 'approved' : statusLower || 'updated';
+  const { displayStatus, subject } = buildReviewEmailSubject(status, unitCode);
   const unitLabel = unitName ? `${unitCode} - ${unitName}` : unitCode;
   const requestsUrl = `${frontendUrl()}/requests`;
   const sessionLabel = labelFromSessionValue(currentSession);
   const preferredLabel = preferredSwapTo ? labelFromSessionValue(preferredSwapTo) : 'Not specified';
-  const subject = statusLower === 'suggested'
-    ? `Alternative session suggested for ${unitCode}`
-    : `Your ${unitCode} request was ${displayStatus}`;
 
   await sendEmail({
     to: [{ email: tutorEmail, name: tutorName || undefined }],
@@ -199,20 +199,13 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     const tutor_id = req.user.id;
 
-    const unitResult = await pool.query(
-      `
-      SELECT
-        un.id,
-        un.unit_code,
-        un.unit_name,
-        un.unit_coordinator_id
-      FROM units un
-      WHERE un.unit_code = $1
-      LIMIT 1
-      `,
-      [unitCode]
-    );
-    const unit = unitResult.rows[0];
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ error: 'Please give a reason for this request' });
+    }
+
+    // unitId is preferred; a unit code can exist in several semesters, so a
+    // code is matched to the newest unit this user actually belongs to.
+    const unit = await resolveUnitForUser({ unitId: req.body.unitId, unitCode }, tutor_id);
     const unit_id = unit?.id;
     if (!unit_id) {
       return res.status(404).json({ error: 'Unit not found' });
@@ -227,16 +220,7 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
 
     const coordinators = await getUnitCoordinators(unit_id);
 
-    const priorityValue = priority || 'Normal';
-
-    await pool.query(
-      `
-      INSERT INTO unit_memberships (unit_id, user_id, role)
-      VALUES ($1, $2, 'tutor')
-      ON CONFLICT (unit_id, user_id, role) DO NOTHING
-      `,
-      [unit_id, tutor_id]
-    );
+    const priorityValue = String(priority || '').toLowerCase() === 'urgent' ? 'Urgent' : 'Normal';
 
     const resolvedCurrentId = await resolveSessionId(pool, unit_id, currentSessionId || null, currentSession);
     const resolvedPreferredId = await resolveSessionId(pool, unit_id, preferredSessionId || null, preferredSwapTo);
@@ -299,7 +283,7 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     res.status(201).json({
       ...result.rows[0],
       tutorName: tutorDisplayName,
-      unitCode,
+      unitCode: unit.unit_code,
     });
   } catch (error) {
     console.error('Error creating request:', error);
@@ -311,7 +295,9 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    let { status, reviewNotes, reason } = req.body;
+    // Review notes belong to the coordinator (they also name the suggested
+    // session), so a tutor can only change the status and their own reason.
+    let { status, reason } = req.body;
 
     const existingResult = await client.query(
       'SELECT * FROM change_requests WHERE id = $1 AND tutor_id = $2',
@@ -321,24 +307,16 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
       return res.status(404).json({ error: 'Request not found' });
     }
     const existing = existingResult.rows[0];
-    const existingStatus = String(existing.status || '').toLowerCase();
 
-    // A tutor can only "accept" an alternative the coordinator suggested.
-    // Approving their own pending request is the coordinator's job.
-    if (String(status || '').toLowerCase() === 'accepted' && existingStatus !== 'suggested') {
-      return res.status(403).json({ error: 'Only the unit coordinator can approve this request' });
+    const statusError = checkTutorStatusChange(existing.status, status);
+    if (statusError) {
+      return res.status(statusError.status).json({ error: statusError.error });
     }
-
-    if (
-      existingStatus === 'suggested' &&
-      String(status || '').toLowerCase() === 'rejected'
-    ) {
-      status = 'Pending';
-    }
+    status = resolveTutorRequestStatus(existing.status, status);
 
     await client.query('BEGIN');
 
-    if (String(status || existing.status || '').toLowerCase() === 'accepted') {
+    if (shouldApplyChange(status, existing.status)) {
       await applyApprovedChangeRequest(client, existing);
     }
 
@@ -346,9 +324,8 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
       UPDATE change_requests 
       SET 
         status = COALESCE($1, status),
-        review_notes = COALESCE($2, review_notes),
-        reason = COALESCE($3, reason)
-      WHERE id = $4 AND tutor_id = $5
+        reason = COALESCE($2, reason)
+      WHERE id = $3 AND tutor_id = $4
       RETURNING 
         id,
         request_type as "requestType",
@@ -360,13 +337,15 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
         preferred_swap_to as "preferredSwapTo",
         created_at as "submittedDate",
         unit_id
-    `, [status, reviewNotes, reason, id, req.user.id]);
+    `, [status || null, reason || null, id, req.user.id]);
 
     await client.query('COMMIT');
 
     const updated = result.rows[0];
 
-    if ((status || '').toLowerCase() === 'pending' && updated.unit_id) {
+    const isAppeal = String(existing.status || '').toLowerCase() === 'rejected'
+      && String(status || '').toLowerCase() === 'pending';
+    if (isAppeal && updated.unit_id) {
       const unitResult = await pool.query(
         'SELECT unit_code FROM units WHERE id = $1',
         [updated.unit_id]
@@ -421,13 +400,18 @@ router.delete('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'),
 
 router.get('/sessions', verifyToken, async (req, res) => {
   try {
+    // Tutor names come from session_tutors (the one assignment table).
     const result = await pool.query(`
-      SELECT 
+      SELECT
         s.*,
-        TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as assigned_tutor_name,
-        un.unit_code
+        un.unit_code,
+        (
+          SELECT STRING_AGG(TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))), ', ' ORDER BY st.assigned_at)
+          FROM session_tutors st
+          JOIN users u ON u.id = st.tutor_id
+          WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
+        ) AS assigned_tutor_name
       FROM sessions s
-      LEFT JOIN users u ON s.assigned_tutor_id = u.id
       LEFT JOIN units un ON s.unit_id = un.id
       -- Only units the caller belongs to (this used to return every unit's sessions).
       WHERE s.unit_id IN (${LINKED_UNITS_SQL})
@@ -487,6 +471,9 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
     const statusLower = String(status || '').toLowerCase();
+    if (!isValidReviewStatus(statusLower)) {
+      return res.status(400).json({ error: 'Status must be Accepted, Rejected or Suggested' });
+    }
 
     const existingResult = await client.query(
       `
@@ -520,7 +507,7 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
       suggestedSessionId = await resolveSessionId(client, existing.unit_id, null, reviewNotes);
     }
 
-    if (statusLower === 'accepted') {
+    if (shouldApplyChange(statusLower, existing.status)) {
       await applyApprovedChangeRequest(client, existing);
     }
 
@@ -580,20 +567,7 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
     const details = detailsResult.rows[0] || {};
     const unitCode = details.unit_code || 'your unit';
 
-    let title, content;
-    if (statusLower === 'accepted') {
-      title = 'Request approved';
-      content = `Your request in ${unitCode} was approved. Your timetable has been updated.`;
-    } else if (statusLower === 'rejected') {
-      title = 'Request rejected';
-      content = `Your request in ${unitCode} was rejected.${reviewNotes ? ` Note: ${reviewNotes}` : ''}`;
-    } else if (statusLower === 'suggested') {
-      title = 'Alternative session suggested';
-      content = `Your coordinator suggested an alternative session for your request in ${unitCode}.`;
-    } else {
-      title = 'Request updated';
-      content = `Your request in ${unitCode} was updated to "${status}".`;
-    }
+    const { title, content } = buildCoordinatorReviewNotification(statusLower, status, unitCode, reviewNotes);
 
     if (updated.tutor_id) {
       await createNotification({

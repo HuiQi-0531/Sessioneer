@@ -321,7 +321,7 @@ const TutorMessages = () => {
     setShowProfile(true);
     try {
       const sessions = await sessionsAPI.getAll(selectedUnitId);
-      setProfileSessions(sessions.filter(s => s.assignedTutorId === selectedContact.userId));
+      setProfileSessions(sessions.filter(s => (Array.isArray(s.tutors) ? s.tutors : []).some(t => t.tutorId === selectedContact.userId)));
     } catch (err) {
       console.error('Error loading profile sessions:', err);
     }

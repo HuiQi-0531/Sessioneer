@@ -1,502 +1,404 @@
-const crypto = require('crypto');
+// Integration workflows: each test follows one user story across several
+// parts of the system (accounts, units, sessions, availability, requests,
+// covers, notifications, jobs) and checks the END RESULT the people involved
+// would see - "open the phone and look", not "ask if it was written".
+const fs = require('fs');
+const path = require('path');
+const { Client } = require('pg');
 const { sendEmail } = require('../../utils/email');
+const { migrate } = require('../../scripts/migrate');
 const { api, seed, query, sessionBody, PASSWORD } = require('../API/harness');
 
-const assign = (ctx, sessionId, token, tutorId) =>
-  api('patch', `/units/${ctx.unitA.id}/sessions/${sessionId}/assign`, token, { tutorId });
+const pad = (n) => String(n).padStart(2, '0');
+const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fromToday = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return dayKey(d); };
+
+const login = async (email, password = PASSWORD) => (await api('post', '/auth/login', null, { email, password })).body.token;
+const notesOf = async (token) => (await api('get', '/notifications', token)).body.notifications;
+const timetable = async (unitId, token) => (await api('get', `/units/${unitId}/sessions`, token)).body;
+const tutorsOn = async (sessionId) => (await query(
+  `SELECT tutor_id, tutor_confirmed FROM session_tutors WHERE session_id = $1 ORDER BY tutor_id`, [sessionId]
+)).rows;
+const tokenFromLastEmail = () => {
+  const call = sendEmail.mock.calls[sendEmail.mock.calls.length - 1][0];
+  return /token=([a-f0-9]+)/.exec(call.textContent || call.htmlContent)[1];
+};
 
 describe('Integration workflows', () => {
   let ctx;
-  beforeEach(async () => { ctx = await seed(); });
+  beforeEach(async () => { ctx = await seed(); sendEmail.mockClear(); });
 
-  test('register, create a unit, assign a tutor, confirm, then a lock blocks later changes', async () => {
-    await api('post', '/auth/register', null, {
-      firstName: 'Nia', lastName: 'Coord', email: 'nia@api.test', role: 'Coordinator',
-      password: PASSWORD, confirmPassword: PASSWORD
-    });
-    const login = await api('post', '/auth/login', null, { email: 'nia@api.test', password: PASSWORD });
-    const token = login.body.token;
-    const unit = await api('post', '/units', token, {
-      unitCode: 'flow101', unitName: 'Flow', semester: 'Semester 1', year: 2027
-    });
-    const session = await api('post', `/units/${unit.body.id}/sessions`, token, sessionBody({ day: 'Tuesday' }));
-    const assigned = await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/assign`, token, { tutorId: ctx.u.other.id });
-    expect(assigned.status).toBe(200);
-    const notes = await api('get', '/notifications', ctx.tokens.other);
-    expect(notes.body.notifications.some(item => item.type === 'session_assigned')).toBe(true);
-    expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: true })).status).toBe(200);
-    expect((await api('patch', `/units/${unit.body.id}/lock-schedule`, token, {})).status).toBe(200);
-    expect((await api('delete', `/units/${unit.body.id}/sessions/${session.body.id}/assign/${ctx.u.other.id}`, token)).status).toBe(409);
-    expect((await api('patch', `/units/${unit.body.id}/sessions/${session.body.id}/confirm`, ctx.tokens.other, { confirmed: false, reason: 'too late' })).status).toBe(409);
+  test('INT-01 semester set-up: register, create unit, import timetable, invite tutor, availability, assign, accept, lock', async () => {
+    // A new coordinator registers and logs in.
+    expect((await api('post', '/auth/register', null, {
+      firstName: 'Nia', lastName: 'Coord', email: 'Nia@API.test', role: 'Coordinator', password: PASSWORD, confirmPassword: PASSWORD
+    })).status).toBe(201);
+    const uc = await login('nia@api.test');
+
+    // Creates a unit and imports the timetable from a CSV.
+    const unit = (await api('post', '/units', uc, { unitCode: 'flow101', unitName: 'Flow', semester: 'Semester 1', year: 2027 })).body;
+    const imported = await api('post', `/units/${unit.id}/sessions/import`, uc, { sessions: [
+      { day: 'Monday', startTime: '9am', endTime: '11am', location: 'P-101', campus: 'GP', sessionType: 'Tutorial', capacity: 25 },
+      { day: 'Tuesday', startTime: '13:00', endTime: '14:00', location: 'P-102', campus: 'GP', sessionType: 'Tutorial', capacity: 25 }
+    ] });
+    expect(imported.body.importedCount).toBe(2);
+    const [mon, tue] = (await timetable(unit.id, uc)).sort((a, b) => a.day.localeCompare(b.day));
+
+    // Invites a brand-new tutor, who accepts and logs in.
+    const invite = await api('post', '/tutor-applications/direct-invite', uc, { unitId: unit.id, email: 'Fresh.Tutor@api.test' });
+    expect((await api('post', '/tutor-applications/accept-invite', null, {
+      token: invite.body.inviteToken, password: 'abcdef', firstName: 'Fresh', lastName: 'Tutor'
+    })).status).toBe(201);
+    const tutor = await login('fresh.tutor@api.test', 'abcdef');
+    const tutorId = (await api('get', '/profile', tutor)).body.id;
+    expect((await api('get', '/units/my-units', tutor)).body.map(u => u.unitCode)).toContain('FLOW101');
+
+    // The tutor submits availability and the coordinator sees it on the grid.
+    await api('post', '/availability/submit', tutor, { unitId: unit.id, unitCode: 'FLOW101', slots: {
+      'Monday-9:00am': 'preferred', 'Monday-10:00am': 'preferred', 'Tuesday-1:00pm': 'avoid'
+    } });
+    const grid = (await api('get', `/availability?unitId=${unit.id}`, uc)).body;
+    expect(grid.submissionStatus).toEqual([{ tutorId, submitted: true }]);
+
+    // Assign Staff ranks the tutor and shows "avoid" on Tuesday.
+    const monCandidates = (await api('get', `/units/${unit.id}/sessions/${mon.id}/candidates`, uc)).body.candidates;
+    expect(monCandidates.find(c => c.id === tutorId).allPreferred).toBe(true);
+    const tueCandidates = (await api('get', `/units/${unit.id}/sessions/${tue.id}/candidates`, uc)).body.candidates;
+    expect(tueCandidates.find(c => c.id === tutorId).warnings).toContain('Marked "avoid" for this time');
+
+    // Assign Monday; the tutor is notified and accepts.
+    await api('patch', `/units/${unit.id}/sessions/${mon.id}/assign`, uc, { tutorId });
+    expect((await notesOf(tutor)).some(n => n.type === 'session_assigned')).toBe(true);
+    await api('patch', `/units/${unit.id}/sessions/${mon.id}/confirm`, tutor, { confirmed: true });
+    expect((await notesOf(uc)).some(n => n.type === 'session_confirmed')).toBe(true);
+
+    // Lock is refused while Tuesday is empty, then forced.
+    const notReady = await api('patch', `/units/${unit.id}/lock-schedule`, uc, {});
+    expect(notReady.body).toMatchObject({ unassignedCount: 1, pendingCount: 0 });
+    expect((await api('patch', `/units/${unit.id}/lock-schedule`, uc, { force: true })).body.scheduleLocked).toBe(true);
+
+    // After locking nothing can change, and the tutor's schedule shows Monday as accepted.
+    expect((await api('patch', `/units/${unit.id}/sessions/${tue.id}/assign`, uc, { tutorId })).status).toBe(409);
+    expect((await api('patch', `/units/${unit.id}/sessions/${mon.id}/confirm`, tutor, { confirmed: false, reason: 'x' })).status).toBe(409);
+    const mine = (await api('get', `/units/${unit.id}/sessions/my-assigned`, tutor)).body;
+    expect(mine.map(s => [s.id, s.tutorConfirmed])).toEqual([[mon.id, true]]);
   });
 
-  test('approving a swap moves the tutor and notifies them', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'prefer Tuesday',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2, priority: 'Urgent'
-    });
-    expect((await api('patch', `/uc/requests/${submitted.body.id}/review`, ctx.tokens.uc, { status: 'Accepted' })).status).toBe(200);
-    const held = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
-    const next = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.open2]);
-    expect(held.rows.map(row => row.tutor_id)).not.toContain(ctx.u.tutor.id);
-    expect(next.rows.map(row => row.tutor_id)).toContain(ctx.u.tutor.id);
-    const notes = await api('get', '/notifications', ctx.tokens.tutor);
-    expect(notes.body.notifications.some(item => item.type === 'request_accepted')).toBe(true);
+  test('INT-02 Sarah in two units: the second coordinator cannot book the same time, and the time shows as avoid', async () => {
+    // "other" is Sarah: a tutor in API101 and API202.
+    await query(`INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor')`, [ctx.unitB.id, ctx.u.other.id]);
+    await api('post', '/availability/submit', ctx.tokens.other, { unitId: ctx.unitB.id, slots: { 'Monday-9:00am': 'preferred' } });
+
+    // UC A offers MON 9-10. While it is only an offer, UC B already sees her as blocked.
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id });
+    const cands = (await api('get', `/units/${ctx.unitB.id}/sessions/${ctx.s.unitB}/candidates`, ctx.tokens.uc2)).body.candidates;
+    const sarah = cands.find(c => c.id === ctx.u.other.id);
+    expect(sarah.hardBlocked).toBe(true);
+    expect(sarah.tentativeConflict).toBe(true);
+    const blocked = await api('patch', `/units/${ctx.unitB.id}/sessions/${ctx.s.unitB}/assign`, ctx.tokens.uc2, { tutorId: ctx.u.other.id });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error).toMatch(/API101/);
+
+    // Sarah accepts A. B's availability grid now shows MON 9am as avoid, with the reason.
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/confirm`, ctx.tokens.other, { confirmed: true });
+    const gridB = (await api('get', `/availability?unitId=${ctx.unitB.id}`, ctx.tokens.uc2)).body;
+    expect(gridB.availability.MON[ctx.u.other.id]['9:00am']).toBe('avoid');
+    expect(gridB.committed.MON[ctx.u.other.id]['9:00am']).toBe('API101');
+    // ...but what she typed is still stored unchanged.
+    expect((await query('SELECT preference FROM availability WHERE tutor_id = $1 AND unit_id = $2', [ctx.u.other.id, ctx.unitB.id])).rows)
+      .toEqual([{ preference: 'preferred' }]);
+
+    // A non-clashing time in B still works.
+    const later = (await api('post', `/units/${ctx.unitB.id}/sessions`, ctx.tokens.uc2, sessionBody({ day: 'MON', startTime: '11:00', endTime: '12:00' }))).body;
+    expect((await api('patch', `/units/${ctx.unitB.id}/sessions/${later.id}/assign`, ctx.tokens.uc2, { tutorId: ctx.u.other.id })).status).toBe(200);
   });
 
-  test('a suggested request goes back to Pending when the tutor rejects it', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'clash',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
-    });
-    await query(`UPDATE change_requests SET status = 'Suggested' WHERE id = $1`, [submitted.body.id]);
-    const appeal = await api('patch', `/requests/${submitted.body.id}`, ctx.tokens.tutor, { status: 'Rejected' });
-    expect(appeal.body.status).toBe('Pending');
+  test('INT-03 a double booking that slips in is stopped when the tutor accepts', async () => {
+    // Two coordinators pressed Assign at the same instant: both offers exist.
+    await query(`INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor')`, [ctx.unitB.id, ctx.u.other.id]);
+    await query('INSERT INTO session_tutors (session_id, tutor_id) VALUES ($1, $3), ($2, $3)', [ctx.s.open, ctx.s.unitB, ctx.u.other.id]);
+
+    expect((await api('patch', `/units/${ctx.unitB.id}/sessions/${ctx.s.unitB}/confirm`, ctx.tokens.other, { confirmed: true })).status).toBe(200);
+    const second = await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/confirm`, ctx.tokens.other, { confirmed: true });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toMatch(/API202/);
+
+    // She declines the second one; UC A sees it needs a tutor again.
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/confirm`, ctx.tokens.other, { confirmed: false, reason: 'double booked' });
+    const row = (await timetable(ctx.unitA.id, ctx.tokens.uc)).find(s => s.id === ctx.s.open);
+    expect(row.isAssigned).toBe(false);
+    expect(row.declinedTutors[0].rejectReason).toBe('double booked');
+    expect((await notesOf(ctx.tokens.uc)).some(n => n.type === 'session_declined')).toBe(true);
   });
 
-  test('approving a session change only unassigns the current session', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Change', reason: 'drop',
-      currentSessionId: ctx.s.held
+  test('INT-04 cover from start to finish: broadcast, claim, everyone sees the cover, then it expires', async () => {
+    const start = fromToday(1);
+    const end = fromToday(8);
+    // The frontend payload (with dates and the away tutor).
+    const sent = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
+      sessionIds: [ctx.s.held], reason: 'conference', startDate: start, endDate: end, originalTutorId: ctx.u.tutor.id
     });
-    expect((await api('patch', `/uc/requests/${submitted.body.id}/review`, ctx.tokens.uc, { status: 'Accepted' })).status).toBe(200);
-    const held = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
-    expect(held.rows.map(row => row.tutor_id)).not.toContain(ctx.u.tutor.id);
-  });
+    expect(sent.status).toBe(201);
+    const id = sent.body.requests[0].id;
 
-  test('the first eligible tutor claims a cover and the session owner changes', async () => {
-    const broadcast = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
-      sessionIds: [ctx.s.held], reason: 'away', startDate: '2026-10-07', endDate: '2026-10-07'
-    });
-    const id = broadcast.body.requests[0].id;
-    expect((await api('get', '/cover-requests/open', ctx.tokens.tutor)).body.find(row => row.id === id)).toBeUndefined();
+    // Everyone except the away tutor is told, and sees it in their open list.
+    expect((await notesOf(ctx.tokens.tutor)).some(n => n.type === 'session_cover_open')).toBe(false);
+    expect((await notesOf(ctx.tokens.other)).some(n => n.type === 'session_cover_open')).toBe(true);
+    expect((await api('get', '/cover-requests/open', ctx.tokens.other)).body.map(r => r.id)).toContain(id);
+    expect((await api('get', '/cover-requests/open', ctx.tokens.tutor)).body.map(r => r.id)).not.toContain(id);
+
+    // First claim wins.
     expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.other)).status).toBe(200);
     expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.super)).status).toBe(409);
-    const session = await query('SELECT assigned_tutor_id FROM sessions WHERE id = $1', [ctx.s.held]);
-    expect(session.rows[0].assigned_tutor_id).toBe(ctx.u.other.id);
-    const notes = await api('get', '/notifications', ctx.tokens.uc);
-    expect(notes.body.notifications.some(item => item.type === 'session_cover_claimed')).toBe(true);
+
+    // UC timetable shows the cover; the permanent tutor is unchanged.
+    const ucRow = (await timetable(ctx.unitA.id, ctx.tokens.uc)).find(s => s.id === ctx.s.held);
+    expect(ucRow.activeCovers.map(c => c.claimedByName)).toEqual(['other Test']);
+    expect(ucRow.tutors.map(t => t.tutorId)).toEqual([ctx.u.tutor.id]);
+    expect(await tutorsOn(ctx.s.held)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: null }]);
+
+    // The claimer sees it in their schedule; the away tutor and UC are told.
+    const covering = (await api('get', `/units/${ctx.unitA.id}/sessions/my-assigned`, ctx.tokens.other)).body.find(s => s.id === ctx.s.held);
+    expect(covering).toMatchObject({ isCovering: true, coverOccurrenceCount: expect.any(Number) });
+    expect((await notesOf(ctx.tokens.tutor)).some(n => n.type === 'session_cover_claimed')).toBe(true);
+    expect((await api('get', '/uc/cover-requests', ctx.tokens.uc)).body.find(r => r.id === id).claimedByName).toBe('other Test');
+
+    // When the cover period is over it disappears by itself.
+    await query(`UPDATE cover_batches SET start_date = CURRENT_DATE - 9, end_date = CURRENT_DATE - 1 WHERE id = $1`, [sent.body.batchId]);
+    expect((await timetable(ctx.unitA.id, ctx.tokens.uc)).find(s => s.id === ctx.s.held).activeCovers).toEqual([]);
+    expect((await api('get', `/units/${ctx.unitA.id}/sessions/my-assigned`, ctx.tokens.other)).body.find(s => s.id === ctx.s.held)).toBeUndefined();
   });
 
-  test('only a super tutor can claim a lecture cover', async () => {
-    const broadcast = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
-      sessionIds: [ctx.s.lecture], startDate: '2026-10-09', endDate: '2026-10-09'
-    });
-    const id = broadcast.body.requests[0].id;
-    expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.tutor)).status).toBe(403);
-    expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.super)).status).toBe(200);
-  });
+  test('INT-05 a cover cannot double-book the person claiming it, and a cancelled cover disappears', async () => {
+    await query(`INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor')`, [ctx.unitB.id, ctx.u.other.id]);
+    await api('patch', `/units/${ctx.unitB.id}/sessions/${ctx.s.unitB}/assign`, ctx.tokens.uc2, { tutorId: ctx.u.other.id });
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/assign`, ctx.tokens.uc, { tutorId: ctx.u.super.id });
+    const sent = await api('post', '/uc/cover-requests', ctx.tokens.uc, { sessionIds: [ctx.s.open], startDate: fromToday(1), endDate: fromToday(3) });
+    const id = sent.body.requests[0].id;
 
-  test('availability shows on the coordinator grid and then closes when locked', async () => {
-    expect((await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Monday-9:00am': 'preferred' }
-    })).status).toBe(201);
-    const grid = await api('get', '/availability?unitCode=API101', ctx.tokens.uc);
-    expect(grid.status).toBe(200);
-    await api('patch', `/units/${ctx.unitA.id}/lock-availability`, ctx.tokens.uc, {});
-    expect((await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Tuesday-10:00am': 'avoid' }
-    })).status).toBe(409);
-  });
-
-  test('an invited email becomes a tutor who can log in and see the unit', async () => {
-    const invite = await api('post', '/tutor-applications/direct-invite', ctx.tokens.uc, {
-      unitId: ctx.unitA.id, email: 'flow.tutor@api.test', role: 'tutor'
-    });
-    expect((await api('post', '/tutor-applications/accept-invite', null, {
-      token: invite.body.inviteToken, password: 'abcdef', firstName: 'Flow', lastName: 'Tutor'
-    })).status).toBe(201);
-    const login = await api('post', '/auth/login', null, { email: 'flow.tutor@api.test', password: 'abcdef' });
-    const units = await api('get', '/units/my-units', login.body.token);
-    expect(units.body.some(unit => unit.unitCode === 'API101')).toBe(true);
-  });
-
-  test('reinviting an existing tutor as super tutor leaves only one teaching role', async () => {
-    await api('post', '/tutor-applications/direct-invite', ctx.tokens.uc, {
-      unitId: ctx.unitA.id, email: 'outsider@api.test', role: 'tutor'
-    });
-    await api('post', '/tutor-applications/direct-invite', ctx.tokens.uc, {
-      unitId: ctx.unitA.id, email: 'outsider@api.test', role: 'super_tutor'
-    });
-    const roles = await query(
-      `SELECT role FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor')`,
-      [ctx.unitA.id, ctx.u.outsider.id]
-    );
-    expect(roles.rows.map(row => row.role)).toEqual(['super_tutor']);
-  });
-
-  test('replace import fails while someone is assigned and succeeds after they are removed', async () => {
-    const blocked = await api('post', `/units/${ctx.unitA.id}/sessions/import`, ctx.tokens.uc, {
-      replace: true,
-      sessions: [{ day: 'MON', startTime: '09:00', endTime: '10:00', sessionType: 'Tutorial', capacity: 30 }]
-    });
-    expect(blocked.status).toBe(409);
-    await query(`DELETE FROM session_tutors WHERE session_id = $1`, [ctx.s.held]);
-    const replaced = await api('post', `/units/${ctx.unitA.id}/sessions/import`, ctx.tokens.uc, {
-      replace: true,
-      sessions: [{ day: 'MON', startTime: '09:00', endTime: '10:00', sessionType: 'Tutorial', capacity: 30, sessionCode: 'NEW01' }]
-    });
-    expect(replaced.status).toBe(201);
-    expect(replaced.body.importedCount).toBe(1);
-  });
-
-  test('duplicating a unit keeps sessions and tutors, and drops requests', async () => {
-    await query(
-      `INSERT INTO change_requests (tutor_id, unit_id, request_type, reason, status)
-       VALUES ($1, $2, 'Session Swap', 'old', 'Pending')`,
-      [ctx.u.tutor.id, ctx.unitA.id]
-    );
-    const copy = await api('post', `/units/${ctx.unitA.id}/duplicate`, ctx.tokens.uc, {
-      semester: 'Semester 1', year: 2027, unitCode: 'flowdup'
-    });
-    const sessions = await query('SELECT id FROM sessions WHERE unit_id = $1', [copy.body.id]);
-    const requests = await query('SELECT id FROM change_requests WHERE unit_id = $1', [copy.body.id]);
-    expect(sessions.rows.length).toBeGreaterThan(0);
-    expect(requests.rows).toHaveLength(0);
-    expect(copy.body.scheduleLocked).toBe(false);
-  });
-
-  test('a three-day-old assignment is reminded once', async () => {
-    await query(`UPDATE session_tutors SET assigned_at = NOW() - INTERVAL '4 days', reminder_sent_at = NULL WHERE session_id = $1`, [ctx.s.held]);
-    const first = await api('post', '/jobs/session-assignment-reminders').set('x-cron-secret', process.env.CRON_SECRET);
-    const second = await api('post', '/jobs/session-assignment-reminders').set('x-cron-secret', process.env.CRON_SECRET);
-    expect(first.body.emailedCount).toBe(1);
-    expect(second.body.emailedCount).toBe(0);
-  });
-
-  test('an admin setup link lets a pending user choose a password and log in', async () => {
-    const created = await api('post', '/admin/users', ctx.tokens.admin, {
-      firstName: 'Pending', lastName: 'User', email: 'setup.user@api.test',
-      role: 'tutor', accountStatus: 'active', sendSetupLink: true
-    });
-    expect(created.status).toBe(201);
-    const tokenRow = await query(
-      `SELECT token_hash FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL`,
-      [created.body.id]
-    );
-    expect(tokenRow.rows).toHaveLength(1);
-  });
-
-  test('changing a password makes the old password fail and the new one able to send a message', async () => {
-    expect((await api('put', '/profile/password', ctx.tokens.tutor, { currentPassword: PASSWORD, newPassword: 'abcdef' })).status).toBe(200);
-    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: PASSWORD })).status).toBe(401);
-    const login = await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'abcdef' });
-    expect((await api('post', '/messages', login.body.token, { recipientId: ctx.u.uc.id, content: 'after reset' })).status).toBe(201);
-  });
-
-  test('a tutor sees the full timetable only after the draft is released', async () => {
-    const hidden = await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.tutor);
-    expect(hidden.body.released).toBe(false);
-    await api('patch', `/units/${ctx.unitA.id}/release-draft`, ctx.tokens.uc, {});
-    const visible = await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.tutor);
-    expect(Array.isArray(visible.body)).toBe(true);
-    expect(visible.body.length).toBeGreaterThan(0);
-  });
-
-  test('a custom application answer is stored and the resume can be downloaded', async () => {
-    await api('put', `/tutor-applications/form/${ctx.unitA.id}`, ctx.tokens.uc, {
-      fields: [{ key: 'q1', label: 'Why you?', type: 'text', required: true }]
-    });
-    await api('post', '/tutor-applications', null, {
-      unitId: ctx.unitA.id, firstName: 'Ann', email: 'flow.apply@api.test',
-      resumeBase64: Buffer.from('%PDF-1.4 resume').toString('base64'),
-      resumeFilename: 'cv.pdf', resumeMimeType: 'application/pdf',
-      customAnswers: { q1: 'I like labs' }
-    });
-    const list = await api('get', `/tutor-applications?unitId=${ctx.unitA.id}`, ctx.tokens.uc);
-    const resume = await api('get', `/tutor-applications/${list.body[0].id}/resume`, ctx.tokens.uc);
-    expect(resume.status).toBe(200);
-    const stored = await query(`SELECT custom_answers FROM tutor_applications WHERE email = 'flow.apply@api.test'`);
-    expect(stored.rows[0].custom_answers.q1).toBe('I like labs');
-  });
-
-  test('a decline without a reason is rejected, then a decline frees the session for delete', async () => {
-    expect((await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}/confirm`, ctx.tokens.tutor, { confirmed: false })).status).toBe(400);
-    expect((await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}/confirm`, ctx.tokens.tutor, { confirmed: false, reason: 'clash' })).status).toBe(200);
-    expect((await api('delete', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}`, ctx.tokens.uc)).status).toBe(200);
-    const gone = await query('SELECT id FROM sessions WHERE id = $1', [ctx.s.held]);
-    expect(gone.rows).toHaveLength(0);
-  });
-
-  test('an overlapping assign is blocked, then a later non-overlapping slot succeeds', async () => {
-    const tutorId = ctx.u.other.id;
-    const token = ctx.tokens.uc;
-    expect((await assign(ctx, ctx.s.open, token, tutorId)).status).toBe(200);
-    const overlap = await assign(ctx, ctx.s.overlap, token, tutorId);
-    expect(overlap.status).toBe(409);
-    expect(overlap.body.error).toMatch(/overlap/i);
-    expect((await assign(ctx, ctx.s.open2, token, tutorId)).status).toBe(200);
-  });
-
-  test('max hours blocks a second long assignment after a two-hour session is taken', async () => {
-    await query('DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2', [ctx.s.held, ctx.u.tutor.id]);
-    expect((await assign(ctx, ctx.s.long, ctx.tokens.uc, ctx.u.tutor.id)).status).toBe(200);
-    const over = await assign(ctx, ctx.s.open, ctx.tokens.uc, ctx.u.tutor.id);
-    expect(over.status).toBe(409);
-    expect(over.body.error).toMatch(/max hours/i);
-  });
-
-  test('a lecture cannot take a normal tutor, then a super tutor is assigned and confirms', async () => {
-    expect((await assign(ctx, ctx.s.lecture, ctx.tokens.uc, ctx.u.tutor.id)).status).toBe(409);
-    expect((await assign(ctx, ctx.s.lecture, ctx.tokens.uc, ctx.u.super.id)).status).toBe(200);
-    expect((await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.lecture}/confirm`, ctx.tokens.super, { confirmed: true })).status).toBe(200);
-  });
-
-  test('force-lock blocks assignment until the schedule is unlocked', async () => {
-    expect((await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.uc, { force: true })).status).toBe(200);
-    expect((await assign(ctx, ctx.s.open2, ctx.tokens.uc, ctx.u.other.id)).status).toBe(409);
-    expect((await api('patch', `/units/${ctx.unitA.id}/unlock-schedule`, ctx.tokens.uc, {})).status).toBe(200);
-    expect((await assign(ctx, ctx.s.open2, ctx.tokens.uc, ctx.u.other.id)).status).toBe(200);
-  });
-
-  test('early access shows the timetable before draft release', async () => {
-    const hidden = await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.other);
-    expect(hidden.body.released).toBe(false);
-    expect((await api('put', `/units/${ctx.unitA.id}/tutors/${ctx.u.other.id}/early-access`, ctx.tokens.uc, { earlyAccess: true })).status).toBe(200);
-    const visible = await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.other);
-    expect(Array.isArray(visible.body)).toBe(true);
-    expect(visible.body.length).toBeGreaterThan(0);
-  });
-
-  test('unreleasing a draft hides the timetable again', async () => {
-    await api('patch', `/units/${ctx.unitA.id}/release-draft`, ctx.tokens.uc, {});
-    expect(Array.isArray((await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.tutor)).body)).toBe(true);
-    await api('patch', `/units/${ctx.unitA.id}/unrelease-draft`, ctx.tokens.uc, {});
-    const hidden = await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.tutor);
-    expect(hidden.body.released).toBe(false);
-  });
-
-  test('the original tutor cannot claim their own cover', async () => {
-    const broadcast = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
-      sessionIds: [ctx.s.held], startDate: '2026-10-07', endDate: '2026-10-07'
-    });
-    const id = broadcast.body.requests[0].id;
-    expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.tutor)).status).toBe(400);
-    expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.other)).status).toBe(200);
-  });
-
-  test('another coordinator cannot review or lock this unit', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Change', reason: 'drop',
-      currentSessionId: ctx.s.held
-    });
-    expect((await api('patch', `/uc/requests/${submitted.body.id}/review`, ctx.tokens.uc2, { status: 'Accepted' })).status).toBe(404);
-    expect((await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.uc2, { force: true })).status).toBe(404);
-    expect((await api('patch', `/units/${ctx.unitA.id}/lock-schedule`, ctx.tokens.tutor, { force: true })).status).toBe(403);
-  });
-
-  test('an urgent request emails coordinators, and a reject notifies the tutor', async () => {
-    sendEmail.mockClear();
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'urgent clash',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2, priority: 'Urgent'
-    });
-    expect(sendEmail).toHaveBeenCalled();
-    expect((await api('patch', `/uc/requests/${submitted.body.id}/review`, ctx.tokens.uc, { status: 'Rejected', reviewNotes: 'keep Wednesday' })).status).toBe(200);
-    const notes = await api('get', '/notifications', ctx.tokens.tutor);
-    expect(notes.body.notifications.some(item => item.type === 'request_rejected')).toBe(true);
-    const stillHeld = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
-    expect(stillHeld.rows.map(row => row.tutor_id)).toContain(ctx.u.tutor.id);
-  });
-
-  test('a locked schedule cannot accept a session change or a swap', async () => {
-    await query('UPDATE units SET schedule_locked = TRUE WHERE id = $1', [ctx.unitA.id]);
-    const change = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Change', reason: 'drop',
-      currentSessionId: ctx.s.held
-    });
-    expect((await api('patch', `/uc/requests/${change.body.id}/review`, ctx.tokens.uc, { status: 'Accepted' })).status).toBe(409);
-    const swap = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'move',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
-    });
-    expect((await api('patch', `/uc/requests/${swap.body.id}/review`, ctx.tokens.uc, { status: 'Accepted' })).status).toBe(409);
-  });
-
-  test('approving a swap onto a lecture is blocked for a normal tutor', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'want lecture',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.lecture
-    });
-    const review = await api('patch', `/uc/requests/${submitted.body.id}/review`, ctx.tokens.uc, { status: 'Accepted' });
-    expect(review.status).toBe(409);
-    const held = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
-    expect(held.rows.map(row => row.tutor_id)).toContain(ctx.u.tutor.id);
-  });
-
-  test('accept-invite rejects a short password, then creates the account', async () => {
-    const invite = await api('post', '/tutor-applications/direct-invite', ctx.tokens.uc, {
-      unitId: ctx.unitA.id, email: 'short.invite@api.test', role: 'tutor'
-    });
-    expect((await api('post', '/tutor-applications/accept-invite', null, {
-      token: invite.body.inviteToken, password: 'ab', firstName: 'Short', lastName: 'Pass'
-    })).status).toBe(400);
-    expect((await api('post', '/tutor-applications/accept-invite', null, {
-      token: invite.body.inviteToken, password: 'abcdef', firstName: 'Short', lastName: 'Pass'
-    })).status).toBe(201);
-    expect((await api('post', '/auth/login', null, { email: 'short.invite@api.test', password: 'abcdef' })).status).toBe(200);
-  });
-
-  test('resubmitting availability replaces slots, lock blocks, unlock allows again', async () => {
-    await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Monday-9:00am': 'preferred' }
-    });
-    await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Tuesday-10:00am': 'avoid' }
-    });
-    const rows = await query('SELECT day, preference FROM availability WHERE tutor_id = $1 AND unit_id = $2', [ctx.u.tutor.id, ctx.unitA.id]);
-    expect(rows.rows).toHaveLength(1);
-    expect(rows.rows[0].preference).toBe('avoid');
-    await api('patch', `/units/${ctx.unitA.id}/lock-availability`, ctx.tokens.uc, {});
-    expect((await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Wednesday-11:00am': 'preferred' }
-    })).status).toBe(409);
-    await api('patch', `/units/${ctx.unitA.id}/unlock-availability`, ctx.tokens.uc, {});
-    expect((await api('post', '/availability/submit', ctx.tokens.tutor, {
-      unitCode: 'API101', slots: { 'Wednesday-11:00am': 'preferred' }
-    })).status).toBe(201);
-  });
-
-  test('unit group chat rejects an outsider then accepts a member', async () => {
-    expect((await api('post', `/messages/group/${ctx.unitA.id}`, ctx.tokens.outsider, { content: 'hello' })).status).toBe(403);
-    expect((await api('post', `/messages/group/${ctx.unitA.id}`, ctx.tokens.tutor, { content: 'hello unit' })).status).toBe(201);
-  });
-
-  test('assignment notifications stay on the assigned tutor, not another tutor', async () => {
-    await assign(ctx, ctx.s.open2, ctx.tokens.uc, ctx.u.other.id);
-    const otherNotes = await api('get', '/notifications', ctx.tokens.other);
-    const tutorNotes = await api('get', '/notifications', ctx.tokens.tutor);
-    expect(otherNotes.body.notifications.some(item => item.type === 'session_assigned')).toBe(true);
-    expect(tutorNotes.body.notifications.some(item => item.type === 'session_assigned')).toBe(false);
-  });
-
-  test('admin can disable a tutor so login fails, but cannot disable themselves', async () => {
-    expect((await api('put', `/admin/users/${ctx.u.admin.id}`, ctx.tokens.admin, {
-      firstName: 'Admin', lastName: 'Test', email: 'admin@api.test', role: 'admin', accountStatus: 'disabled'
-    })).status).toBe(400);
-    expect((await api('put', `/admin/users/${ctx.u.outsider.id}`, ctx.tokens.admin, {
-      firstName: 'Out', lastName: 'Sider', email: 'outsider@api.test', role: 'tutor', accountStatus: 'disabled'
-    })).status).toBe(200);
-    expect((await api('post', '/auth/login', null, { email: 'outsider@api.test', password: PASSWORD })).status).toBe(403);
-  });
-
-  test('the reminder job rejects a bad secret, then emails a stale assignment once', async () => {
-    expect((await api('post', '/jobs/session-assignment-reminders').set('x-cron-secret', 'wrong')).status).toBe(401);
-    await query(`UPDATE session_tutors SET assigned_at = NOW() - INTERVAL '4 days', reminder_sent_at = NULL WHERE session_id = $1`, [ctx.s.held]);
-    const first = await api('post', '/jobs/session-assignment-reminders').set('x-cron-secret', process.env.CRON_SECRET);
-    expect(first.status).toBe(200);
-    expect(first.body.emailedCount).toBe(1);
-  });
-
-  test('duplicate copies tutor memberships onto the new unit', async () => {
-    const copy = await api('post', `/units/${ctx.unitA.id}/duplicate`, ctx.tokens.uc, {
-      semester: 'Semester 1', year: 2027, unitCode: 'memdup'
-    });
-    const tutors = await query(
-      `SELECT user_id FROM unit_memberships WHERE unit_id = $1 AND role IN ('tutor', 'super_tutor')`,
-      [copy.body.id]
-    );
-    expect(tutors.rows.map(row => row.user_id).sort()).toEqual(
-      [ctx.u.tutor.id, ctx.u.super.id, ctx.u.other.id].sort()
-    );
-  });
-
-  test('creating a session rejects a taken code, then succeeds with a new code', async () => {
-    const clash = await api('post', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.uc, sessionBody({ sessionCode: 'TUT01', day: 'FRI', startTime: '15:00', endTime: '16:00' }));
+    const clash = await api('post', `/cover-requests/${id}/claim`, ctx.tokens.other);
     expect(clash.status).toBe(409);
-    const created = await api('post', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.uc, sessionBody({ sessionCode: 'TUT99', day: 'FRI', startTime: '15:00', endTime: '16:00' }));
-    expect(created.status).toBe(201);
-    expect(created.body.sessionCode).toBe('TUT99');
+    expect(clash.body.error).toMatch(/API202/);
+
+    await api('delete', `/uc/cover-requests/batch/${sent.body.batchId}`, ctx.tokens.uc);
+    expect((await api('get', '/cover-requests/open', ctx.tokens.tutor)).body.map(r => r.id)).not.toContain(id);
+    expect((await api('post', `/cover-requests/${id}/claim`, ctx.tokens.tutor)).status).toBe(409);
   });
 
-  test('a coordinator cannot delete another coordinators unit', async () => {
-    expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc2)).status).toBe(404);
+  test('INT-06 swap by suggestion: tutor asks, UC suggests, tutor accepts, timetable updates once', async () => {
+    const req = (await api('post', '/requests', ctx.tokens.tutor, {
+      unitId: ctx.unitA.id, unitCode: 'API101', requestType: 'Session Swap', reason: 'class clash',
+      currentSession: 'WED 11:00-12:00|GP-P-101', currentSessionId: ctx.s.held, priority: 'Urgent'
+    })).body;
+    expect(sendEmail).toHaveBeenCalled(); // urgent -> coordinators emailed
+    expect((await notesOf(ctx.tokens.uc)).some(n => n.type === 'request_submitted')).toBe(true);
+
+    // Suggest TUE 09-10 using the label format the UI sends ("id::label").
+    await api('patch', `/uc/requests/${req.id}/review`, ctx.tokens.uc, { status: 'suggested', reviewNotes: `${ctx.s.open2}::TUE 09:00 - 10:00 | GP-P-101` });
+    expect((await notesOf(ctx.tokens.tutor)).some(n => n.type === 'request_suggested')).toBe(true);
+    expect((await api('patch', `/requests/${req.id}`, ctx.tokens.tutor, { status: 'accepted' })).status).toBe(200);
+
+    const rows = await timetable(ctx.unitA.id, ctx.tokens.uc);
+    expect(rows.find(s => s.id === ctx.s.open2).tutors.map(t => t.tutorId)).toEqual([ctx.u.tutor.id]);
+    expect(rows.find(s => s.id === ctx.s.held).tutors).toEqual([]);
+
+    // Pressing approve again must not move anything a second time.
+    expect((await api('patch', `/uc/requests/${req.id}/review`, ctx.tokens.uc, { status: 'accepted' })).status).toBe(200);
+    expect(await tutorsOn(ctx.s.open2)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: null }]);
   });
 
-  test('wrong current password is rejected, then a reset token logs in with the new password only', async () => {
-    expect((await api('put', '/profile/password', ctx.tokens.tutor, { currentPassword: 'nope', newPassword: 'abcdef' })).status).toBe(401);
-    const raw = 'flow-reset-token';
-    await query(
-      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-      [ctx.u.tutor.id, crypto.createHash('sha256').update(raw).digest('hex')]
-    );
-    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'newpass' })).status).toBe(200);
-    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: PASSWORD })).status).toBe(401);
-    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'newpass' })).status).toBe(200);
-    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'again12' })).status).toBe(400);
+  test('INT-07 an admin approval really moves the tutor, and a blocked one leaves everything as it was', async () => {
+    const ok = (await api('post', '/requests', ctx.tokens.tutor, {
+      unitCode: 'API101', requestType: 'Session Swap', reason: 'x', currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
+    })).body;
+    await api('patch', `/admin/requests/${ok.id}/review`, ctx.tokens.admin, { status: 'accepted' });
+    expect((await timetable(ctx.unitA.id, ctx.tokens.uc)).find(s => s.id === ctx.s.open2).tutors.map(t => t.tutorId)).toEqual([ctx.u.tutor.id]);
+    expect((await notesOf(ctx.tokens.tutor)).some(n => n.type === 'request_accepted')).toBe(true);
+
+    await query('INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES ($1, $2, TRUE)', [ctx.s.open, ctx.u.other.id]);
+    const full = (await api('post', '/requests', ctx.tokens.tutor, {
+      unitCode: 'API101', requestType: 'Session Swap', reason: 'y', currentSessionId: ctx.s.open2, preferredSessionId: ctx.s.open
+    })).body;
+    expect((await api('patch', `/admin/requests/${full.id}/review`, ctx.tokens.admin, { status: 'accepted' })).status).toBe(409);
+    expect((await query('SELECT status FROM change_requests WHERE id = $1', [full.id])).rows[0].status).toBe('Pending');
+    expect(await tutorsOn(ctx.s.open)).toEqual([{ tutor_id: ctx.u.other.id, tutor_confirmed: true }]);
   });
 
-  test('empty messages are rejected, then a direct message is stored', async () => {
-    expect((await api('post', '/messages', ctx.tokens.tutor, { recipientId: ctx.u.uc.id, content: '   ' })).status).toBe(400);
-    const sent = await api('post', '/messages', ctx.tokens.tutor, { recipientId: ctx.u.uc.id, content: 'need a swap' });
-    expect(sent.status).toBe(201);
-    const stored = await query('SELECT content FROM messages WHERE sender_id = $1 AND recipient_id = $2', [ctx.u.tutor.id, ctx.u.uc.id]);
-    expect(stored.rows.some(row => row.content === 'need a swap')).toBe(true);
+  test('INT-08 decline, refill and lock: a declined session is reopened and filled by someone else', async () => {
+    const unit = (await api('post', '/units', ctx.tokens.uc, { unitCode: 'refill', unitName: 'Refill', semester: 'Semester 1', year: 2027 })).body;
+    const s = (await api('post', `/units/${unit.id}/sessions`, ctx.tokens.uc, sessionBody())).body;
+    await api('patch', `/units/${unit.id}/sessions/${s.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id });
+    await api('patch', `/units/${unit.id}/sessions/${s.id}/confirm`, ctx.tokens.other, { confirmed: false, reason: 'busy' });
+
+    expect((await api('patch', `/units/${unit.id}/lock-schedule`, ctx.tokens.uc, {})).body).toMatchObject({ unassignedCount: 1 });
+    // The declining tutor cannot take it back on their own.
+    expect((await api('patch', `/units/${unit.id}/sessions/${s.id}/confirm`, ctx.tokens.other, { confirmed: true })).status).toBe(409);
+
+    await api('patch', `/units/${unit.id}/sessions/${s.id}/assign`, ctx.tokens.uc, { tutorId: ctx.u.super.id });
+    expect((await api('patch', `/units/${unit.id}/lock-schedule`, ctx.tokens.uc, {})).body).toMatchObject({ unassignedCount: 0, pendingCount: 1 });
+    await api('patch', `/units/${unit.id}/sessions/${s.id}/confirm`, ctx.tokens.super, { confirmed: true });
+    expect((await api('patch', `/units/${unit.id}/lock-schedule`, ctx.tokens.uc, {})).status).toBe(200);
   });
 
-  test('the same tutor cannot be assigned twice, then another tutor can fill a second seat after capacity is raised', async () => {
-    expect((await assign(ctx, ctx.s.held, ctx.tokens.uc, ctx.u.tutor.id)).status).toBe(409);
-    await query('UPDATE sessions SET required_tutors = 2 WHERE id = $1', [ctx.s.held]);
-    expect((await assign(ctx, ctx.s.held, ctx.tokens.uc, ctx.u.other.id)).status).toBe(200);
+  test('INT-09 next semester: duplicate the unit, staff it fresh, and availability goes to the right semester', async () => {
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}/confirm`, ctx.tokens.tutor, { confirmed: true });
+    const copy = (await api('post', `/units/${ctx.unitA.id}/duplicate`, ctx.tokens.uc, { semester: 'Semester 1', year: 2027 })).body;
+    expect(copy.unitCode).toBe('API101');
+
+    // Same sessions, same tutors on the unit, but nobody assigned yet.
+    const copied = await timetable(copy.id, ctx.tokens.uc);
+    expect(copied).toHaveLength(7);
+    expect(copied.every(s => s.tutors.length === 0 && s.declinedTutors.length === 0)).toBe(true);
+    expect((await api('get', `/availability?unitId=${copy.id}`, ctx.tokens.uc)).body.tutors.map(t => t.id)).toContain(ctx.u.tutor.id);
+
+    // Availability sent with the new unitId is stored on the new unit only.
+    await api('post', '/availability/submit', ctx.tokens.tutor, { unitId: copy.id, unitCode: 'API101', slots: { 'Friday-9:00am': 'preferred' } });
+    const units = (await query('SELECT DISTINCT unit_id FROM availability WHERE tutor_id = $1', [ctx.u.tutor.id])).rows.map(r => r.unit_id);
+    expect(units).toEqual([copy.id]);
+
+    // The old semester is untouched.
+    expect(await tutorsOn(ctx.s.held)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: true }]);
   });
 
-  test('starring a tutor is stored and listing tutors includes that flag', async () => {
-    expect((await api('put', `/units/${ctx.unitA.id}/tutors/${ctx.u.tutor.id}/starred`, ctx.tokens.uc, { starred: true })).body.starred).toBe(true);
-    const list = await api('get', `/units/${ctx.unitA.id}/tutors`, ctx.tokens.uc);
-    const row = list.body.find(item => item.id === ctx.u.tutor.id);
-    expect(row).toBeDefined();
-    expect(row.starred).toBe(true);
+  test('INT-10 moving a staffed session: a clash is refused, a free time moves it for everyone', async () => {
+    await query('UPDATE users SET maximum_hours = 10 WHERE id = $1', [ctx.u.tutor.id]);
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/assign`, ctx.tokens.uc, { tutorId: ctx.u.tutor.id });
+    // tutor now holds MON 09-10 and WED 11-12. Moving WED onto MON 09:30 clashes.
+    expect((await api('put', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}`, ctx.tokens.uc, { day: 'MON', startTime: '09:30', endTime: '10:30' })).status).toBe(409);
+    expect((await api('put', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}`, ctx.tokens.uc, { day: 'FRI', startTime: '15:00', endTime: '16:00' })).status).toBe(200);
+    await api('patch', `/units/${ctx.unitA.id}/release-draft`, ctx.tokens.uc, {});
+    const seen = (await api('get', `/units/${ctx.unitA.id}/sessions/my-assigned`, ctx.tokens.tutor)).body.find(s => s.id === ctx.s.held);
+    expect(seen).toMatchObject({ day: 'FRI', startTime: '15:00:00' });
   });
 
-  test('a coordinator can self-assign a tutorial and the session records them', async () => {
-    expect((await assign(ctx, ctx.s.open, ctx.tokens.uc, ctx.u.uc.id)).status).toBe(200);
-    const row = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_id = $2`, [ctx.s.open, ctx.u.uc.id]);
-    expect(row.rows).toHaveLength(1);
-  });
+  test('INT-11 deleting a unit removes everything that belonged to it and nothing else', async () => {
+    await api('post', '/availability/submit', ctx.tokens.tutor, { unitCode: 'API101', slots: { 'Monday-9:00am': 'preferred' } });
+    await api('post', '/requests', ctx.tokens.tutor, { unitCode: 'API101', requestType: 'Session Change', reason: 'x', currentSessionId: ctx.s.held });
+    await api('post', '/uc/cover-requests', ctx.tokens.uc, { sessionIds: [ctx.s.held], startDate: fromToday(1), endDate: fromToday(2) });
+    await api('post', `/messages/group/${ctx.unitA.id}`, ctx.tokens.tutor, { content: 'bye' });
 
-  test('the bot rejects an empty prompt after a unit exists', async () => {
-    expect((await api('post', '/bot/chat', ctx.tokens.uc, { message: '' })).status).toBe(400);
-  });
-
-  test('a tutor cannot accept their own swap request', async () => {
-    const submitted = await api('post', '/requests', ctx.tokens.tutor, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'prefer Tuesday',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
-    });
-    expect((await api('patch', `/requests/${submitted.body.id}`, ctx.tokens.tutor, { status: 'Accepted' })).status).toBe(403);
-    const held = await query(`SELECT tutor_id FROM session_tutors WHERE session_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`, [ctx.s.held]);
-    expect(held.rows.map(row => row.tutor_id)).toContain(ctx.u.tutor.id);
-  });
-
-  test('an outsider cannot join a unit by submitting a request', async () => {
-    expect((await api('post', '/requests', ctx.tokens.outsider, {
-      unitCode: 'API101', requestType: 'Session Swap', reason: 'join',
-      currentSessionId: ctx.s.held, preferredSessionId: ctx.s.open2
-    })).status).toBe(403);
-    const member = await query(
-      `SELECT 1 FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor')`,
-      [ctx.unitA.id, ctx.u.outsider.id]
-    );
-    expect(member.rows).toHaveLength(0);
-  });
-
-  test('register rejects a short password', async () => {
-    expect((await api('post', '/auth/register', null, {
-      firstName: 'Short', lastName: 'Pass', email: 'short.reg@api.test', role: 'tutor',
-      password: '123', confirmPassword: '123'
-    })).status).toBe(400);
-  });
-
-  test('the main coordinator can delete a unit that still has sessions', async () => {
     expect((await api('delete', `/units/${ctx.unitA.id}`, ctx.tokens.uc)).status).toBe(200);
-    expect((await query('SELECT id FROM units WHERE id = $1', [ctx.unitA.id])).rows).toHaveLength(0);
+    expect((await api('get', '/units', ctx.tokens.uc)).body).toEqual([]);
+    expect((await api('get', '/units/my-units', ctx.tokens.tutor)).body).toEqual([]);
+    expect((await api('get', '/requests', ctx.tokens.tutor)).body).toEqual([]);
+    expect((await api('get', '/cover-requests/open', ctx.tokens.other)).body).toEqual([]);
+    expect((await timetable(ctx.unitB.id, ctx.tokens.uc2))).toHaveLength(1);
   });
 
-  test('an API-assigned tutor cannot claim cover for that session', async () => {
-    expect((await assign(ctx, ctx.s.open, ctx.tokens.uc, ctx.u.other.id)).status).toBe(200);
-    const broadcast = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
-      sessionIds: [ctx.s.open], startDate: '2026-10-05', endDate: '2026-10-05'
+  test('INT-12 account life cycle: admin creates, user sets a password, logs in, is disabled, is locked out', async () => {
+    const created = await api('post', '/admin/users', ctx.tokens.admin, {
+      firstName: 'Setup', lastName: 'User', email: 'setup.user@api.test', role: 'tutor', accountStatus: 'active', sendSetupLink: true
     });
-    expect((await api('post', `/cover-requests/${broadcast.body.requests[0].id}/claim`, ctx.tokens.other)).status).toBe(400);
+    expect(created.status).toBe(201);
+    const token = tokenFromLastEmail();
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'chosen1' })).status).toBe(200);
+    const userToken = await login('setup.user@api.test', 'chosen1');
+    expect((await api('get', '/profile', userToken)).body.email).toBe('setup.user@api.test');
+
+    await api('put', `/admin/users/${created.body.id}`, ctx.tokens.admin, {
+      firstName: 'Setup', lastName: 'User', email: 'setup.user@api.test', role: 'tutor', accountStatus: 'disabled'
+    });
+    expect((await api('post', '/auth/login', null, { email: 'setup.user@api.test', password: 'chosen1' })).status).toBe(403);
+    expect((await api('get', '/profile', userToken)).status).toBe(403); // the old token stops working too
   });
+
+  test('INT-13 forgot password: email link works once, old password stops working', async () => {
+    await api('post', '/auth/forgot-password', null, { email: 'TUTOR@api.test' });
+    const token = tokenFromLastEmail();
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'brandnew' })).status).toBe(200);
+    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: PASSWORD })).status).toBe(401);
+    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'brandnew' })).status).toBe(200);
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'again12' })).status).toBe(400);
+  });
+
+  test('INT-14 reminders: a 3-day-old unanswered offer is emailed once, an answered one never', async () => {
+    await query(`UPDATE session_tutors SET assigned_at = NOW() - INTERVAL '4 days' WHERE session_id = $1`, [ctx.s.held]);
+    const run = () => api('post', '/jobs/session-assignment-reminders').set('x-cron-secret', process.env.CRON_SECRET);
+    expect((await run()).body.emailedCount).toBe(1);
+    expect((await run()).body.emailedCount).toBe(0);
+
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/assign`, ctx.tokens.uc, { tutorId: ctx.u.other.id });
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/confirm`, ctx.tokens.other, { confirmed: true });
+    await query(`UPDATE session_tutors SET assigned_at = NOW() - INTERVAL '4 days' WHERE session_id = $1`, [ctx.s.open]);
+    expect((await run()).body.emailedCount).toBe(0);
+  });
+
+  test('INT-15 who can see the timetable and talk: release, early access, group chat, outsiders', async () => {
+    expect((await timetable(ctx.unitA.id, ctx.tokens.other)).released).toBe(false);
+    await api('put', `/units/${ctx.unitA.id}/tutors/${ctx.u.other.id}/early-access`, ctx.tokens.uc, { earlyAccess: true });
+    expect(Array.isArray(await timetable(ctx.unitA.id, ctx.tokens.other))).toBe(true);
+    expect((await timetable(ctx.unitA.id, ctx.tokens.super)).released).toBe(false);
+    await api('patch', `/units/${ctx.unitA.id}/release-draft`, ctx.tokens.uc, {});
+    expect(Array.isArray(await timetable(ctx.unitA.id, ctx.tokens.super))).toBe(true);
+
+    expect((await api('post', `/messages/group/${ctx.unitA.id}`, ctx.tokens.outsider, { content: 'hi' })).status).toBe(403);
+    expect((await api('post', `/messages/group/${ctx.unitA.id}`, ctx.tokens.super, { content: 'hello team' })).status).toBe(201);
+    expect((await api('get', `/messages/group/${ctx.unitA.id}`, ctx.tokens.uc)).body.map(m => m.content)).toEqual(['hello team']);
+    expect((await api('post', '/messages', ctx.tokens.tutor, { recipientId: ctx.u.uc.id, content: 'question' })).status).toBe(201);
+    expect((await api('get', `/messages/thread/${ctx.u.tutor.id}`, ctx.tokens.uc)).body.map(m => m.content)).toEqual(['question']);
+  });
+
+  test('INT-16 migration 001 turns an old database into the new one without losing real assignments', async () => {
+    const base = process.env.TEST_DATABASE_URL;
+    const legacyName = `${new URL(base).pathname.slice(1)}_legacy`;
+    const legacyUrl = Object.assign(new URL(base), { pathname: `/${legacyName}` }).toString();
+    const admin = new Client({ connectionString: base });
+    await admin.connect();
+    await admin.query(`DROP DATABASE IF EXISTS ${legacyName}`);
+    await admin.query(`CREATE DATABASE ${legacyName}`);
+    await admin.end();
+
+    const db = new Client({ connectionString: legacyUrl });
+    await db.connect();
+    try {
+      await db.query(fs.readFileSync(path.join(__dirname, 'fixtures', 'legacy-schema.sql'), 'utf8'));
+      // Old data: a swap stored only in the old column, a cover claim stored
+      // in the old column, and a normal assignment already in session_tutors.
+      await db.query(`
+        INSERT INTO users (id, email, password_hash, role, name) VALUES
+          ('00000000-0000-0000-0000-0000000000a1', 'swap@old.test', 'x', 'tutor', 'Swap'),
+          ('00000000-0000-0000-0000-0000000000a2', 'cover@old.test', 'x', 'tutor', 'Cover'),
+          ('00000000-0000-0000-0000-0000000000a3', 'normal@old.test', 'x', 'tutor', 'Normal');
+        INSERT INTO units (id, unit_code, unit_name, semester, year) VALUES
+          ('00000000-0000-0000-0000-0000000000b1', 'OLD1', 'Old', 'Semester 2', 2026);
+        INSERT INTO sessions (id, unit_id, day, start_time, end_time, assigned_tutor_id, is_assigned, tutor_confirmed) VALUES
+          ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1', 'MON', '09:00', '10:00', '00000000-0000-0000-0000-0000000000a1', TRUE, TRUE),
+          ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000000b1', 'TUE', '09:00', '10:00', '00000000-0000-0000-0000-0000000000a2', TRUE, TRUE),
+          ('00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-0000000000b1', 'WED', '09:00', '10:00', '00000000-0000-0000-0000-0000000000a3', TRUE, NULL);
+        INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES
+          ('00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-0000000000a3', NULL);
+        INSERT INTO cover_batches (id, unit_id) VALUES ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1');
+        INSERT INTO cover_requests (batch_id, session_id, unit_id, status, claimed_by_id) VALUES
+          ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000000b1', 'claimed', '00000000-0000-0000-0000-0000000000a2');
+      `);
+      await db.end();
+
+      await migrate(legacyUrl, () => {});
+      await migrate(legacyUrl, () => {}); // running twice is safe
+
+      const check = new Client({ connectionString: legacyUrl });
+      await check.connect();
+      const st = (await check.query(`
+        SELECT u.email, st.tutor_confirmed FROM session_tutors st JOIN users u ON u.id = st.tutor_id ORDER BY u.email
+      `)).rows;
+      const cols = (await check.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions'`)).rows.map(r => r.column_name);
+      const applied = (await check.query('SELECT name FROM schema_migrations')).rows.map(r => r.name);
+      await check.end();
+
+      expect(st).toEqual([
+        { email: 'normal@old.test', tutor_confirmed: null }, // untouched
+        { email: 'swap@old.test', tutor_confirmed: true }    // rescued from the old column
+      ]);                                                     // cover claim NOT made permanent
+      expect(cols).not.toEqual(expect.arrayContaining(['assigned_tutor_id']));
+      expect(cols).not.toContain('is_assigned');
+      expect(cols).not.toContain('tutor_confirmed');
+      expect(applied).toEqual(['001_single_assignment_table.sql']);
+    } finally {
+      await db.end().catch(() => {});
+      const cleanup = new Client({ connectionString: base });
+      await cleanup.connect();
+      await cleanup.query(`DROP DATABASE IF EXISTS ${legacyName}`).catch(() => {});
+      await cleanup.end();
+    }
+  }, 60000);
 });

@@ -122,7 +122,10 @@ const seed = async () => {
     lec: await cover(s.aLec),
     con: await cover(s.aCon),
     lec2: await cover(s.aLec2),
-    tut: await cover(s.aTut)
+    tut: await cover(s.aTut),
+    // A Tutorial cover tutorA never teaches. (UC-xx assigns tutorA to aTut
+    // earlier in this run, and a tutor cannot cover a session they teach.)
+    tut4: await cover(s.aTut4)
   };
   const batchB = (await query(
     `INSERT INTO cover_batches (unit_id, created_by_id, reason, start_date, end_date)
@@ -346,7 +349,7 @@ const tutorCases = [
   { id: 'TU-05', role: 'Tutor', action: 'View open cover requests', expected: 'Allow',
     run: () => call('get', '/cover-requests/open', T('tutorA')) },
   { id: 'TU-06', role: 'Tutor', action: 'Claim a Tutorial cover request', expected: 'Allow',
-    run: () => call('post', `/cover-requests/${ctx.covers.tut}/claim`, T('tutorA')) },
+    run: () => call('post', `/cover-requests/${ctx.covers.tut4}/claim`, T('tutorA')) },
   { id: 'TU-07', role: 'Tutor', action: 'Post in own unit group chat', expected: 'Allow',
     run: () => call('post', `/messages/group/${A()}`, T('tutorA'), { content: 'hi' }) },
 

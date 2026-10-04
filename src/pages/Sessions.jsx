@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsAPI, coverAPI } from '../config/api';
+import { getTutorNames, getTutorLabel, formatCoverNote } from '../utils/sessionDisplay';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -352,7 +353,7 @@ const Sessions = () => {
       .filter(s => filters.days.length === 0 || filters.days.includes(s.day))
       .filter(s => filters.types.length === 0 || filters.types.includes(s.sessionType))
       .filter(s => filters.campuses.length === 0 || filters.campuses.includes(s.campus))
-      .filter(s => !filters.unassignedOnly || !s.assignedTutorId);
+      .filter(s => !filters.unassignedOnly || getTutorNames(s).length < Number(s.requiredTutors || 1));
 
     if (filters.sortField === 'code') {
       result = [...result].sort((a, b) => {
@@ -362,8 +363,8 @@ const Sessions = () => {
       });
     } else if (filters.sortField === 'tutor') {
       result = [...result].sort((a, b) => {
-        const nameA = a.assignedTutorName || '';
-        const nameB = b.assignedTutorName || '';
+        const nameA = getTutorLabel(a);
+        const nameB = getTutorLabel(b);
         if (!nameA && !nameB) return 0;
         if (!nameA) return 1;
         if (!nameB) return -1;
@@ -448,8 +449,11 @@ const Sessions = () => {
                     {session.location ? ` · ${session.location}` : ''}
                   </div>
                   <div className="ss-grid-block-tutor">
-                    {session.assignedTutorName || 'Unassigned'}
+                    {getTutorLabel(session) || 'Unassigned'}
                   </div>
+                  {formatCoverNote(session) && (
+                    <div className="ss-grid-block-tutor">{formatCoverNote(session)}</div>
+                  )}
                 </button>
               );
             })
@@ -467,13 +471,13 @@ const Sessions = () => {
   // Every tutor who currently has at least one session, for the "who's out" dropdown.
   const tutorsWithSessions = Array.from(
     new Map(
-      sessions
-        .filter(s => s.assignedTutorId)
-        .map(s => [s.assignedTutorId, s.assignedTutorName])
+      sessions.flatMap(s => (Array.isArray(s.tutors) ? s.tutors : []).map(t => [t.tutorId, t.tutorName]))
     ).entries()
   ).map(([id, name]) => ({ id, name }));
 
-  const tutorSessions = sessions.filter(s => s.assignedTutorId === coverTutorId);
+  const tutorSessions = sessions.filter(s =>
+    (Array.isArray(s.tutors) ? s.tutors : []).some(t => t.tutorId === coverTutorId)
+  );
   const coverSelectedSessions = tutorSessions.filter(s => coverSelectedIds.has(s.id));
   const enrolmentSize = Number(activeUnit?.enrolmentSize || 0);
 
@@ -546,7 +550,8 @@ const Sessions = () => {
     setIsBroadcasting(true);
     setCoverError('');
     try {
-      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim(), coverStartDate, coverEndDate);      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
+      const result = await coverAPI.broadcast(coverSelectedSessions.map(s => s.id), coverReason.trim(), coverStartDate, coverEndDate, coverTutorId);
+      setCoverSuccess(`Broadcast sent to ${result.notifiedCount} tutor${result.notifiedCount === 1 ? '' : 's'}. First to claim each session gets it.`);
       setShowCoverModal(false);
     } catch (err) {
       setCoverError(err.message || 'Failed to broadcast cover request.');
@@ -818,7 +823,10 @@ const Sessions = () => {
                     <td>{session.campus || '-'}</td>
                     <td>{session.sessionType || '-'}</td>
                     <td>{session.capacity || '-'}</td>
-                    <td>{session.assignedTutorName || <span className="ss-unassigned">Unassigned</span>}</td>
+                    <td>
+                      {getTutorLabel(session) || <span className="ss-unassigned">Unassigned</span>}
+                      {formatCoverNote(session) && <div className="ss-cover-note">{formatCoverNote(session)}</div>}
+                    </td>
                     <td>
                       <span className={`ss-status-badge ${(session.status || '').toLowerCase()}`}>
                         {session.status}

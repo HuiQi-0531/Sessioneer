@@ -1,4 +1,4 @@
-// Moved here unchanged from messages.routes.js.
+// Used by messages.routes.js.
 const formatMessage = (m, currentUserId) => ({
   id: m.id,
   senderId: m.sender_id,

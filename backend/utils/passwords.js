@@ -24,7 +24,8 @@ const hashResetToken = (token) => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
-// Same rule the routes used inline before: `if (password.length < 6)` rejects.
-const isValidPassword = (password) => !(password.length < 6);
+// At least 6 characters. Anything that is not text (a number, null, an
+// object) is rejected instead of crashing the route.
+const isValidPassword = (password) => typeof password === 'string' && password.length >= 6;
 
 module.exports = { hashPassword, verifyPassword, hashResetToken, isValidPassword };

@@ -2,43 +2,20 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { splitDisplayName } = require('../utils/userNames');
+const {
+  normaliseInvitedRole,
+  formatApplication,
+  filterCustomAnswers,
+  isInviteExpired,
+  resolveInviteName
+} = require('../utils/applicationRules');
+const { isValidEmail } = require('../utils/authRules');
 const { getCoordinatorUnitId, LINKED_UNITS_SQL } = require('../utils/unitAccess');
-const { LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
+const { DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
 
 const router = express.Router();
 
-// The only two roles a coordinator can invite someone as. Anything else in
-// the request body is ignored and falls back to 'tutor'.
-const INVITABLE_ROLES = ['tutor', 'super_tutor'];
-const normaliseInvitedRole = (role) => (INVITABLE_ROLES.includes(role) ? role : 'tutor');
-
 const { hashPassword, isValidPassword } = require('../utils/passwords');
-
-const formatApplication = (a) => ({
-  id: a.id,
-  unitId: a.unit_id,
-  unitCode: a.unit_code,
-  name: a.name,
-  lastName: a.last_name,
-  fullName: [a.name, a.last_name].filter(Boolean).join(' '),
-  email: a.email,
-  phoneNumber: a.phone_number,
-  workExperience: a.work_experience,
-  maximumHours: a.maximum_hours,
-  contractType: a.contract_type,
-  hasResume: !!a.resume_filename,
-  resumeFilename: a.resume_filename,
-  status: a.status,
-  appliedAt: a.applied_at,
-  invitedAt: a.invited_at,
-  invitedRole: a.invited_role || 'tutor',
-  // Only meaningful while status === 'invited' - accept-invite nulls this
-  // out, and it's how the "Copy link" button on an already-invited card
-  // can still work after the one-time success modal has been closed.
-  inviteToken: a.status === 'invited' ? a.invite_token : null,
-  customAnswers: a.custom_answers || {}
-});
 
 const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
   return getCoordinatorUnitId(unitId, coordinatorId, clientOrPool);
@@ -86,6 +63,9 @@ router.post('/', async (req, res) => {
     if (!cleanFirstName || !email) {
       return res.status(400).json({ error: 'First name and email are required' });
     }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
 
     if (!unitId) {
       return res.status(400).json({ error: 'Application link is missing a unit' });
@@ -99,9 +79,7 @@ router.post('/', async (req, res) => {
     const resumeBuffer = resumeBase64 ? Buffer.from(resumeBase64, 'base64') : null;
     // Only keep answers for keys that aren't one of the legacy dedicated
     // columns - those are handled separately above.
-    const cleanCustomAnswers = customAnswers && typeof customAnswers === 'object'
-      ? Object.fromEntries(Object.entries(customAnswers).filter(([key]) => !LEGACY_FIELD_KEYS.includes(key)))
-      : {};
+    const cleanCustomAnswers = filterCustomAnswers(customAnswers);
 
     await pool.query(
       `
@@ -109,7 +87,7 @@ router.post('/', async (req, res) => {
         (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, custom_answers, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
       `,
-      [unitId, cleanFirstName, cleanLastName || null, email, phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
+      [unitId, cleanFirstName, cleanLastName || null, String(email).trim().toLowerCase(), phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -385,7 +363,7 @@ router.get('/verify-invite/:token', async (req, res) => {
     if (app.status !== 'invited') {
       return res.status(409).json({ error: 'This invite has already been used' });
     }
-    if (new Date() > new Date(app.invite_token_expires_at)) {
+    if (isInviteExpired(app.invite_token_expires_at)) {
       return res.status(410).json({ error: 'This invite link has expired' });
     }
 
@@ -420,10 +398,12 @@ router.post('/accept-invite', async (req, res) => {
     }
     const application = appResult.rows[0];
 
+    // The token is kept after use (status = 'accepted') so a second click
+    // says "already used" instead of "invalid link".
     if (application.status !== 'invited') {
       return res.status(409).json({ error: 'This invite has already been used' });
     }
-    if (new Date() > new Date(application.invite_token_expires_at)) {
+    if (isInviteExpired(application.invite_token_expires_at)) {
       return res.status(410).json({ error: 'This invite link has expired' });
     }
 
@@ -441,9 +421,8 @@ router.post('/accept-invite', async (req, res) => {
     await client.query('BEGIN');
 
     const passwordHash = hashPassword(password);
-    const splitName = splitDisplayName(application.name);
-    const resolvedFirstName = application.name || splitName.firstName || inviteFirstName;
-    const resolvedLastName = application.last_name || splitName.lastName || inviteLastName;
+    const { firstName: resolvedFirstName, lastName: resolvedLastName } =
+      resolveInviteName(application, inviteFirstName, inviteLastName);
     const newUserResult = await client.query(
       `
       INSERT INTO users (name, last_name, email, role, password_hash, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data)
@@ -451,7 +430,7 @@ router.post('/accept-invite', async (req, res) => {
       RETURNING id
       `,
       [
-        resolvedFirstName, resolvedLastName || null, application.email, passwordHash,
+        resolvedFirstName, resolvedLastName || null, String(application.email).trim().toLowerCase(), passwordHash,
         application.phone_number, application.work_experience, 
         application.maximum_hours, application.contract_type,
         application.resume_filename, application.resume_mime_type, application.resume_data
@@ -473,7 +452,8 @@ router.post('/accept-invite', async (req, res) => {
     await client.query(
       `
       UPDATE tutor_applications
-      SET status = 'accepted', created_user_id = $1, invite_token = NULL,
+      SET status = 'accepted', created_user_id = $1,
+          invite_token_expires_at = LEAST(invite_token_expires_at, NOW()),
           name = $2, last_name = $3
       WHERE id = $4
       `,
@@ -483,7 +463,7 @@ router.post('/accept-invite', async (req, res) => {
     await client.query('COMMIT');
     res.status(201).json({ success: true, message: 'Account created successfully. You can now log in.' });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error accepting invite:', error);
     res.status(500).json({ error: 'Failed to create account' });
   } finally {

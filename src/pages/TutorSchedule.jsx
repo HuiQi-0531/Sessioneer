@@ -35,8 +35,9 @@ const getCurrentUserId = () => {
   }
 };
 
+// The API puts declined tutors in declinedTutors[], not tutors[], so look in both.
 const getMyTutorEntry = (session, myId) => {
-  const tutors = session.tutors || [];
+  const tutors = [...(session.tutors || []), ...(session.declinedTutors || [])];
   return tutors.find(t => t.tutorId === myId) || null;
 };
 
@@ -87,7 +88,7 @@ const TutorSchedule = () => {
     try {
       const results = await Promise.all(
         tutorUnits.map(async (unit) => {
-          const data = await sessionsAPI.getMyAssigned(unit.id);
+          const data = await sessionsAPI.getMyAssigned(unit.id, { includeDeclined: true });
           return data.map(session => ({
             ...session,
             unitId: unit.id,
@@ -433,8 +434,9 @@ const handleExportPng = async () => {
                         <span className={`ts-status-badge ${status}`}>
                           {status === 'pending' ? 'Awaiting response' : status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
-                        {status === 'declined' && session.tutorRejectReason && (
-                          <div className="ts-reject-reason">"{getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason}"</div>                        )}
+                        {status === 'declined' && (getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason) && (
+                          <div className="ts-reject-reason">"{getMyTutorEntry(session, myId)?.rejectReason || session.tutorRejectReason}"</div>
+                        )}
                         {status === 'covering' && session.coverStartDate && session.coverEndDate && (
                           <div className="ts-cover-daterange">
                             {new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}

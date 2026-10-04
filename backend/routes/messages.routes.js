@@ -6,24 +6,13 @@ const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { getCoordinatorUnitId, shareAnyUnit } = require('../utils/unitAccess');
+const { formatMessage } = require('../utils/messageRules');
+const { ALLOWED_ATTACHMENT_TYPES, getSupabaseConfig, buildRequestBaseUrl } = require('../utils/uploadRules');
 
 const router = express.Router();
 
 const ATTACHMENT_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'message-attachments';
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
-const ALLOWED_ATTACHMENT_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/csv',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-]);
-
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ATTACHMENT_SIZE },
@@ -54,34 +43,6 @@ const emitGroupMessage = (req, unitId, message) => {
   });
 };
 
-const formatMessage = (m, currentUserId) => ({
-  id: m.id,
-  senderId: m.sender_id,
-  recipientId: m.recipient_id || null,
-  senderName: m.sender_name || null,
-  senderAvatarUrl: m.sender_avatar_url || null,
-  content: m.content,
-  isRead: m.is_read,
-  sentAt: m.sent_at,
-  attachmentUrl: m.attachment_url || null,
-  attachmentName: m.attachment_name || null,
-  attachmentType: m.attachment_type || null,
-  attachmentSize: m.attachment_size || null,
-  isMine: m.sender_id === currentUserId
-});
-
-const getSupabaseConfig = () => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    return null;
-  }
-  return {
-    supabaseUrl: supabaseUrl.replace(/\/$/, ''),
-    serviceKey
-  };
-};
-
 const ensureAttachmentBucket = async () => {
   const { supabaseUrl, serviceKey } = getSupabaseConfig();
   const response = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
@@ -103,12 +64,6 @@ const ensureAttachmentBucket = async () => {
     const text = await response.text();
     throw new Error(text || 'Failed to prepare attachment storage');
   }
-};
-
-const buildRequestBaseUrl = (req) => {
-  const forwardedProto = req.get('x-forwarded-proto');
-  const protocol = forwardedProto ? forwardedProto.split(',')[0] : req.protocol;
-  return `${protocol}://${req.get('host')}`;
 };
 
 const uploadAttachmentLocally = async (file, senderId, req) => {
@@ -188,7 +143,7 @@ const canAccessUnit = async (user, unitId) => {
         UNION
         SELECT 1 FROM availability WHERE tutor_id = $1 AND unit_id = $2
         UNION
-        SELECT 1 FROM sessions WHERE assigned_tutor_id = $1 AND unit_id = $2
+        SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1 AND s.unit_id = $2
       )
       `,
       [user.id, unitId]
@@ -344,7 +299,7 @@ router.get('/my-contacts', verifyToken, requireRole('tutor', 'coordinator'), asy
         UNION
         SELECT unit_id FROM availability WHERE tutor_id = $1
         UNION
-        SELECT unit_id FROM sessions WHERE assigned_tutor_id = $1
+        SELECT s.unit_id FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1
       )
         AND c.role = 'coordinator'
       `,

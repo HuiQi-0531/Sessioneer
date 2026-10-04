@@ -812,3 +812,8 @@
   color: var(--color-text-subtle);
   margin-top: 10px;
 }
+.ss-cover-note {
+  font-size: 0.75rem;
+  color: #6b5fd0;
+  margin-top: 2px;
+}
