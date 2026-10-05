@@ -6,6 +6,7 @@ const { escapeHtml, sendEmail } = require('../utils/email');
 const {
   AllocationError,
   applyApprovedChangeRequest,
+  assertSameSessionType,
   resolveSessionId
 } = require('../utils/applyChangeRequest');
 const { isUserLinkedToUnit, LINKED_UNITS_SQL, resolveUnitForUser } = require('../utils/unitAccess');
@@ -225,6 +226,13 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
     const resolvedCurrentId = await resolveSessionId(pool, unit_id, currentSessionId || null, currentSession);
     const resolvedPreferredId = await resolveSessionId(pool, unit_id, preferredSessionId || null, preferredSwapTo);
 
+    if (resolvedPreferredId) {
+      if (!resolvedCurrentId) {
+        return res.status(400).json({ error: 'Please select a current session' });
+      }
+      await assertSameSessionType(pool, unit_id, resolvedCurrentId, resolvedPreferredId);
+    }
+
     const result = await pool.query(`
       INSERT INTO change_requests 
       (tutor_id, unit_id, request_type, reason, status, current_session, preferred_swap_to, priority, current_session_id, preferred_session_id, created_at)
@@ -286,6 +294,9 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
       unitCode: unit.unit_code,
     });
   } catch (error) {
+    if (error instanceof AllocationError) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error('Error creating request:', error);
     res.status(500).json({ error: 'Failed to create request' });
   }
@@ -505,6 +516,10 @@ router.patch('/uc/requests/:id/review', verifyToken, requireRole('coordinator'),
     let suggestedSessionId = existing.suggested_session_id;
     if (statusLower === 'suggested' && reviewNotes) {
       suggestedSessionId = await resolveSessionId(client, existing.unit_id, null, reviewNotes);
+      if (suggestedSessionId) {
+        const currentId = await resolveSessionId(client, existing.unit_id, existing.current_session_id, existing.current_session);
+        await assertSameSessionType(client, existing.unit_id, currentId, suggestedSessionId);
+      }
     }
 
     if (shouldApplyChange(statusLower, existing.status)) {

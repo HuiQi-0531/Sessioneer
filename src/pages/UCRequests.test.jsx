@@ -1,7 +1,7 @@
 // UC Requests: approving and rejecting send the right review status.
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import UCRequests from './UCRequests';
-import { ucAPI } from '../config/api';
+import { ucAPI, sessionsAPI } from '../config/api';
 
 jest.mock('../config/api', () => ({
   sessionsAPI: { getFresh: jest.fn().mockResolvedValue([]) },
@@ -23,6 +23,22 @@ beforeEach(() => {
   ucAPI.getAllRequests.mockResolvedValue([pending]);
   ucAPI.getFreshRequests.mockResolvedValue([pending]);
   ucAPI.reviewRequest.mockResolvedValue({});
+  sessionsAPI.getFresh.mockResolvedValue([]);
+});
+
+test('M-2 UC suggestions only show matching session types even with spaced time labels', async () => {
+  const request = { ...pending, currentSession: 'TUE 13:00 - 14:00 | P-1' };
+  ucAPI.getAllRequests.mockResolvedValue([request]);
+  ucAPI.getFreshRequests.mockResolvedValue([request]);
+  sessionsAPI.getFresh.mockResolvedValue([
+    { id: 's2', day: 'TUE', startTime: '13:00', endTime: '14:00', location: 'P-1', sessionType: 'Tutorial' },
+    { id: 's3', day: 'WED', startTime: '15:00', endTime: '16:00', location: 'P-1', sessionType: 'Tutorial' },
+    { id: 's4', day: 'FRI', startTime: '15:00', endTime: '16:00', location: 'P-1', sessionType: 'Lecture' }
+  ]);
+  const { container } = render(<UCRequests />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Suggest' }));
+  await waitFor(() => expect(container.querySelectorAll('.uc-session-option').length).toBe(1));
+  expect(container.querySelector('.uc-session-option')).toHaveTextContent('WED');
 });
 
 test('FE-36 a pending request shows who, what and why', async () => {

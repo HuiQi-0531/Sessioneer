@@ -1,7 +1,7 @@
 // Tutor Requests page: claiming a cover, and the message the tutor sees when it fails.
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import TutorRequests from './TutorRequests';
-import { coverAPI, requestsAPI } from '../config/api';
+import { coverAPI, requestsAPI, sessionsAPI } from '../config/api';
 
 jest.mock('../config/api', () => ({
   requestsAPI: { getAll: jest.fn(), create: jest.fn(), delete: jest.fn(), update: jest.fn() },
@@ -28,6 +28,28 @@ beforeEach(() => {
   jest.clearAllMocks();
   requestsAPI.getAll.mockResolvedValue([]);
   coverAPI.getOpen.mockResolvedValue([openCover]);
+  sessionsAPI.getMyAssigned.mockResolvedValue([]);
+  sessionsAPI.getAll.mockResolvedValue([]);
+});
+
+test('M-2 preferred swaps only list the current session type and reset when current session changes', async () => {
+  const session = (id, sessionType, day) => ({ id, sessionType, day, startTime: '09:00', endTime: '10:00', location: 'P-1' });
+  const mine = [session('tutorial', 'Tutorial', 'MON'), session('practical', 'Practical', 'TUE')];
+  sessionsAPI.getMyAssigned.mockResolvedValue(mine);
+  sessionsAPI.getAll.mockResolvedValue([...mine, session('other-tutorial', 'Tutorial', 'WED'), session('lecture', 'Lecture', 'THU')]);
+  const { container } = render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: '+ Request' }));
+  fireEvent.change(container.querySelector('select[name="selectedUnit"]'), { target: { value: 'unit1' } });
+  await waitFor(() => expect(container.querySelector('select[name="currentSession"]').options.length).toBe(3));
+  const current = container.querySelector('select[name="currentSession"]');
+  const preferred = container.querySelector('select[name="preferredSwapTo"]');
+  fireEvent.change(current, { target: { value: current.options[1].value } });
+  expect([...preferred.options].map(option => option.text)).not.toEqual(expect.arrayContaining([expect.stringMatching(/Lecture|Practical/)]));
+  expect(preferred.options.length).toBe(2);
+  fireEvent.change(preferred, { target: { value: preferred.options[1].value } });
+  fireEvent.change(current, { target: { value: current.options[2].value } });
+  expect(preferred.value).toBe('');
+  expect(preferred.options.length).toBe(1);
 });
 
 test('FE-26 an open cover is listed with who is away and why', async () => {

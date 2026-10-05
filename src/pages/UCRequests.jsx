@@ -14,6 +14,7 @@ const labelFromValue = (value) => {
 
 const normaliseLabel = (value) => {
   return labelFromValue(value)
+    .replace(/\s*[-\u2013]\s*/g, '-')
     .replace(/\s*\|\s*/g, '|')
     .replace(/\s+/g, ' ')
     .trim()
@@ -146,6 +147,8 @@ const UCRequests = () => {
       setProcessedRequests(formattedRequests.filter(r => r.status !== 'Pending'));
 
       const currentRequestLabel = normaliseLabel(request.currentSession);
+      const currentSession = sessions.find(session => getSessionComparableLabel(session) === currentRequestLabel);
+      const currentType = String(currentSession?.sessionType || '').trim().toLowerCase();
       const swapOpenSessionLabels = new Set(
         formattedRequests
           .filter(r => r.id !== request.id && (r.status || '').toLowerCase() === 'pending')
@@ -155,6 +158,7 @@ const UCRequests = () => {
       );
 
       const filteredSessions = sessions
+        .filter(session => currentType && String(session.sessionType || '').trim().toLowerCase() === currentType)
         .map(session => {
           const comparableLabel = getSessionComparableLabel(session);
           const assignedCount = Array.isArray(session.tutors)

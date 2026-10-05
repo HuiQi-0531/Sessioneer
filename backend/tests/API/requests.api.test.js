@@ -134,7 +134,9 @@ defineApiCases('API requests: coordinator review moves the tutor', (add) => {
     expect((await review(ctx, res.body.id, 'accepted')).status).toBe(409);
   });
   add('API-R18 a Lecture target needs a Super Tutor', async (ctx) => {
+    await query("UPDATE sessions SET session_type = 'Lecture' WHERE id = $1", [ctx.s.held]);
     const res = await submit(ctx, ctx.tokens.tutor, { preferredSessionId: ctx.s.lecture });
+    expect(res.status).toBe(201);
     expect((await review(ctx, res.body.id, 'accepted')).status).toBe(409);
   });
   add('API-R19 a "Session Change" only removes the tutor', async (ctx) => {
@@ -166,6 +168,42 @@ defineApiCases('API requests: coordinator review moves the tutor', (add) => {
 });
 
 defineApiCases('API requests: admin review', (add) => {
+  add('M-13 admin suggestion with spaced times is stored and accepted exactly once', async (ctx) => {
+    const res = await submit(ctx, ctx.tokens.tutor, { preferredSessionId: null, preferredSwapTo: null });
+    const suggested = await api('patch', `/admin/requests/${res.body.id}/review`, ctx.tokens.admin, {
+      status: 'suggested', reviewNotes: 'Tutorial - TUE 09:00 - 10:00 | GP-P-101'
+    });
+    expect(suggested.status).toBe(200);
+    expect((await query('SELECT suggested_session_id FROM change_requests WHERE id = $1', [res.body.id])).rows[0].suggested_session_id).toBe(ctx.s.open2);
+    expect((await api('patch', `/requests/${res.body.id}`, ctx.tokens.tutor, { status: 'accepted' })).status).toBe(200);
+    expect(await onSession(ctx.s.open2, ctx.u.tutor.id)).toBe(true);
+    expect(await onSession(ctx.s.held, ctx.u.tutor.id)).toBe(false);
+    expect((await api('patch', `/requests/${res.body.id}`, ctx.tokens.tutor, { reason: 'updated explanation' })).status).toBe(200);
+    expect((await query('SELECT count(*)::int AS count FROM session_tutors WHERE session_id = $1 AND tutor_id = $2', [ctx.s.open2, ctx.u.tutor.id])).rows[0].count).toBe(1);
+  });
+  add('M-2 a forged cross-type request is rejected at submission without creating a request', async (ctx) => {
+    const res = await submit(ctx, ctx.tokens.tutor, { preferredSessionId: ctx.s.lecture });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/same session type/);
+    expect((await query('SELECT id FROM change_requests WHERE tutor_id = $1', [ctx.u.tutor.id])).rows).toHaveLength(0);
+    expect(await onSession(ctx.s.held, ctx.u.tutor.id)).toBe(true);
+  });
+  add('M-2 legacy cross-type requests cannot be approved by UC or admin', async (ctx) => {
+    const res = await submit(ctx, ctx.tokens.tutor);
+    await query('UPDATE change_requests SET preferred_session_id = $1 WHERE id = $2', [ctx.s.lecture, res.body.id]);
+    expect((await review(ctx, res.body.id, 'accepted')).status).toBe(409);
+    expect((await api('patch', `/admin/requests/${res.body.id}/review`, ctx.tokens.admin, { status: 'accepted' })).status).toBe(409);
+    expect(await onSession(ctx.s.held, ctx.u.tutor.id)).toBe(true);
+    expect(await onSession(ctx.s.lecture, ctx.u.tutor.id)).toBe(false);
+    expect((await query('SELECT status FROM change_requests WHERE id = $1', [res.body.id])).rows[0].status).toBe('Pending');
+  });
+  add('M-2 UC and admin cannot suggest a different session type', async (ctx) => {
+    const res = await submit(ctx, ctx.tokens.tutor);
+    const label = 'FRI 12:00-14:00|GP-P-101';
+    expect((await review(ctx, res.body.id, 'suggested', label)).status).toBe(409);
+    expect((await api('patch', `/admin/requests/${res.body.id}/review`, ctx.tokens.admin, { status: 'suggested', reviewNotes: label })).status).toBe(409);
+    expect((await query('SELECT status FROM change_requests WHERE id = $1', [res.body.id])).rows[0].status).toBe('Pending');
+  });
   add('API-R24 an admin approval also moves the tutor (it used to only change the label)', async (ctx) => {
     const res = await submit(ctx, ctx.tokens.tutor);
     expect((await api('patch', `/admin/requests/${res.body.id}/review`, ctx.tokens.admin, { status: 'accepted' })).status).toBe(200);
@@ -184,6 +222,7 @@ defineApiCases('API requests: admin review', (add) => {
     const ids = list.map(s => s.id);
     expect(ids).toContain(ctx.s.open2);
     expect(ids).not.toContain(ctx.s.held);
+    expect(ids).not.toContain(ctx.s.lecture);
   });
   add('API-R27 a declined tutor does not make a session look full to the admin', async (ctx) => {
     const res = await submit(ctx, ctx.tokens.tutor);

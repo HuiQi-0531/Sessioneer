@@ -55,6 +55,14 @@ describe('getSessionComparableLabel', () => {
 });
 
 describe('buildSuggestionSessions (sessions an admin can suggest instead)', () => {
+  test('M-2: suggestions match the current session type', () => {
+    const rows = [
+      { id: 'A', day: 'MON', start_time: '10:00', end_time: '12:00', location: 'GP', session_type: 'Tutorial' },
+      { id: 'B', day: 'TUE', start_time: '10:00', end_time: '12:00', location: 'GP', session_type: 'Tutorial' },
+      { id: 'C', day: 'WED', start_time: '10:00', end_time: '12:00', location: 'GP', session_type: 'Lecture' }
+    ];
+    expect(buildSuggestionSessions(rows, 'MON 10:00-12:00|GP', []).map(s => s.id)).toEqual(['B']);
+  });
   const s = (id, day, tutors = [], required = 1) => ({
     id, day, start_time: '10:00:00', end_time: '12:00:00', location: 'GP', required_tutors: required, tutors
   });

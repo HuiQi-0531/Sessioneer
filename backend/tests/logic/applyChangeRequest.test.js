@@ -2,8 +2,16 @@ const {
   comparable,
   sessionComparable,
   sessionLoose,
-  labelFromStored
+  labelFromStored,
+  resolveSessionId
 } = require('../../utils/applyChangeRequest');
+
+test('M-13 an admin display label with a session type resolves to the target ID', async () => {
+  const client = { query: jest.fn().mockResolvedValue({ rows: [{
+    id: 'target', day: 'MON', start_time: '09:00:00', end_time: '10:00:00', location: 'GP-P-101', session_type: 'Tutorial'
+  }] }) };
+  expect(await resolveSessionId(client, 'unit', null, 'Tutorial - MON 09:00 - 10:00 | GP-P-101')).toBe('target');
+});
 
 describe('comparable', () => {
   test('LG-103: spaces around a hyphen are removed', () => {

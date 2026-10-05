@@ -40,12 +40,13 @@ const resolveSessionId = async (client, unitId, storedId, storedValue) => {
   if (!storedValue || !unitId) return null;
 
   const result = await client.query(
-    'SELECT id, day, start_time, end_time, location FROM sessions WHERE unit_id = $1',
+    'SELECT id, day, start_time, end_time, location, session_type FROM sessions WHERE unit_id = $1',
     [unitId]
   );
   const target = comparable(labelFromStored(storedValue));
   const match = result.rows.find((session) =>
-    sessionComparable(session) === target || sessionLoose(session) === target
+    sessionComparable(session) === target || sessionLoose(session) === target ||
+    (session.session_type && comparable(`${session.session_type} - ${sessionComparable(session)}`) === target)
   );
   return match?.id || null;
 };
@@ -90,6 +91,17 @@ const loadSession = async (client, sessionId, unitId) => {
     throw new AllocationError('Session not found in this unit', 404);
   }
   return result.rows[0];
+};
+
+const assertSameSessionType = async (client, unitId, currentSessionId, targetSessionId) => {
+  const current = await loadSession(client, currentSessionId, unitId);
+  const target = await loadSession(client, targetSessionId, unitId);
+  const currentType = String(current.session_type || '').trim().toLowerCase();
+  const targetType = String(target.session_type || '').trim().toLowerCase();
+  if (!currentType || currentType !== targetType) {
+    throw new AllocationError('Changes and swaps must use the same session type', 409);
+  }
+  return target;
 };
 
 const assertNoOverlap = async (client, tutorId, session, ignoreSessionId) => {
@@ -217,7 +229,7 @@ const applyApprovedChangeRequest = async (client, request) => {
     return { action: 'unchanged', fromSessionId: currentSessionId };
   }
 
-  const targetSession = await loadSession(client, targetSessionId, unitId);
+  const targetSession = await assertSameSessionType(client, unitId, currentSessionId, targetSessionId);
   const targetTutors = await getActiveTutorIds(client, targetSessionId);
   const requiredTutors = Number(targetSession.required_tutors || 1);
 
@@ -256,6 +268,7 @@ const applyApprovedChangeRequest = async (client, request) => {
 
 module.exports = {
   AllocationError,
+  assertSameSessionType,
   applyApprovedChangeRequest,
   resolveSessionId,
   comparable,
