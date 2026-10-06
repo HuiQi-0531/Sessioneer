@@ -38,6 +38,9 @@ describe('API profile, messages, notifications, dashboards', () => {
   });
 
   test('direct and group messages enforce content and unit access', async () => {
+    const unrelated = await api('post', '/messages', T('tutor'), { recipientId: ctx.u.uc2.id, content: 'unauthorized cross-unit message' });
+    expect(unrelated.status).toBe(403);
+    expect((await query("SELECT id FROM messages WHERE content = 'unauthorized cross-unit message'")).rows).toHaveLength(0);
     expect((await api('post', '/messages', T('tutor'), { recipientId: ctx.u.uc.id, content: '   ' })).status).toBe(400);
     const sent = await api('post', '/messages', T('tutor'), { recipientId: ctx.u.uc.id, content: 'hello' });
     expect(sent.status).toBe(201);

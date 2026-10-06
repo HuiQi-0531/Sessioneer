@@ -10,7 +10,10 @@ const makeClient = ({ tutorsBySession = {}, sessions = {}, maxHours = null, isSu
     if (sql.includes('SELECT tutor_id') && sql.includes('FROM session_tutors')) {
       return { rows: (tutorsBySession[params[0]] || []).map(tutor_id => ({ tutor_id })) };
     }
-    if (sql.startsWith('SELECT * FROM sessions')) return { rows: sessions[params[0]] ? [sessions[params[0]]] : [] };
+    if (sql.startsWith('SELECT * FROM sessions')) {
+      const session = sessions[params[0]] || (params[0] === 'A' ? { id: 'A', session_type: 'Tutorial' } : null);
+      return { rows: session ? [session] : [] };
+    }
     if (sql.includes('maximum_hours')) return { rows: [{ maximum_hours: maxHours, is_super_tutor: isSuper }] };
     if (sql.includes('JOIN session_tutors st')) return { rows: [] };
     writes.push(sql.trim().split(/\s+/).slice(0, 3).join(' '));
@@ -22,6 +25,27 @@ const base = { tutor_id: 't1', unit_id: 'u1', current_session_id: 'A' };
 const target = { id: 'B', day: 'WED', start_time: '10:00:00', end_time: '12:00:00', required_tutors: 1, session_type: 'Tutorial' };
 
 describe('applyApprovedChangeRequest (fake database)', () => {
+  test.each(['Lecture', 'Consultation', 'Practical'])('M-2: Tutorial cannot move to %s, even for a Super Tutor', async (sessionType) => {
+    const client = makeClient({
+      tutorsBySession: { A: ['t1'], B: [] },
+      sessions: { B: { ...target, session_type: sessionType } },
+      isSuper: true
+    });
+    await expect(applyApprovedChangeRequest(client, {
+      ...base, request_type: 'Session Swap', preferred_session_id: 'B'
+    })).rejects.toThrow('same session type');
+    expect(client.writes).toEqual([]);
+  });
+  test('M-2: an incompatible admin suggestion is rejected before any assignment changes', async () => {
+    const client = makeClient({
+      tutorsBySession: { A: ['t1'], B: ['t1'] },
+      sessions: { B: { ...target, session_type: 'Lecture' } }, isSuper: true
+    });
+    await expect(applyApprovedChangeRequest(client, {
+      ...base, request_type: 'Session Swap', suggested_session_id: 'B', preferred_session_id: 'A'
+    })).rejects.toThrow('same session type');
+    expect(client.writes).toEqual([]);
+  });
   test('LG-225: a "change" request removes the tutor from their session', async () => {
     const client = makeClient({ tutorsBySession: { A: ['t1'] } });
     await expect(applyApprovedChangeRequest(client, { ...base, request_type: 'Session Change' }))

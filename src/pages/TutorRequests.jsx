@@ -185,11 +185,20 @@ const TutorRequests = () => {
     setFormData(prev => {
       const next = { ...prev, [name]: value };
       if (name === 'selectedUnit') { next.currentSession = ''; next.preferredSwapTo = ''; }
+      if (name === 'currentSession') next.preferredSwapTo = '';
       return next;
     });
   };
 
   const selectedUnitObj = allUnits.find(u => u.id === formData.selectedUnit);
+  const selectedCurrentSession = unitSessions.find(
+    s => sessionValue(s, selectedUnitObj?.unitCode) === formData.currentSession
+  );
+  const eligibleSwapTargets = swapTargetSessions.filter(s =>
+    selectedCurrentSession && s.id !== selectedCurrentSession.id &&
+    String(s.sessionType || '').trim().toLowerCase() ===
+      String(selectedCurrentSession.sessionType || '').trim().toLowerCase()
+  );
 
   const handleSubmit = async () => {
   const errs = {};
@@ -208,6 +217,7 @@ const TutorRequests = () => {
 
   try {
     await requestsAPI.create({
+      unitId: formData.selectedUnit,
       unitCode: selectedUnitObj?.unitCode,
       requestType: formData.requestType,
       priority: formData.priority,
@@ -222,7 +232,7 @@ const TutorRequests = () => {
     setTimeout(() => setShowSuccess(false), 3000);
     setShowModal(false);
     setFormData(INITIAL_FORM);
-  } catch (err) { alert('Failed to submit request. Please try again.'); }
+  } catch (err) { alert(err.message || 'Failed to submit request. Please try again.'); }
 };
 
   const handleCancel = () => { setShowModal(false); setErrors({}); setFormData(INITIAL_FORM); };
@@ -657,8 +667,7 @@ const TutorRequests = () => {
                   <option value="">
                     {!formData.selectedUnit ? '— Select a unit first —' : isLoadingSessions ? '— Loading —' : '— Select a session —'}
                   </option>
-                  {swapTargetSessions
-                    .filter(s => sessionValue(s, selectedUnitObj?.unitCode) !== formData.currentSession)
+                  {eligibleSwapTargets
                     .map(s => (
                       <option key={s.id} value={sessionValue(s, selectedUnitObj?.unitCode)}>
                         {sessionLabelWithCode(s)}

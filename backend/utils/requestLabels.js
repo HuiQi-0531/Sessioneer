@@ -30,6 +30,8 @@ const getSessionComparableLabel = (session) => {
 // Sessions an admin can suggest instead (was inline in GET /admin/requests/:id/suggestion-sessions).
 const buildSuggestionSessions = (sessionRows, currentSessionValue, otherPendingSessionValues) => {
   const currentRequestLabel = normaliseSessionLabel(currentSessionValue);
+  const currentSession = sessionRows.find(session => getSessionComparableLabel(session) === currentRequestLabel);
+  const currentType = String(currentSession?.session_type || '').trim().toLowerCase();
   const swapOpenSessionLabels = new Set(
     otherPendingSessionValues
       .map(value => normaliseSessionLabel(value))
@@ -37,6 +39,7 @@ const buildSuggestionSessions = (sessionRows, currentSessionValue, otherPendingS
   );
 
   return sessionRows
+    .filter(session => !currentType || String(session.session_type || '').trim().toLowerCase() === currentType)
     .map((session) => {
       const comparableLabel = getSessionComparableLabel(session);
       const assignedCount = Array.isArray(session.tutors) ? session.tutors.length : 0;

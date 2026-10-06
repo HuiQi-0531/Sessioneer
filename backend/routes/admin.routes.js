@@ -59,6 +59,7 @@ const { shouldApplyChange } = require('../utils/changeRequestRules');
 const {
   AllocationError,
   applyApprovedChangeRequest,
+  assertSameSessionType,
   resolveSessionId
 } = require('../utils/applyChangeRequest');
 
@@ -1498,6 +1499,10 @@ router.patch('/requests/:id/review', async (req, res) => {
     let suggestedSessionId = existing.suggested_session_id;
     if (statusLower === 'suggested' && reviewNotes) {
       suggestedSessionId = await resolveSessionId(client, existing.unit_id, null, reviewNotes);
+      if (suggestedSessionId) {
+        const currentId = await resolveSessionId(client, existing.unit_id, existing.current_session_id, existing.current_session);
+        await assertSameSessionType(client, existing.unit_id, currentId, suggestedSessionId);
+      }
     }
 
     // Approving must also move the tutor on the timetable (session_tutors),
