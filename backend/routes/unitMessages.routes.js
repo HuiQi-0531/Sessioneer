@@ -158,6 +158,13 @@ router.get('/group-unread-count', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
+    const canSeeChat = req.user.role === 'coordinator'
+      ? !!(await getOwnedUnitId(unitId, req.user.id))
+      : req.user.role === 'tutor' && await isTutorLinkedToUnit(req.user.id, unitId);
+    if (!canSeeChat) {
+      return res.status(403).json({ error: 'You do not have access to this unit chat' });
+    }
+
     const lastReadResult = await pool.query(
       'SELECT last_read_at FROM group_chat_reads WHERE unit_id = $1 AND user_id = $2',
       [unitId, req.user.id]

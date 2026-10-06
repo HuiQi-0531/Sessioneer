@@ -54,6 +54,7 @@ const {
   describeCoverConflict
 } = require('../utils/allocationRules');
 const { normaliseUnitCode, deleteUnitCascade } = require('../utils/unitRules');
+const { superTutorDowngradeError } = require('../utils/unitAccess');
 const { shouldApplyChange } = require('../utils/changeRequestRules');
 const {
   AllocationError,
@@ -576,6 +577,11 @@ router.post('/users/:id/units', async (req, res) => {
         return res.status(409).json({ error: 'This user already has coordinator access for this unit.' });
       }
 
+      if (role === 'tutor') {
+        const downgradeError = await superTutorDowngradeError(req.params.id, unitId);
+        if (downgradeError) return res.status(409).json({ error: downgradeError });
+      }
+
       await pool.query(
         `
         DELETE FROM unit_memberships
@@ -1033,6 +1039,11 @@ router.post('/units/:id/tutors', async (req, res) => {
       return res.status(400).json({ error: 'Admin accounts cannot be added as tutors' });
     }
 
+    if (membershipRole === 'tutor') {
+      const downgradeError = await superTutorDowngradeError(tutor.id, id);
+      if (downgradeError) return res.status(409).json({ error: downgradeError });
+    }
+
     await pool.query(
       `
       DELETE FROM unit_memberships
@@ -1060,7 +1071,7 @@ router.post('/units/:id/tutors', async (req, res) => {
       type: 'tutor_unit_added',
       title: 'Added to a unit',
       content: `You have been added as a ${roleLabel} for ${unit.rows[0].unit_code}.`,
-      relatedUnitId: id
+      unitId: id
     });
 
     const refreshed = await pool.query(
@@ -1121,6 +1132,11 @@ router.patch('/units/:id/tutors/:userId/role', async (req, res) => {
 
     if (userResult.rows[0].role === 'admin') {
       return res.status(400).json({ error: 'Admin accounts cannot be added as tutors' });
+    }
+
+    if (membershipRole === 'tutor') {
+      const downgradeError = await superTutorDowngradeError(userId, id);
+      if (downgradeError) return res.status(409).json({ error: downgradeError });
     }
 
     await pool.query(

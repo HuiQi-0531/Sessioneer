@@ -10,7 +10,7 @@ const {
   resolveInviteName
 } = require('../utils/applicationRules');
 const { isValidEmail } = require('../utils/authRules');
-const { getCoordinatorUnitId, LINKED_UNITS_SQL } = require('../utils/unitAccess');
+const { getCoordinatorUnitId, LINKED_UNITS_SQL, superTutorDowngradeError } = require('../utils/unitAccess');
 const { DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
 
 const router = express.Router();
@@ -274,6 +274,11 @@ router.post('/direct-invite', verifyToken, requireRole('coordinator'), async (re
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
+
+      if (invitedRole === 'tutor') {
+        const downgradeError = await superTutorDowngradeError(user.id, ownedUnitId);
+        if (downgradeError) return res.status(409).json({ error: downgradeError });
+      }
 
       // A person only holds one tutor-tier role per unit (tutor OR super_tutor).
       // Re-inviting them as the other one swaps it instead of stacking both.

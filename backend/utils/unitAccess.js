@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { requiresSuperTutor } = require('./roles');
 
 const ensureUnitMembership = async (clientOrPool, unitId, userId, role) => {
   await clientOrPool.query(
@@ -115,6 +116,26 @@ const isTutorLinkedToUnit = async (userId, unitId, clientOrPool = pool) => {
   return result.rows.length > 0;
 };
 
+// A plain Tutor may not teach Lectures or Consultations. Returns an error
+// message if dropping this person to Tutor would leave one of those with them.
+const superTutorDowngradeError = async (userId, unitId, clientOrPool = pool) => {
+  const result = await clientOrPool.query(
+    `
+    SELECT s.session_code, s.session_type
+    FROM session_tutors st
+    JOIN sessions s ON s.id = st.session_id
+    WHERE st.tutor_id = $1 AND s.unit_id = $2
+      AND st.tutor_confirmed IS DISTINCT FROM FALSE
+    `,
+    [userId, unitId]
+  );
+  const held = result.rows
+    .filter(row => requiresSuperTutor(row.session_type))
+    .map(row => row.session_code || row.session_type);
+  if (held.length === 0) return null;
+  return `This person still teaches ${held.join(', ')}, which needs a Super Tutor. Reassign it before changing them to Tutor.`;
+};
+
 module.exports = {
   resolveUnitForUser,
   isTutorLinkedToUnit,
@@ -122,5 +143,6 @@ module.exports = {
   getCoordinatorUnitId,
   isUserLinkedToUnit,
   shareAnyUnit,
+  superTutorDowngradeError,
   LINKED_UNITS_SQL
 };
