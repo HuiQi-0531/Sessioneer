@@ -80,7 +80,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Component tests (run once, no watch mode)
         run: npm test -- --watchAll=false
@@ -118,7 +118,7 @@ jobs:
             e2e/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install backend dependencies
         run: npm ci
