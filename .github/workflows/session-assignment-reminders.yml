@@ -1,16 +1,23 @@
 name: Session Assignment Reminders
 
+# Daily reminder emails, 9:00 AM Brisbane time:
+#   1. "assigned 3 days ago and still not answered" session reminders
+#   2. "availability deadline is less than 3 days away" reminders
+# Each step calls a backend endpoint protected by SESSIONEER_CRON_SECRET.
+
 on:
   schedule:
-    # Runs daily at 9:00 AM Brisbane time.
+    # Runs daily at 9:00 AM Brisbane time (23:00 UTC the day before).
     - cron: '0 23 * * *'
   workflow_dispatch:
 
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
+    env:
+      BACKEND_URL: https://sessioneer-backend.onrender.com
     steps:
-      - name: Trigger reminder job
+      - name: Trigger assignment reminder job
         run: |
           response_file="$(mktemp)"
           status_code="$(curl --show-error --silent \
@@ -18,7 +25,27 @@ jobs:
             --write-out "%{http_code}" \
             --request POST \
             --header "Authorization: Bearer ${{ secrets.SESSIONEER_CRON_SECRET }}" \
-            https://sessioneer-backend.onrender.com/jobs/session-assignment-reminders)"
+            "$BACKEND_URL/jobs/session-assignment-reminders")"
+
+          echo "Backend status: $status_code"
+          echo "Backend response:"
+          cat "$response_file"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            exit 1
+          fi
+
+      - name: Trigger availability deadline reminder job
+        # Runs even if the first step failed, so one problem does not block the other.
+        if: ${{ !cancelled() }}
+        run: |
+          response_file="$(mktemp)"
+          status_code="$(curl --show-error --silent \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.SESSIONEER_CRON_SECRET }}" \
+            "$BACKEND_URL/jobs/availability-deadline-reminders")"
 
           echo "Backend status: $status_code"
           echo "Backend response:"

@@ -382,7 +382,14 @@ describe('Integration workflows', () => {
         SELECT u.email, st.tutor_confirmed FROM session_tutors st JOIN users u ON u.id = st.tutor_id ORDER BY u.email
       `)).rows;
       const cols = (await check.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions'`)).rows.map(r => r.column_name);
-      const applied = (await check.query('SELECT name FROM schema_migrations')).rows.map(r => r.name);
+      const applied = (await check.query('SELECT name FROM schema_migrations ORDER BY name')).rows.map(r => r.name);
+      // Migration 002 only adds: existing units get no teaching period (so no
+      // class reminders until a UC sets one) and existing users token_version 0.
+      const unit = (await check.query(`SELECT teaching_start_date, teaching_end_date, unit_code FROM units`)).rows;
+      const versions = (await check.query(`SELECT DISTINCT token_version FROM users`)).rows;
+      const reminderTables = (await check.query(
+        `SELECT to_regclass('public.availability_reminders') AS a, to_regclass('public.session_reminders') AS s`
+      )).rows[0];
       await check.end();
 
       expect(st).toEqual([
@@ -392,7 +399,10 @@ describe('Integration workflows', () => {
       expect(cols).not.toEqual(expect.arrayContaining(['assigned_tutor_id']));
       expect(cols).not.toContain('is_assigned');
       expect(cols).not.toContain('tutor_confirmed');
-      expect(applied).toEqual(['001_single_assignment_table.sql']);
+      expect(applied).toEqual(['001_single_assignment_table.sql', '002_reminders_teaching_period_token_version.sql']);
+      expect(unit).toEqual([{ teaching_start_date: null, teaching_end_date: null, unit_code: 'OLD1' }]);
+      expect(versions).toEqual([{ token_version: 0 }]);
+      expect(reminderTables).toEqual({ a: 'availability_reminders', s: 'session_reminders' });
     } finally {
       await db.end().catch(() => {});
       const cleanup = new Client({ connectionString: base });

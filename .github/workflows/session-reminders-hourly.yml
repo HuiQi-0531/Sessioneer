@@ -1,0 +1,35 @@
+name: Session Reminders (24 hours before class)
+
+# Every hour: email tutors whose confirmed class starts 23-24 hours from now
+# (Brisbane time). The backend works out which classes qualify and never
+# sends the same reminder twice.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  send-session-reminders:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_URL: https://sessioneer-backend.onrender.com
+    steps:
+      - name: Trigger 24-hour session reminder job
+        run: |
+          response_file="$(mktemp)"
+          status_code="$(curl --show-error --silent \
+            --max-time 120 \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.SESSIONEER_CRON_SECRET }}" \
+            "$BACKEND_URL/jobs/session-reminders")"
+
+          echo "Backend status: $status_code"
+          echo "Backend response:"
+          cat "$response_file"
+
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            exit 1
+          fi

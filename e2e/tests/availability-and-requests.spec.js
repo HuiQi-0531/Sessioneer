@@ -43,6 +43,9 @@ test('E2E-06 a tutor asks to swap, the coordinator approves, the schedule moves'
   await selects.nth(4).selectOption({ label: wedOption });
   await page.getByPlaceholder(/detailed reason/).fill('Clashes with my lab');
   await page.getByRole('button', { name: 'Submit Request' }).click();
+  // The new request is listed under "Pending Status" (the page opens on the
+  // Cover Requests tab, so open the right tab instead of relying on timing).
+  await page.locator('.requests-tab', { hasText: 'Pending Status' }).click();
   await expect(page.getByText('Clashes with my lab')).toBeVisible();
 
   const ucContext = await browser.newContext();

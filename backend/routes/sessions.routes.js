@@ -7,6 +7,7 @@ const {
   sessionDurationHours
 } = require('../utils/normalise');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
+const { noticeSessionUpdated, noticeTutorRemoved, loadNoticeUser } = require('../utils/reminders');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
 const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 const { scoreCandidate, sortCandidates } = require('../utils/candidateScoring');
@@ -407,6 +408,9 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
+
+    // Tell assigned tutors if the day, time or location moved.
+    await noticeSessionUpdated({ before: current, after: result.rows[0] });
 
     res.json(formatSessionRow(result.rows[0]));
   } catch (error) {
@@ -838,7 +842,7 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
     // The session must belong to this unit, otherwise a coordinator could
     // remove tutors from another unit's session by putting their own unit in the URL.
     const sessionInUnit = await pool.query(
-      'SELECT 1 FROM sessions WHERE id = $1 AND unit_id = $2',
+      'SELECT * FROM sessions WHERE id = $1 AND unit_id = $2',
       [sessionId, unitId]
     );
     if (sessionInUnit.rows.length === 0) {
@@ -849,10 +853,16 @@ router.delete('/:sessionId/assign/:tutorId', verifyToken, requireRole('coordinat
       return res.status(409).json({ error: 'This schedule has been finalised and locked. Unlock it first to make changes.' });
     }
 
-    await pool.query(
-      'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2',
+    const removed = await pool.query(
+      'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2 RETURNING tutor_confirmed',
       [sessionId, tutorId]
     );
+
+    // A tutor who still held the session (Pending or Confirmed) is told they
+    // were removed. Clearing out a Declined row is not news to them.
+    if (removed.rows.length > 0 && removed.rows[0].tutor_confirmed !== false) {
+      await noticeTutorRemoved({ session: sessionInUnit.rows[0], tutor: await loadNoticeUser(tutorId) });
+    }
 
     const withName = await pool.query(
       `

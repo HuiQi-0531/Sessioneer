@@ -13,6 +13,18 @@ const {
   buildAvailabilityGrid,
   applyCommittedSessions
 } = require('../utils/availabilityRules');
+const { checkManualAvailabilityReminder } = require('../utils/reminderRules');
+const { sendAvailabilityReminder } = require('../utils/reminders');
+
+// SQL: a manual reminder for this unit ($1) + tutor ($2) was already sent
+// today (Brisbane calendar day). sent_at is stored in UTC.
+const SENT_TODAY_SQL = `
+  SELECT 1 FROM availability_reminders
+  WHERE unit_id = $1 AND tutor_id = $2 AND kind = 'manual'
+    AND (sent_at AT TIME ZONE 'UTC' AT TIME ZONE 'Australia/Brisbane')::date
+        = (NOW() AT TIME ZONE 'Australia/Brisbane')::date
+  LIMIT 1
+`;
 
 const router = express.Router();
 
@@ -118,7 +130,24 @@ router.get('/', verifyToken, async (req, res) => {
       `,
       [unit_id, grid.tutors.map(t => t.id)]
     );
-    res.json(applyCommittedSessions(grid, committedResult.rows));
+    const result = applyCommittedSessions(grid, committedResult.rows);
+
+    // Coordinators also see which tutors already got a bell reminder today,
+    // so the button stays in its "sent" state after a reload.
+    if (hasCoordinatorAccess) {
+      const remindedResult = await pool.query(
+        `
+        SELECT DISTINCT tutor_id FROM availability_reminders
+        WHERE unit_id = $1 AND kind = 'manual'
+          AND (sent_at AT TIME ZONE 'UTC' AT TIME ZONE 'Australia/Brisbane')::date
+              = (NOW() AT TIME ZONE 'Australia/Brisbane')::date
+        `,
+        [unit_id]
+      );
+      result.remindersSentToday = remindedResult.rows.map(row => row.tutor_id);
+    }
+
+    res.json(result);
   } catch (error) {
     console.error('Error fetching availability:', error);
     res.status(500).json({ error: 'Failed to fetch availability' });
@@ -187,6 +216,102 @@ router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (
     res.status(500).json({ error: 'Failed to submit availability' });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * POST /availability/reminders (UC bell button)
+ * Body: { unitId, tutorId }
+ * Sends the "submit your availability" email + in-app notice to one tutor
+ * straight away. Only a coordinator of that unit may do it, the tutor must be
+ * on the unit and must not have submitted yet, and at most once per day.
+ */
+router.post('/reminders', verifyToken, requireRole('coordinator'), async (req, res) => {
+  const { unitId, tutorId } = req.body || {};
+  if (!unitId || !tutorId) {
+    return res.status(400).json({ error: 'unitId and tutorId are required' });
+  }
+
+  const client = await pool.connect();
+  let reminderId = null;
+  let tutor = null;
+  let unit = null;
+  try {
+    const coordinatorUnitId = await getCoordinatorUnitId(unitId, req.user.id, client).catch(() => null);
+    if (!coordinatorUnitId) {
+      return res.status(403).json({ error: 'Only a coordinator of this unit can send reminders.' });
+    }
+
+    await client.query('BEGIN');
+    // Serialise clicks for the same tutor + unit so a double click sends once.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`availability-reminder:${unitId}:${tutorId}`]);
+
+    const unitResult = await client.query(
+      'SELECT id, unit_code, unit_name, availability_deadline FROM units WHERE id = $1',
+      [unitId]
+    );
+    unit = unitResult.rows[0];
+
+    const tutorResult = await client.query(
+      `
+      SELECT u.id, u.email, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name
+      FROM users u
+      WHERE u.id = $2
+        AND EXISTS (
+          SELECT 1 FROM unit_memberships um
+          WHERE um.unit_id = $1 AND um.user_id = u.id AND um.role IN ('tutor', 'super_tutor')
+        )
+      `,
+      [unitId, tutorId]
+    );
+    tutor = tutorResult.rows[0];
+
+    const [submittedResult, sentTodayResult] = tutor
+      ? await Promise.all([
+          client.query(
+            'SELECT 1 FROM availability WHERE unit_id = $1 AND tutor_id = $2 AND is_submitted = TRUE LIMIT 1',
+            [unitId, tutorId]
+          ),
+          client.query(SENT_TODAY_SQL, [unitId, tutorId])
+        ])
+      : [{ rows: [] }, { rows: [] }];
+
+    const problem = checkManualAvailabilityReminder({
+      isTutorOnUnit: !!tutor && !!tutor.email,
+      hasSubmitted: submittedResult.rows.length > 0,
+      alreadySentToday: sentTodayResult.rows.length > 0
+    });
+    if (problem) {
+      await client.query('ROLLBACK');
+      return res.status(problem.status).json({ error: problem.error });
+    }
+
+    const inserted = await client.query(
+      `
+      INSERT INTO availability_reminders (unit_id, tutor_id, deadline, kind, sent_by_id)
+      VALUES ($1, $2, $3, 'manual', $4)
+      RETURNING id, sent_at
+      `,
+      [unitId, tutorId, unitResult.rows[0].availability_deadline, req.user.id]
+    );
+    reminderId = inserted.rows[0].id;
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error preparing availability reminder:', error);
+    return res.status(500).json({ error: 'Failed to send reminder' });
+  } finally {
+    client.release();
+  }
+
+  try {
+    await sendAvailabilityReminder({ tutor, unit });
+    res.status(201).json({ success: true, tutorId, message: 'Reminder sent' });
+  } catch (error) {
+    // Not sent, so it does not count towards "once per day".
+    await pool.query('DELETE FROM availability_reminders WHERE id = $1', [reminderId]).catch(() => {});
+    console.error('Error sending availability reminder:', error);
+    res.status(502).json({ error: 'The reminder email could not be sent. Please try again.' });
   }
 });
 

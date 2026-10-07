@@ -37,11 +37,12 @@ CREATE USER sessioneer WITH PASSWORD 'your_password_here';
 CREATE DATABASE sessioneer_db OWNER sessioneer;
 ```
 
-Then load the schema:
+Then build the schema (after step 3, once `backend/.env` points at the database):
 ```bash
-psql -U sessioneer -d sessioneer_db -f backend/setup-db.sql
+cd backend
+npm run db:migrate
 ```
-This creates the core tables. A few newer tables/columns (e.g. `unit_memberships`, `session_tutors`, `cover_requests`) aren't in this script — the backend adds them automatically the first time it starts (see step 4).
+This runs `setup-db.sql` and every numbered file in `backend/db/migrations/` that has not been applied yet. Run it again after every pull that adds a migration (for example `002_reminders_teaching_period_token_version.sql`). It only adds tables and columns; existing data is kept.
 
 ### 3. Configure Backend
 ```bash
@@ -63,7 +64,7 @@ Also set `JWT_SECRET` to any long random string. The `BREVO_API_KEY`, `SUPABASE_
 cd backend
 npm start
 ```
-On first run you should see a series of `... schema OK` lines in the console — this is the backend automatically adding any tables/columns not already in `setup-db.sql`. You should also see `Database connected at: <timestamp>`.
+You should see `Database connected at: <timestamp>`. The backend no longer changes the schema at start-up; if a column is missing, run `npm run db:migrate`.
 
 **Terminal 2 - Frontend:**
 ```bash
@@ -95,3 +96,59 @@ There are no working pre-seeded logins — `setup-db.sql` inserts two sample use
 
 **Login fails for sarah.kim@uni.edu / elaine.lee@student.edu?**
 - Expected — see "Creating an Account" above. These accounts have a dummy password hash and cannot log in as shipped.
+
+## Reminder emails and scheduled jobs
+
+All jobs are backend endpoints protected by `CRON_SECRET` (send it as `Authorization: Bearer <secret>` or `x-cron-secret: <secret>`). GitHub Actions calls them on a schedule using the repository secret `SESSIONEER_CRON_SECRET`; each workflow can also be started by hand from the Actions tab (**Run workflow**).
+
+| Endpoint | When | What it does | Workflow |
+|----------|------|--------------|----------|
+| `POST /jobs/session-assignment-reminders` | Daily 9:00 am Brisbane | Reminds tutors who have not answered an assignment after 3 days | `session-assignment-reminders.yml` |
+| `POST /jobs/availability-deadline-reminders` | Daily 9:00 am Brisbane | Emails every tutor / Super Tutor who has not submitted availability when the unit's deadline is 3 days away or less (not locked, not passed). Once per tutor + unit + deadline; a new deadline allows one more | `session-assignment-reminders.yml` (second step) |
+| `POST /jobs/session-reminders` | Every hour | Emails tutors whose class starts 23-24 hours from now (Brisbane time). Only when the unit has a teaching period that contains that date, the schedule is locked and the tutor has Confirmed. If the class was taken over through a claimed cover request, only the person covering is reminded. Once per tutor + session + date. Respects the user's "session updates" setting for both the email and the in-app notice | `session-reminders-hourly.yml` |
+
+Every job answers with counts, for example `{ "checkedCount": 5, "emailedCount": 4, "failedCount": 1, "alreadySentCount": 0, "failures": [...] }`. One failed email never stops the others, and a failed one is tried again on the next run.
+
+For testing or a dry run at a chosen moment, a caller with the secret can send `{ "asOf": "2026-10-11T00:15:00Z" }` to run a job as if it were that time.
+
+Other notices:
+- **Availability bell (UC Availability page).** Clicking the bell next to a tutor who has not submitted sends the same reminder email and in-app notice straight away. Only a coordinator of that unit can do it, the person must be a tutor on the unit who has not submitted, and only once per tutor per day ("Reminder already sent today").
+- **Schedule changes.** When a UC or Admin changes a session's day, time or location, every tutor on it (Pending or Confirmed) gets an in-app notice describing the change, e.g. `TUT02 moved from Mon 10:00–12:00 to Tue 14:00–16:00`. Removing a tutor from a session tells that tutor. Changes that tutors cannot see (capacity, staff note) send nothing. If the class is within 48 hours an email is sent as well. A session cannot be deleted while tutors are still on it, so tutors hear about it at the "removed" step.
+- **Teaching period.** Units have an optional teaching start and end date (UC unit form and Admin > Units). Without them no class reminders are sent for that unit.
+
+## Logging out
+
+`POST /auth/logout` ends the login on the server: every token the user holds (on any device) stops working at once and returns `401` with `code: "AUTH_INVALID"`. Changing the password (Profile) or resetting it by email link does the same; the Profile page receives a fresh token so that browser stays logged in. The frontend sends the user back to the login page whenever it receives that 401.
+
+## Tests
+
+| Suite | Command (from `backend/` unless stated) | Tests |
+|-------|------------------------------------------|-------|
+| Logic (unit) | `npm run test:logic` | 677 |
+| API | `npm run test:api` | 427 |
+| Integration | `npm run test:integration` | 16 |
+| RBAC | `npm run test:rbac` | 99 |
+| Frontend components | `CI=true npm test -- --watchAll=false` (project root) | 53 |
+| E2E (Playwright) | `npm test` in `e2e/` (see `e2e/README.md`) | 13 |
+
+The API, integration, RBAC and E2E suites need a throwaway PostgreSQL database whose name contains `test` (see `backend/tests/rbac/README.md`).
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request (when it is opened and on every new commit) and on every push to `main`. It starts a temporary PostgreSQL database inside the job and runs, as three checks:
+
+1. **Backend tests (logic, API, integration, RBAC)**
+2. **Frontend component tests** (non-interactive, no watch mode)
+3. **E2E tests (Playwright)** (the Playwright report is uploaded when it fails)
+
+If any step fails, the check is red. No real secrets or database addresses are in the workflow.
+
+### Branch protection for `main` (one-off, repository admin)
+
+GitHub > repository **Settings** > **Branches** (or **Rules** > **Rulesets**) > add a rule for `main`:
+
+- Require a pull request before merging, with **Required approvals: 1** (another team member must approve).
+- Require status checks to pass before merging, and select the three checks above. They only appear in the list after the CI workflow has run once, so open a pull request first.
+- Optionally: require branches to be up to date before merging, and do not allow bypassing the rules.
+
+To demonstrate it: open a pull request that breaks one test (the check goes red and **Merge** is blocked), then push a fix (the check goes green and the PR can be merged after one approval).

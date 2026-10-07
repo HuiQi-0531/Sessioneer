@@ -3,6 +3,7 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification } = require('../utils/notify');
 const { ensureUnitMembership, getCoordinatorUnitId } = require('../utils/unitAccess');
+const { validateTeachingPeriod, resolveTeachingPeriodUpdate } = require('../utils/reminderRules');
 
 const router = express.Router();
 
@@ -65,7 +66,8 @@ router.get('/my-units', verifyToken, requireRole('tutor', 'coordinator'), async 
       `
       SELECT DISTINCT u.id, u.unit_code, u.unit_name, u.semester, u.year,
              u.campus, u.delivery_mode, u.availability_deadline, u.availability_locked,
-             u.schedule_locked, u.schedule_locked_at, u.draft_released
+             u.schedule_locked, u.schedule_locked_at, u.draft_released,
+             u.teaching_start_date, u.teaching_end_date
       FROM units u
       WHERE u.id IN (
         SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
@@ -94,6 +96,7 @@ router.get('/my-access', verifyToken, async (req, res) => {
       SELECT u.id, u.unit_code, u.unit_name, u.semester, u.year,
              u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
              u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released,
+             u.teaching_start_date, u.teaching_end_date,
              ARRAY_AGG(DISTINCT access_roles.role ORDER BY access_roles.role) as roles
       FROM units u
       JOIN (
@@ -107,7 +110,8 @@ router.get('/my-access', verifyToken, async (req, res) => {
       ) access_roles ON access_roles.unit_id = u.id
       GROUP BY u.id, u.unit_code, u.unit_name, u.semester, u.year,
                u.campus, u.delivery_mode, u.enrolment_size, u.availability_deadline,
-               u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released
+               u.availability_locked, u.schedule_locked, u.schedule_locked_at, u.draft_released,
+               u.teaching_start_date, u.teaching_end_date
       ORDER BY u.year DESC, u.semester DESC, u.unit_code ASC
       `,
       [req.user.id]
@@ -127,7 +131,8 @@ router.get('/', verifyToken, requireRole('coordinator'), async (req, res) => {
       `
       SELECT id, unit_code, unit_name, semester, year, campus,
              delivery_mode, enrolment_size, availability_deadline,
-             availability_locked, schedule_locked, schedule_locked_at, created_at
+             availability_locked, schedule_locked, schedule_locked_at, draft_released,
+             teaching_start_date, teaching_end_date, created_at
       FROM units
       WHERE unit_coordinator_id = $1
          OR EXISTS (
@@ -157,7 +162,8 @@ router.get('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
       `
       SELECT id, unit_code, unit_name, semester, year, campus,
              delivery_mode, enrolment_size, availability_deadline,
-             availability_locked, schedule_locked, schedule_locked_at, created_at
+             availability_locked, schedule_locked, schedule_locked_at, draft_released,
+             teaching_start_date, teaching_end_date, created_at
       FROM units
       WHERE id = $1
         AND (
@@ -190,13 +196,19 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
   try {
     const {
       unitCode, unitName, semester, year,
-      enrolmentSize, availabilityDeadline, coordinatorEmails
+      enrolmentSize, availabilityDeadline, coordinatorEmails,
+      teachingStartDate, teachingEndDate
     } = req.body;
 
     if (!unitCode || !unitName || !semester || !year) {
       return res.status(400).json({
         error: 'Unit code, unit name, semester, and year are required'
       });
+    }
+
+    const teachingError = validateTeachingPeriod(teachingStartDate, teachingEndDate);
+    if (teachingError) {
+      return res.status(400).json({ error: teachingError });
     }
 
     const normalizedUnitCode = normaliseUnitCode(unitCode);
@@ -249,16 +261,20 @@ router.post('/', verifyToken, requireRole('coordinator'), async (req, res) => {
         `
         INSERT INTO units
           (unit_coordinator_id, unit_code, unit_name, semester, year,
-           campus, delivery_mode, enrolment_size, availability_deadline)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           campus, delivery_mode, enrolment_size, availability_deadline,
+           teaching_start_date, teaching_end_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, unit_code, unit_name, semester, year, campus,
                   delivery_mode, enrolment_size, availability_deadline,
-                  availability_locked, schedule_locked, schedule_locked_at, draft_released
+                  availability_locked, schedule_locked, schedule_locked_at, draft_released,
+                  teaching_start_date, teaching_end_date
         `,
         [
           req.user.id, normalizedUnitCode, unitName, semester, year,
           null, null, enrolmentSize || null,
-          availabilityDeadline || null
+          availabilityDeadline || null,
+          teachingStartDate || null,
+          teachingEndDate || null
         ]
       );
 
@@ -310,7 +326,7 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
     }
 
     const existingResult = await pool.query(
-      'SELECT unit_code, semester, year FROM units WHERE id = $1',
+      'SELECT unit_code, semester, year, teaching_start_date, teaching_end_date FROM units WHERE id = $1',
       [id]
     );
 
@@ -319,6 +335,14 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
     }
 
     const existingUnit = existingResult.rows[0];
+
+    // Teaching dates are only changed when the request includes them; an
+    // empty value clears them (which turns session reminders off).
+    const nextTeaching = resolveTeachingPeriodUpdate(req.body, existingUnit);
+    const teachingError = validateTeachingPeriod(nextTeaching.start, nextTeaching.end);
+    if (teachingError) {
+      return res.status(400).json({ error: teachingError });
+    }
     const nextUnitCode = unitCode ? normaliseUnitCode(unitCode) : existingUnit.unit_code;
     const nextSemester = semester || existingUnit.semester;
     const nextYear = year || existingUnit.year;
@@ -345,16 +369,20 @@ router.put('/:id', verifyToken, requireRole('coordinator'), async (req, res) => 
         semester = COALESCE($3, semester),
         year = COALESCE($4, year),
         enrolment_size = COALESCE($5, enrolment_size),
-        availability_deadline = COALESCE($6, availability_deadline)
+        availability_deadline = COALESCE($6, availability_deadline),
+        teaching_start_date = $8,
+        teaching_end_date = $9
       WHERE id = $7
       RETURNING id, unit_code, unit_name, semester, year, campus,
                 delivery_mode, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, schedule_locked_at, draft_released
+                availability_locked, schedule_locked, schedule_locked_at, draft_released,
+                teaching_start_date, teaching_end_date
       `,
       [
         nextUnitCode, unitName, semester, year,
         enrolmentSize, availabilityDeadline,
-        id
+        id,
+        nextTeaching.start, nextTeaching.end
       ]
     );
 

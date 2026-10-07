@@ -1,6 +1,7 @@
 // Unit logic used by units.routes.js (normaliseUnitCode also by admin.routes.js).
 const pool = require('../db');
 const { isUnitActive } = require('./normalise');
+const { toDateKey } = require('./brisbaneTime');
 
 const formatUnit = (u) => ({
   id: u.id,
@@ -16,6 +17,8 @@ const formatUnit = (u) => ({
   scheduleLocked: u.schedule_locked || false,
   scheduleLockedAt: u.schedule_locked_at || null,
   draftReleased: u.draft_released || false,
+  teachingStartDate: toDateKey(u.teaching_start_date),
+  teachingEndDate: toDateKey(u.teaching_end_date),
   isActive: isUnitActive(u.semester, u.year)
 });
 

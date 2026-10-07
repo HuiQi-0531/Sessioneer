@@ -20,3 +20,18 @@ describe('getBlockedAccountResponse', () => {
     expect(getBlockedAccountResponse(undefined)).toBeNull();
   });
 });
+
+describe('token version (server-side logout)', () => {
+  const { tokenVersionMatches } = require('../../middleware/auth');
+
+  test('LG-653: a token with the current version is accepted', () => {
+    expect(tokenVersionMatches({ tv: 2 }, { token_version: 2 })).toBe(true);
+  });
+  test('LG-654: a token from before a logout (older version) is refused', () => {
+    expect(tokenVersionMatches({ tv: 1 }, { token_version: 2 })).toBe(false);
+  });
+  test('LG-655: a token without a version counts as version 0', () => {
+    expect(tokenVersionMatches({}, { token_version: 0 })).toBe(true);
+    expect(tokenVersionMatches({}, { token_version: 1 })).toBe(false);
+  });
+});

@@ -28,7 +28,8 @@ npm run report        # open the HTML report afterwards
 ```
 
 Playwright starts the backend on port 5001 and the React dev server on
-port 3000 by itself. Results are written to `results/e2e-results.json` and
+port 3000 by itself. The same stories also run automatically in CI
+(`.github/workflows/ci.yml`) on every pull request. Results are written to `results/e2e-results.json` and
 `results/html/`.
 
 ## Stories
@@ -46,6 +47,8 @@ port 3000 by itself. Results are written to `results/e2e-results.json` and
 | E2E-09 | Pages are guarded by role in the browser | accounts-and-access.spec.js |
 | E2E-10 | Admin disables an account; that user cannot log in | accounts-and-access.spec.js |
 | E2E-11 | Schedule Builder List View shows Awaiting / Confirmed and who declined (with reason) | uc-assigns-and-finalises.spec.js |
+| E2E-12 | Logging out ends the session on the server: the old token is refused and protected pages go back to login | accounts-and-access.spec.js |
+| E2E-13 | A browser whose login was ended elsewhere is sent back to the login page | accounts-and-access.spec.js |
 
 ## Adding your own story
 

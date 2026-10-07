@@ -1,5 +1,6 @@
 // Admin logic used by admin.routes.js.
 const { formatUserNameFields, joinUserName } = require('./userNames');
+const { toDateKey } = require('./brisbaneTime');
 
 const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor']);
 const VALID_ACCOUNT_STATUSES = new Set(['active', 'pending', 'disabled']);
@@ -64,6 +65,8 @@ const formatAdminUnit = (unit) => ({
   availabilityLocked: unit.availability_locked,
   scheduleLocked: unit.schedule_locked,
   draftReleased: unit.draft_released,
+  teachingStartDate: toDateKey(unit.teaching_start_date),
+  teachingEndDate: toDateKey(unit.teaching_end_date),
   mainCoordinatorName: joinUserName(unit.main_coordinator_name, unit.main_coordinator_last_name),
   mainCoordinatorEmail: unit.main_coordinator_email || '',
   coordinators: unit.coordinators || '',

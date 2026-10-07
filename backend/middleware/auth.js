@@ -19,20 +19,45 @@ const getBlockedAccountResponse = (status) => {
   return null;
 };
 
+// Every 401 from here carries this code, so the frontend can tell "your
+// login is no longer valid" apart from other 401s (e.g. a wrong current
+// password) and send the user back to the login page.
+const AUTH_ERROR_CODE = 'AUTH_INVALID';
+const unauthorised = (res, error) => res.status(401).json({ error, code: AUTH_ERROR_CODE });
+
+// Tokens carry the user's token_version as `tv`. Logging out, changing or
+// resetting the password bumps the stored version, which makes every token
+// issued before that moment stop working. Tokens from before this feature
+// have no `tv` and count as version 0.
+const tokenVersionMatches = (decoded, user) =>
+  Number(decoded.tv || 0) === Number(user.token_version || 0);
+
+const signToken = (user) => jwt.sign(
+  { id: user.id, email: user.email, role: user.role, tv: Number(user.token_version || 0) },
+  process.env.JWT_SECRET,
+  { expiresIn: '8h' }
+);
+
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
+    return unauthorised(res, 'No token provided');
   }
 
   const token = authHeader.split(' ')[1];
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return unauthorised(res, 'Invalid or expired token');
+  }
+
+  try {
     const result = await pool.query(
       `
-      SELECT id, email, role, account_status
+      SELECT id, email, role, account_status, token_version
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -43,7 +68,11 @@ const verifyToken = async (req, res, next) => {
     const user = result.rows[0];
 
     if (!user) {
-      return res.status(401).json({ error: 'User account no longer exists' });
+      return unauthorised(res, 'User account no longer exists');
+    }
+
+    if (!tokenVersionMatches(decoded, user)) {
+      return unauthorised(res, 'You have been logged out. Please log in again.');
     }
 
     const accountStatus = user.account_status || 'active';
@@ -61,7 +90,7 @@ const verifyToken = async (req, res, next) => {
     };
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return unauthorised(res, 'Invalid or expired token');
   }
 };
 
@@ -74,4 +103,11 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-module.exports = { verifyToken, requireRole, getBlockedAccountResponse };
+module.exports = {
+  verifyToken,
+  requireRole,
+  getBlockedAccountResponse,
+  signToken,
+  tokenVersionMatches,
+  AUTH_ERROR_CODE
+};

@@ -29,7 +29,21 @@ const TutorAvailability = () => {
   // 'all' = submit to every tutor unit (default, current behaviour).
   // Otherwise this is a specific unit's id, and everything below scopes
   // to just that one unit instead.
-  const [selectedUnitId, setSelectedUnitId] = useState(ALL_UNITS_VALUE);
+  // A reminder email links here as /availability?unitId=<id>, which opens
+  // that unit straight away.
+  const [selectedUnitId, setSelectedUnitId] = useState(() => {
+    if (typeof window === 'undefined') return ALL_UNITS_VALUE;
+    const linkedUnitId = new URLSearchParams(window.location.search).get('unitId');
+    return linkedUnitId || ALL_UNITS_VALUE;
+  });
+
+  // Ignore a linked unit this tutor does not belong to.
+  useEffect(() => {
+    if (unitLoading || selectedUnitId === ALL_UNITS_VALUE) return;
+    if (!allUnits.some(unit => unit.id === selectedUnitId && unitHasTutorAccess(unit) && unit.isActive)) {
+      setSelectedUnitId(ALL_UNITS_VALUE);
+    }
+  }, [unitLoading, allUnits, selectedUnitId]);
 
   const [isEditable, setIsEditable] = useState(true);
   const [availabilityData, setAvailabilityData] = useState({});

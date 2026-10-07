@@ -27,7 +27,17 @@ const emptyForm = {
   unitName: '',
   semesterYear: '',
   enrolmentSize: '',
-  availabilityDeadline: ''
+  availabilityDeadline: '',
+  teachingStartDate: '',
+  teachingEndDate: ''
+};
+
+// Same rule as the backend: both or neither, and the end not before the start.
+const teachingPeriodError = (start, end) => {
+  if (!start && !end) return '';
+  if (!start || !end) return 'Enter both a teaching start date and a teaching end date, or leave both empty.';
+  if (end < start) return 'Teaching end date must be on or after the teaching start date.';
+  return '';
 };
 
 const CreateUnit = () => {
@@ -71,7 +81,9 @@ const CreateUnit = () => {
           enrolmentSize: unit.enrolmentSize || '',
           availabilityDeadline: unit.availabilityDeadline
             ? unit.availabilityDeadline.slice(0, 10)
-            : ''
+            : '',
+          teachingStartDate: unit.teachingStartDate || '',
+          teachingEndDate: unit.teachingEndDate || ''
         });
         setCoordinators(unitCoordinators);
         if (unitCoordinators.length > 0) setShowCoordinatorSection(true);
@@ -159,6 +171,12 @@ const CreateUnit = () => {
       return;
     }
 
+    const teachingError = teachingPeriodError(formData.teachingStartDate, formData.teachingEndDate);
+    if (teachingError) {
+      setError(teachingError);
+      return;
+    }
+
     const [semester, yearStr] = formData.semesterYear.split('|');
 
     const payload = {
@@ -168,6 +186,8 @@ const CreateUnit = () => {
       year: parseInt(yearStr, 10),
       enrolmentSize: formData.enrolmentSize ? parseInt(formData.enrolmentSize, 10) : null,
       availabilityDeadline: formData.availabilityDeadline || null,
+      teachingStartDate: formData.teachingStartDate || null,
+      teachingEndDate: formData.teachingEndDate || null,
       coordinatorEmails
     };
 
@@ -332,6 +352,35 @@ const CreateUnit = () => {
                       />
                     </div>
                   </div>
+
+                  <div className="cu-field-row">
+                    <div className="cu-field">
+                      <label htmlFor="teachingStartDate">Teaching Start Date</label>
+                      <input
+                        id="teachingStartDate"
+                        type="date"
+                        name="teachingStartDate"
+                        value={formData.teachingStartDate}
+                        onChange={handleChange}
+                      />
+                    </div>
+
+                    <div className="cu-field">
+                      <label htmlFor="teachingEndDate">Teaching End Date</label>
+                      <input
+                        id="teachingEndDate"
+                        type="date"
+                        name="teachingEndDate"
+                        value={formData.teachingEndDate}
+                        min={formData.teachingStartDate || undefined}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                  <p className="cu-field-hint">
+                    Optional. Tutors get a reminder email 24 hours before each class only between these dates
+                    (and only once the schedule is locked). Leave both empty to turn class reminders off.
+                  </p>
 
                   <div className="cu-coordinator-section">
                     <button

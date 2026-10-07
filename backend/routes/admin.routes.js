@@ -7,6 +7,8 @@ const { normaliseDay } = require('../utils/normalise');
 const { createNotification } = require('../utils/notify');
 const { escapeHtml, sendEmail } = require('../utils/email');
 const { requiresSuperTutor } = require('../utils/roles');
+const { validateTeachingPeriod, resolveTeachingPeriodUpdate } = require('../utils/reminderRules');
+const { noticeSessionUpdated, noticeTutorRemoved, loadNoticeUser } = require('../utils/reminders');
 
 const {
   VALID_ROLES,
@@ -738,6 +740,8 @@ router.get('/units', async (req, res) => {
         un.availability_locked,
         un.schedule_locked,
         un.draft_released,
+        un.teaching_start_date,
+        un.teaching_end_date,
         main_uc.name AS main_coordinator_name,
         main_uc.last_name AS main_coordinator_last_name,
         main_uc.email AS main_coordinator_email,
@@ -801,6 +805,12 @@ router.post('/units', async (req, res) => {
       return res.status(400).json({ error: 'Unit code, unit name, semester, year and coordinator email are required' });
     }
 
+    const teaching = resolveTeachingPeriodUpdate(req.body, {});
+    const teachingError = validateTeachingPeriod(teaching.start, teaching.end);
+    if (teachingError) {
+      return res.status(400).json({ error: teachingError });
+    }
+
     const coordinator = await findCoordinatorByEmail(coordinatorEmail);
     if (!coordinator) {
       return res.status(400).json({ error: 'No coordinator account found for this email' });
@@ -825,12 +835,13 @@ router.post('/units', async (req, res) => {
 
     const result = await pool.query(
       `
-      INSERT INTO units (unit_coordinator_id, unit_code, unit_name, semester, year, enrolment_size, availability_deadline)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO units (unit_coordinator_id, unit_code, unit_name, semester, year, enrolment_size, availability_deadline,
+                         teaching_start_date, teaching_end_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, unit_code, unit_name, semester, year, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, draft_released
+                availability_locked, schedule_locked, draft_released, teaching_start_date, teaching_end_date
       `,
-      [coordinator.id, unitCode, unitName, semester, year, enrolmentSize, availabilityDeadline]
+      [coordinator.id, unitCode, unitName, semester, year, enrolmentSize, availabilityDeadline, teaching.start, teaching.end]
     );
 
     await pool.query(
@@ -873,6 +884,16 @@ router.put('/units/:id', async (req, res) => {
       return res.status(400).json({ error: 'Unit code, unit name, semester, year and coordinator email are required' });
     }
 
+    const existingTeaching = await pool.query(
+      'SELECT teaching_start_date, teaching_end_date FROM units WHERE id = $1',
+      [id]
+    );
+    const teaching = resolveTeachingPeriodUpdate(req.body, existingTeaching.rows[0] || {});
+    const teachingError = validateTeachingPeriod(teaching.start, teaching.end);
+    if (teachingError) {
+      return res.status(400).json({ error: teachingError });
+    }
+
     const coordinator = await findCoordinatorByEmail(coordinatorEmail);
     if (!coordinator) {
       return res.status(400).json({ error: 'No coordinator account found for this email' });
@@ -907,12 +928,14 @@ router.put('/units/:id', async (req, res) => {
           semester = $4,
           year = $5,
           enrolment_size = $6,
-          availability_deadline = $7
+          availability_deadline = $7,
+          teaching_start_date = $9,
+          teaching_end_date = $10
       WHERE id = $8
       RETURNING id, unit_code, unit_name, semester, year, enrolment_size, availability_deadline,
-                availability_locked, schedule_locked, draft_released
+                availability_locked, schedule_locked, draft_released, teaching_start_date, teaching_end_date
       `,
-      [coordinator.id, unitCode, unitName, semester, year, enrolmentSize, availabilityDeadline, id]
+      [coordinator.id, unitCode, unitName, semester, year, enrolmentSize, availabilityDeadline, id, teaching.start, teaching.end]
     );
 
     if (result.rows.length === 0) {
@@ -1797,7 +1820,7 @@ router.put('/sessions/:id', async (req, res) => {
     }
 
     const currentResult = await pool.query(`
-      SELECT s.unit_id,
+      SELECT s.*,
         COUNT(st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM false)::int AS assigned_count
       FROM sessions s
       LEFT JOIN session_tutors st ON st.session_id = s.id
@@ -1842,7 +1865,7 @@ router.put('/sessions/:id', async (req, res) => {
           required_tutors = $9,
           status = $10
       WHERE id = $11
-      RETURNING id
+      RETURNING *
       `,
       [unitId, day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, id]
     );
@@ -1850,6 +1873,9 @@ router.put('/sessions/:id', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
+
+    // Same as the UC page: tell assigned tutors if the day, time or location moved.
+    await noticeSessionUpdated({ before: current, after: result.rows[0] });
 
     const refreshed = await pool.query(
       `
@@ -2053,7 +2079,7 @@ router.delete('/sessions/:id/assignments/:tutorId', async (req, res) => {
 
   try {
     const sessionResult = await pool.query(`
-      SELECT s.id, un.schedule_locked
+      SELECT s.*, un.schedule_locked
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
       WHERE s.id = $1
@@ -2064,10 +2090,14 @@ router.delete('/sessions/:id/assignments/:tutorId', async (req, res) => {
     }
 
     const removed = await pool.query(
-      'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2 RETURNING tutor_id',
+      'DELETE FROM session_tutors WHERE session_id = $1 AND tutor_id = $2 RETURNING tutor_id, tutor_confirmed',
       [id, tutorId]
     );
     if (removed.rows.length === 0) return res.status(404).json({ error: 'Assignment not found' });
+
+    if (removed.rows[0].tutor_confirmed !== false) {
+      await noticeTutorRemoved({ session: sessionResult.rows[0], tutor: await loadNoticeUser(tutorId) });
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Admin session unassignment error:', error);

@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 require('dotenv').config();
 
 const pool = require('./db');
+const { tokenVersionMatches } = require('./middleware/auth');
 
 const authRoutes = require('./routes/auth.routes');
 const unitsRoutes = require('./routes/units.routes');
@@ -36,12 +37,18 @@ const io = new Server(server, {
   }
 });
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('No token provided'));
 
-    socket.user = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // A logged-out token must not open a live connection either.
+    const result = await pool.query('SELECT token_version FROM users WHERE id = $1', [decoded.id]);
+    if (!result.rows[0] || !tokenVersionMatches(decoded, result.rows[0])) {
+      return next(new Error('Invalid token'));
+    }
+    socket.user = decoded;
     next();
   } catch (error) {
     next(new Error('Invalid token'));

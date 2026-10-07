@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { disconnectSocket } from '../utils/socket';
+import { authAPI } from '../config/api';
+import { clearLocalSession } from '../utils/authSession';
 import { getDisplayName } from '../utils/userName';
 import '../styles/LogoutConfirm.css';
 
@@ -12,10 +13,18 @@ const LogoutConfirm = () => {
     return saved ? JSON.parse(saved) : null;
   }, []);
 
-  const handleConfirm = () => {
-    disconnectSocket();
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('token');
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleConfirm = async () => {
+    setIsLoggingOut(true);
+    try {
+      // Invalidate the token on the server first, then forget it here.
+      await authAPI.logout();
+    } catch (error) {
+      // Offline or server down: still log out of this browser.
+      console.error('Server logout failed:', error);
+    }
+    clearLocalSession();
     navigate('/login', { replace: true });
   };
 
@@ -45,7 +54,9 @@ const LogoutConfirm = () => {
 
         <div className="lo-buttons">
           <button className="lo-btn-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="lo-btn-confirm" onClick={handleConfirm}>Log Out</button>
+          <button className="lo-btn-confirm" onClick={handleConfirm} disabled={isLoggingOut}>
+            {isLoggingOut ? 'Logging out...' : 'Log Out'}
+          </button>
         </div>
       </div>
     </div>

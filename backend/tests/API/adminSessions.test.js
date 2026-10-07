@@ -1,19 +1,21 @@
+// Admin session routes with a mocked database (no real DB needed).
+// Moved here from backend/tests/ so the API test config actually runs it.
 const express = require('express');
 const request = require('supertest');
-const pool = require('../db');
-const { createNotification } = require('../utils/notify');
+const pool = require('../../db');
+const { createNotification } = require('../../utils/notify');
 
-jest.mock('../db', () => ({ query: jest.fn(), connect: jest.fn() }));
-jest.mock('../middleware/auth', () => ({
+jest.mock('../../db', () => ({ query: jest.fn(), connect: jest.fn() }));
+jest.mock('../../middleware/auth', () => ({
   verifyToken: (req, res, next) => { req.user = { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', role: 'admin' }; next(); },
   requireRole: () => (req, res, next) => next()
 }));
-jest.mock('../utils/notify', () => ({ createNotification: jest.fn() }));
-jest.mock('../utils/email', () => ({ escapeHtml: value => value, sendEmail: jest.fn() }));
+jest.mock('../../utils/notify', () => ({ createNotification: jest.fn() }));
+jest.mock('../../utils/email', () => ({ escapeHtml: value => value, sendEmail: jest.fn() }));
 
 const app = express();
 app.use(express.json());
-app.use('/admin', require('../routes/admin.routes'));
+app.use('/admin', require('../../routes/admin.routes'));
 
 const sessionId = '11111111-1111-1111-1111-111111111111';
 const staffId = '22222222-2222-2222-2222-222222222222';
@@ -33,7 +35,7 @@ beforeEach(() => {
 describe('Admin session deletion', () => {
   test('refuses to delete a session with an active tutor assignment', async () => {
     const client = mockClient(async (sql) => {
-      if (sql.includes('SELECT s.id, un.schedule_locked')) return { rows: [{ id: sessionId, schedule_locked: false }] };
+      if (sql.includes('un.schedule_locked') && sql.includes('FROM sessions s')) return { rows: [{ id: sessionId, unit_id: unitId, schedule_locked: false }] };
       if (sql.includes('SELECT 1 FROM session_tutors')) return { rows: [{ '?column?': 1 }] };
       return { rows: [] };
     });
@@ -60,7 +62,7 @@ describe('Admin session deletion', () => {
 
   test('deletes an unassigned session', async () => {
     const client = mockClient(async (sql) => {
-      if (sql.includes('SELECT s.id, un.schedule_locked')) return { rows: [{ id: sessionId, schedule_locked: false }] };
+      if (sql.includes('un.schedule_locked') && sql.includes('FROM sessions s')) return { rows: [{ id: sessionId, unit_id: unitId, schedule_locked: false }] };
       return { rows: [] };
     });
 
@@ -187,7 +189,7 @@ describe('Admin session assignments', () => {
 
   test('unassigns a staff member when the schedule is open', async () => {
     pool.query.mockImplementation(async (sql) => {
-      if (sql.includes('SELECT s.id, un.schedule_locked')) return { rows: [{ id: sessionId, schedule_locked: false }] };
+      if (sql.includes('un.schedule_locked') && sql.includes('FROM sessions s')) return { rows: [{ id: sessionId, unit_id: unitId, schedule_locked: false }] };
       if (sql.includes('DELETE FROM session_tutors')) return { rows: [{ tutor_id: staffId }] };
       return { rows: [] };
     });

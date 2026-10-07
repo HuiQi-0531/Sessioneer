@@ -50,6 +50,8 @@ export default function UCAvailability({ onSendReminder }) {
   const [zoom,           setZoom]           = useState(100);
   const [isFullscreen,   setIsFullscreen]   = useState(false);
   const [remindersSent,  setRemindersSent]  = useState(new Set());
+  const [remindersSending, setRemindersSending] = useState(new Set());
+  const [reminderNotice, setReminderNotice] = useState(null);
   const [tutors,           setTutors]           = useState([]);
   const [availability,     setAvailability]     = useState({});
   const [submissionStatus, setSubmissionStatus] = useState([]);
@@ -75,6 +77,7 @@ export default function UCAvailability({ onSendReminder }) {
       setTutors(data.tutors ?? []);
       setAvailability(data.availability ?? {});
       setSubmissionStatus(data.submissionStatus ?? []);
+      setRemindersSent(new Set(data.remindersSentToday ?? []));
     } catch (err) {
       console.error('Could not load availability data:', err);
       setTutors([]);
@@ -107,10 +110,28 @@ export default function UCAvailability({ onSendReminder }) {
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
-  const handleReminderClick = (tutorId) => {
-    if (!remindersSent.has(tutorId)) {
+  const handleReminderClick = async (tutor) => {
+    const tutorId = tutor.id;
+    if (!activeUnit || remindersSent.has(tutorId) || remindersSending.has(tutorId)) return;
+
+    setRemindersSending(prev => new Set(prev).add(tutorId));
+    setReminderNotice(null);
+    try {
+      await availabilityAPI.sendReminder(activeUnit.id, tutorId, activeUnit.unitCode);
       setRemindersSent(prev => new Set(prev).add(tutorId));
+      setReminderNotice({ type: 'success', text: `Reminder sent to ${tutor.name}.` });
       if (onSendReminder) onSendReminder(tutorId);
+    } catch (err) {
+      if (err.status === 409 && /already sent today/i.test(err.message)) {
+        setRemindersSent(prev => new Set(prev).add(tutorId));
+      }
+      setReminderNotice({ type: 'error', text: err.message || 'Failed to send reminder.' });
+    } finally {
+      setRemindersSending(prev => {
+        const next = new Set(prev);
+        next.delete(tutorId);
+        return next;
+      });
     }
   };
 
@@ -206,6 +227,16 @@ export default function UCAvailability({ onSendReminder }) {
             </div>
           )}
 
+          {reminderNotice && (
+            <div
+              role="status"
+              className={`uca-reminder-notice uca-reminder-notice--${reminderNotice.type}`}
+            >
+              {reminderNotice.text}
+              <button type="button" className="uca-reminder-notice__close" aria-label="Dismiss" onClick={() => setReminderNotice(null)}>×</button>
+            </div>
+          )}
+
           <div className={`uca-card ${isFullscreen ? 'uca-card--fullscreen' : ''}`}>
             <div className="uca-controls-row">
               <div className="uca-controls-left">
@@ -287,6 +318,7 @@ export default function UCAvailability({ onSendReminder }) {
                         {filteredTutors.map(tutor => {
                           const hasSubmitted  = submittedIds.has(tutor.id);
                           const reminderSent  = remindersSent.has(tutor.id);
+                          const reminderBusy  = remindersSending.has(tutor.id);
                           return (
                             <th key={tutor.id} className="uca-grid__tutor-header">
                               <span className="uca-grid__tutor-namerow">
@@ -297,9 +329,9 @@ export default function UCAvailability({ onSendReminder }) {
                                     type="button"
                                     className={`uca-bell uca-bell--header ${reminderSent ? "uca-bell--sent" : ""}`}
                                     aria-label={reminderSent ? `Reminder sent to ${tutor.name}` : `Send reminder to ${tutor.name}`}
-                                    title={reminderSent ? "Reminder sent" : "Not yet submitted — send reminder"}
-                                    onClick={() => handleReminderClick(tutor.id)}
-                                    disabled={reminderSent}
+                                    title={reminderSent ? "Reminder sent today" : (reminderBusy ? "Sending reminder..." : "Not yet submitted — send reminder")}
+                                    onClick={() => handleReminderClick(tutor)}
+                                    disabled={reminderSent || reminderBusy}
                                   >
                                     <BellIcon isActive={!reminderSent} />
                                   </button>

@@ -4,7 +4,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, signToken } = require('../middleware/auth');
 const { formatProfile, parseMaximumHours, buildProfileUpdateParams } = require('../utils/profileRules');
 const { ALLOWED_AVATAR_TYPES, getSupabaseConfig, buildRequestBaseUrl } = require('../utils/uploadRules');
 
@@ -193,9 +193,16 @@ router.put('/password', verifyToken, async (req, res) => {
     }
 
     const newHash = hashPassword(newPassword);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, req.user.id]);
+    // token_version + 1 signs out every other device/browser. This browser
+    // gets a fresh token in the response so the user stays logged in here.
+    const updated = await pool.query(
+      `UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 0) + 1
+       WHERE id = $2
+       RETURNING id, email, role, token_version`,
+      [newHash, req.user.id]
+    );
 
-    res.json({ success: true, message: 'Password updated successfully' });
+    res.json({ success: true, message: 'Password updated successfully', token: signToken(updated.rows[0]) });
   } catch (error) {
     console.error('Error changing password:', error);
     res.status(500).json({ error: 'Failed to change password' });

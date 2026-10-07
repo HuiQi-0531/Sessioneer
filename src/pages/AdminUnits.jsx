@@ -11,6 +11,8 @@ const emptyForm = {
   year: new Date().getFullYear(),
   enrolmentSize: '',
   availabilityDeadline: '',
+  teachingStartDate: '',
+  teachingEndDate: '',
   coordinatorEmail: ''
 };
 
@@ -101,6 +103,8 @@ const AdminUnits = () => {
       year: unit.year || new Date().getFullYear(),
       enrolmentSize: unit.enrolmentSize || '',
       availabilityDeadline: formatDateInput(unit.availabilityDeadline),
+      teachingStartDate: formatDateInput(unit.teachingStartDate),
+      teachingEndDate: formatDateInput(unit.teachingEndDate),
       coordinatorEmail: unit.mainCoordinatorEmail || ''
     });
     setFormError('');
@@ -128,11 +132,23 @@ const AdminUnits = () => {
       year: Number(formData.year),
       enrolmentSize: formData.enrolmentSize ? Number(formData.enrolmentSize) : null,
       availabilityDeadline: formData.availabilityDeadline || null,
+      teachingStartDate: formData.teachingStartDate || null,
+      teachingEndDate: formData.teachingEndDate || null,
       coordinatorEmail: formData.coordinatorEmail.trim()
     };
 
     if (!payload.unitCode || !payload.unitName || !payload.semester || !payload.year || !payload.coordinatorEmail) {
       setFormError('Please complete all required fields.');
+      return;
+    }
+
+    if (Boolean(payload.teachingStartDate) !== Boolean(payload.teachingEndDate)) {
+      setFormError('Enter both a teaching start date and a teaching end date, or leave both empty.');
+      return;
+    }
+
+    if (payload.teachingStartDate && payload.teachingEndDate < payload.teachingStartDate) {
+      setFormError('Teaching end date must be on or after the teaching start date.');
       return;
     }
 
@@ -380,6 +396,11 @@ const AdminUnits = () => {
             </div>
 
             <label>Availability deadline<input name="availabilityDeadline" type="date" value={formData.availabilityDeadline} onChange={updateForm} /></label>
+
+            <div className="admin-form-grid">
+              <label>Teaching start date<input name="teachingStartDate" type="date" value={formData.teachingStartDate} onChange={updateForm} /></label>
+              <label>Teaching end date<input name="teachingEndDate" type="date" min={formData.teachingStartDate || undefined} value={formData.teachingEndDate} onChange={updateForm} /></label>
+            </div>
 
             <div className="admin-modal-actions">
               <button type="button" className="admin-secondary-btn" onClick={closeModal}>Cancel</button>

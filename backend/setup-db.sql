@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS users (
     resume_filename VARCHAR(255),
     resume_mime_type VARCHAR(100),
     resume_data BYTEA,
+    token_version INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
@@ -65,6 +66,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_request_updates BOOLEAN DEFAUL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_filename VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_mime_type VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_data BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
 
 -- units
@@ -84,6 +86,8 @@ CREATE TABLE IF NOT EXISTS units (
     schedule_locked_at TIMESTAMP,
     draft_released BOOLEAN DEFAULT FALSE,
     application_form JSONB,
+    teaching_start_date DATE,
+    teaching_end_date DATE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_coordinator_id UUID REFERENCES users(id) ON DELETE SET NULL;
@@ -100,6 +104,8 @@ ALTER TABLE units ADD COLUMN IF NOT EXISTS schedule_locked BOOLEAN DEFAULT FALSE
 ALTER TABLE units ADD COLUMN IF NOT EXISTS schedule_locked_at TIMESTAMP;
 ALTER TABLE units ADD COLUMN IF NOT EXISTS draft_released BOOLEAN DEFAULT FALSE;
 ALTER TABLE units ADD COLUMN IF NOT EXISTS application_form JSONB;
+ALTER TABLE units ADD COLUMN IF NOT EXISTS teaching_start_date DATE;
+ALTER TABLE units ADD COLUMN IF NOT EXISTS teaching_end_date DATE;
 ALTER TABLE units ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
 
 -- unit_memberships
@@ -419,6 +425,34 @@ ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invited_role VARCHAR(20)
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invite_token VARCHAR(255);
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMP;
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS created_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+-- availability_reminders (availability deadline reminder log; see migration 002)
+CREATE TABLE IF NOT EXISTS availability_reminders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    unit_id UUID NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+    tutor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    deadline TIMESTAMP,
+    kind VARCHAR(10) NOT NULL DEFAULT 'auto',
+    sent_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    sent_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    CONSTRAINT availability_reminders_kind_check CHECK (kind IN ('auto', 'manual'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_availability_reminders_auto
+    ON availability_reminders(unit_id, tutor_id, deadline)
+    WHERE kind = 'auto';
+CREATE INDEX IF NOT EXISTS idx_availability_reminders_manual
+    ON availability_reminders(unit_id, tutor_id, sent_at)
+    WHERE kind = 'manual';
+
+-- session_reminders (24-hour class reminder log; see migration 002)
+CREATE TABLE IF NOT EXISTS session_reminders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    tutor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    occurrence_date DATE NOT NULL,
+    sent_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    UNIQUE (session_id, tutor_id, occurrence_date)
+);
 
 -- unit_memberships may exist with the older two-role check
 ALTER TABLE unit_memberships DROP CONSTRAINT IF EXISTS unit_memberships_role_check;

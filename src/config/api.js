@@ -228,6 +228,19 @@ export const authAPI = {
     }
 
     return data;
+  },
+
+  // Ends the login on the server too, so the token cannot be reused.
+  // Best effort: the caller clears the browser session either way.
+  logout: async () => {
+    const headers = authHeader();
+    if (!headers.Authorization) return null;
+    const response = await withTimeout((signal) => fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers,
+      signal
+    }), 'Logging out timed out.');
+    return response.json().catch(() => ({}));
   }
 };
 
@@ -512,6 +525,24 @@ export const availabilityAPI = {
 
     clearAvailabilityCache(unitCode);
     return response.json();
+  },
+
+  // UC bell button: email + notify one tutor who has not submitted yet.
+  // Throws an Error whose .status is the HTTP status (409 = already sent today).
+  sendReminder: async (unitId, tutorId, unitCode) => {
+    const response = await fetch(`${API_URL}/availability/reminders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ unitId, tutorId })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || 'Failed to send reminder');
+      error.status = response.status;
+      throw error;
+    }
+    if (unitCode) clearAvailabilityCache(unitCode);
+    return data;
   }
 };
 
@@ -1290,6 +1321,9 @@ export const profileAPI = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to change password');
+    // Changing the password signs out every other device; this browser gets
+    // a fresh token so it stays logged in.
+    if (result.token) localStorage.setItem('token', result.token);
     clearProfileCache();
     return result;
   },

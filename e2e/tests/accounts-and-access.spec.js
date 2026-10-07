@@ -66,3 +66,42 @@ test('E2E-10 an admin disables an account and that user can no longer log in', a
   await other.getByRole('button', { name: 'Log In' }).click();
   await expect(other.locator('.login-error-message')).toContainText('disabled');
 });
+
+test('E2E-12 logging out ends the session on the server: the old token is refused and pages go back to login', async ({ page, request }) => {
+  await loginAs(page, USERS.tutor.email);
+  const token = await page.evaluate(() => localStorage.getItem('token'));
+  expect((await request.get('http://localhost:5001/profile', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(200);
+
+  await page.goto('/logout');
+  await page.getByRole('button', { name: 'Log Out' }).click();
+  await expect(page).toHaveURL(/\/login/);
+  expect(await page.evaluate(() => localStorage.getItem('token'))).toBeNull();
+
+  // A copied token no longer works.
+  expect((await request.get('http://localhost:5001/profile', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401);
+
+  await page.goto('/tutor-dashboard');
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test('E2E-13 a browser whose login was ended elsewhere is sent back to the login page', async ({ browser }) => {
+  const first = await browser.newContext();
+  const second = await browser.newContext();
+  const pageA = await first.newPage();
+  const pageB = await second.newPage();
+
+  await loginAs(pageA, USERS.tutor.email);
+  await loginAs(pageB, USERS.tutor.email);
+
+  await pageA.goto('/logout');
+  await pageA.getByRole('button', { name: 'Log Out' }).click();
+  await expect(pageA).toHaveURL(/\/login/);
+
+  // B still has its token saved, but the server now answers 401.
+  await pageB.goto('/tutor-dashboard');
+  await expect(pageB).toHaveURL(/\/login/);
+  expect(await pageB.evaluate(() => localStorage.getItem('token'))).toBeNull();
+
+  await first.close();
+  await second.close();
+});

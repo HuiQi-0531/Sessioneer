@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { installAuthExpiryHandler } from './utils/authSession';
+
+// A 401 "login no longer valid" from the backend sends the user to /login.
+installAuthExpiryHandler();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

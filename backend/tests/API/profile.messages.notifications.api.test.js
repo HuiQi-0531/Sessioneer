@@ -19,12 +19,16 @@ describe('API profile, messages, notifications, dashboards', () => {
 
     expect((await api('put', '/profile/password', T('tutor'), { newPassword: 'abcdef' })).status).toBe(400);
     expect((await api('put', '/profile/password', T('tutor'), { currentPassword: 'wrong', newPassword: 'abcdef' })).status).toBe(401);
-    expect((await api('put', '/profile/password', T('tutor'), { currentPassword: ctx.password, newPassword: 'abcdef' })).status).toBe(200);
+    const changed = await api('put', '/profile/password', T('tutor'), { currentPassword: ctx.password, newPassword: 'abcdef' });
+    expect(changed.status).toBe(200);
+    // Changing the password ends every older login; the response carries a new token.
+    expect((await api('get', '/profile', T('tutor'))).status).toBe(401);
+    const fresh = changed.body.token;
 
-    const prefs = await api('put', '/profile/notifications', T('tutor'), { notifySessionUpdates: false, notifyRequestUpdates: true });
+    const prefs = await api('put', '/profile/notifications', fresh, { notifySessionUpdates: false, notifyRequestUpdates: true });
     expect(prefs.status).toBe(200);
-    expect((await api('get', '/profile', T('tutor'))).status).toBe(200);
-    expect((await api('post', '/profile/avatar', T('tutor'))).status).toBe(400);
+    expect((await api('get', '/profile', fresh)).status).toBe(200);
+    expect((await api('post', '/profile/avatar', fresh)).status).toBe(400);
   });
 
   test('API-P02 an empty max-hours field keeps the stored value (it used to crash with 500)', async () => {

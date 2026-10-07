@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const pool = require('../db');
+const { verifyToken, signToken } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { formatUserNameFields } = require('../utils/userNames');
 const { normaliseRegisterRole, resolveRegisterName, validateRegistration } = require('../utils/authRules');
@@ -86,7 +86,7 @@ router.post('/login', async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, name, last_name, email, role, password_hash, avatar_url, account_status
+      SELECT id, name, last_name, email, role, password_hash, avatar_url, account_status, token_version
       FROM users
       WHERE LOWER(email) = $1
       LIMIT 1
@@ -108,11 +108,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'This account is still pending. Please contact an administrator.' });
     }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
+    const token = signToken(user);
 
     res.json({
       message: 'Login successful',
@@ -223,7 +219,8 @@ router.post('/reset-password', async (req, res) => {
     try {
       await client.query('BEGIN');
       await client.query(
-        'UPDATE users SET password_hash = $1 WHERE id = $2',
+        // token_version + 1 logs the user out everywhere (old tokens stop working).
+        'UPDATE users SET password_hash = $1, token_version = COALESCE(token_version, 0) + 1 WHERE id = $2',
         [passwordHash, resetToken.user_id]
       );
       await client.query(
@@ -242,6 +239,24 @@ router.post('/reset-password', async (req, res) => {
   } catch (error) {
     console.error('Error resetting password:', error);
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+/**
+ * POST /auth/logout
+ * Ends the session on the server: the token used for this request (and any
+ * other token this user holds, on any device) stops working immediately.
+ */
+router.post('/logout', verifyToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({ message: 'Logged out' });
+  } catch (error) {
+    console.error('Error logging out:', error);
+    res.status(500).json({ error: 'Failed to log out' });
   }
 });
 
