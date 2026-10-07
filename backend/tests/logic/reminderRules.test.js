@@ -287,3 +287,56 @@ describe('schedule-change notices', () => {
     expect(shouldEmailScheduleChange([{ day: 'MON', start_time: '10:00', end_time: '11:00' }], later)).toBe(false);
   });
 });
+
+describe('edge cases', () => {
+  const { timeToMinutesOfDay, addDaysToKey, formatDateKey } = require('../../utils/brisbaneTime');
+  const { coverAppliesOn, sessionDisplayName, startsWithinHours } = require('../../utils/reminderRules');
+
+  test('LG-673: unreadable or empty dates give no date key', () => {
+    expect(toDateKey(null)).toBeNull();
+    expect(toDateKey('')).toBeNull();
+    expect(toDateKey(new Date('nope'))).toBeNull();
+    expect(toDateKey('13/07/2026')).toBeNull();
+  });
+  test('LG-674: times outside a 24-hour clock are rejected', () => {
+    expect(timeToMinutesOfDay('25:00')).toBeNull();
+    expect(timeToMinutesOfDay('10:75')).toBeNull();
+    expect(timeToMinutesOfDay(undefined)).toBeNull();
+    expect(formatClockTime('later')).toBe('later');
+    expect(formatClockTime('12:00')).toBe('12:00 pm');
+  });
+  test('LG-675: adding days crosses months and years', () => {
+    expect(addDaysToKey('2026-12-30', 3)).toBe('2027-01-02');
+    expect(formatDateKey('2027-01-02')).toBe('Sat 2 Jan 2027');
+  });
+  test('LG-676: an end time before the start is ignored; no end time is fine', () => {
+    expect(nextWeeklyOccurrence('MON', '10:00', '09:00', NOW).end).toBeNull();
+    expect(nextWeeklyOccurrence('MON', '10:00', null, NOW).end).toBeNull();
+    expect(nextWeeklyOccurrence('MON', 'soon', '11:00', NOW)).toBeNull();
+    expect(formatBrisbaneDateTime(null)).toBe('');
+  });
+  test('LG-677: covers without dates, claimer or claimed status never apply', () => {
+    expect(coverAppliesOn(null, '2026-10-12')).toBe(false);
+    expect(coverAppliesOn({ status: 'claimed', claimed_by_id: 'x', start_date: null, end_date: null }, '2026-10-12')).toBe(false);
+    expect(coverAppliesOn({ status: 'claimed', claimed_by_id: null, start_date: '2026-10-12', end_date: '2026-10-12' }, '2026-10-12')).toBe(false);
+  });
+  test('LG-678: unreadable session days are never "within 48 hours"; names fall back', () => {
+    expect(startsWithinHours({ day: 'X', start_time: '10:00' }, 48, NOW)).toBe(false);
+    expect(shouldEmailScheduleChange(null, NOW)).toBe(false);
+    expect(sessionDisplayName({ session_type: 'Lecture' })).toBe('Lecture');
+    expect(sessionDisplayName({})).toBe('Session');
+  });
+  test('LG-679: a location cleared or added is described', () => {
+    const base = { session_code: 'TUT01', day: 'MON', start_time: '10:00', end_time: '11:00' };
+    expect(describeSessionChange({ ...base, location: 'GP-P-101' }, { ...base, location: '' }))
+      .toEqual(['Location changed from GP-P-101 to no location']);
+    expect(describeSessionChange({ ...base, location: null }, { ...base, session_code: null, location: 'GP-Z-410' }))
+      .toEqual(['Location changed from no location to GP-Z-410']);
+  });
+  test('LG-680: empty inputs to the selectors are safe', () => {
+    expect(selectSessionsForReminder(null, NOW)).toEqual([]);
+    expect(resolveSessionReminderRecipients(null, null, '2026-10-12')).toEqual([]);
+    expect(isUnitInAvailabilityReminderWindow(null, NOW)).toBe(false);
+    expect(resolveTeachingPeriodUpdate(null, {})).toEqual({ start: null, end: null });
+  });
+});
