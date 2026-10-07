@@ -11,15 +11,15 @@ Group Members:
 # Sessioneer - Session Management System
 
 ## Prerequisites
-- Node.js (v14+)
-- PostgreSQL (v14+), installed and running locally
+- Node.js 18 or newer (20 or 22 recommended; CI uses 22)
+- PostgreSQL 14 or newer, installed and running locally
 
 ## Quick Setup
 
 ### 1. Clone and Install
 ```bash
 git clone <repo-url>
-cd cap-proj
+cd <repo-folder>
 
 # Install frontend dependencies
 npm install
@@ -37,12 +37,7 @@ CREATE USER sessioneer WITH PASSWORD 'your_password_here';
 CREATE DATABASE sessioneer_db OWNER sessioneer;
 ```
 
-Then build the schema (after step 3, once `backend/.env` points at the database):
-```bash
-cd backend
-npm run db:migrate
-```
-This runs `setup-db.sql` and every numbered file in `backend/db/migrations/` that has not been applied yet. Run it again after every pull that adds a migration (for example `002_reminders_teaching_period_token_version.sql`). It only adds tables and columns; existing data is kept.
+The tables are created in step 3, once the backend knows where this database is.
 
 ### 3. Configure Backend
 ```bash
@@ -54,6 +49,12 @@ Edit `.env` and point `DATABASE_URL` at your local database, e.g.:
 DATABASE_URL=postgresql://sessioneer:your_password_here@localhost:5432/sessioneer_db
 ```
 (Default local Postgres port is `5432` — change it if your install uses a different one.)
+
+Then build the schema:
+```bash
+npm run db:migrate
+```
+This runs `setup-db.sql` and every numbered file in `backend/db/migrations/` that has not been applied yet. Run it again after every pull that adds a migration (for example `002_reminders_teaching_period_token_version.sql`). It only adds tables and columns; existing data is kept. Check which database `DATABASE_URL` points at before running it.
 
 Also set `JWT_SECRET` to any long random string. The `BREVO_API_KEY`, `SUPABASE_*`, and `CRON_SECRET` variables are optional — they're only needed for password-reset emails, file attachment storage, and scheduled reminder jobs. The app runs fine locally with placeholder values for those.
 
@@ -78,7 +79,7 @@ No frontend configuration is needed for local development — the app automatica
 - Health Check: http://localhost:5001/health
 
 ## Creating an Account
-There are no working pre-seeded logins — `setup-db.sql` inserts two sample users (`test1@gmail.com`, `test2@gmail.com`) with a placeholder password hash that can never pass login. Use the **Sign Up** page to create a real Unit Coordinator or Tutor account instead; registered passwords are hashed and verified correctly.
+A new database has no users. Use the **Sign Up** page to create a Unit Coordinator or Tutor account. Admin accounts are created by an existing admin (Admin > Users), or by changing a user's `role` to `admin` directly in the database for the very first one.
 
 ## Troubleshooting
 
@@ -94,8 +95,11 @@ There are no working pre-seeded logins — `setup-db.sql` inserts two sample use
 - Make sure the backend is running on port 5001.
 - Check `http://localhost:5001/health` returns `"status": "ok"`.
 
-**Login fails for sarah.kim@uni.edu / elaine.lee@student.edu?**
-- Expected — see "Creating an Account" above. These accounts have a dummy password hash and cannot log in as shipped.
+**"column ... does not exist" errors?**
+- The database is behind the code. Run `npm run db:migrate` in `backend/`.
+
+**Suddenly sent back to the login page?**
+- Expected after logging out on another device, changing or resetting your password, or after 8 hours: log in again.
 
 ## Reminder emails and scheduled jobs
 
