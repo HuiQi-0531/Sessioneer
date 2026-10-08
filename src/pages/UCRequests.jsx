@@ -4,6 +4,7 @@ import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/UCRequests.css';
+import '../styles/TutorRequests.css';
 
 const labelFromValue = (value) => {
   if (!value) return '';
@@ -42,7 +43,9 @@ const splitReasonAndAppeal = (reasonText) => {
 };
 
 const UCRequests = () => {
-  const { allUnits } = useActiveUnit();
+  const { allUnits, activeUnit } = useActiveUnit();
+  const [activeTab, setActiveTab] = useState('pending');
+
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
@@ -237,7 +240,20 @@ const UCRequests = () => {
     } catch (error) { console.error('Error suggesting session:', error); }
   };
 
+  const belongsToActiveUnit = (req) => {
+    if (!activeUnit) return false;
+    if (req.unitId != null && activeUnit.id != null) {
+      return String(req.unitId) === String(activeUnit.id);
+    }
+    const reqCode = String(req.unitCode || '').trim().toUpperCase();
+    const activeCode = String(activeUnit.unitCode || '').trim().toUpperCase();
+    return reqCode !== '' && reqCode === activeCode;
+  };
+  const visiblePending = pendingRequests.filter(belongsToActiveUnit);
+  const visibleProcessed = processedRequests.filter(belongsToActiveUnit);
+
   const isUrgent = (req) => (req.priority || '').toLowerCase() === 'urgent';
+  const isAppealed = (req) => req.reason && req.reason.includes(APPEAL_MARKER);
 
   const renderReasonSections = (req) => {
     const { reason, appeal } = splitReasonAndAppeal(req.reason);
@@ -257,6 +273,67 @@ const UCRequests = () => {
     );
   };
 
+  const renderSessionRow = (request) => (
+    <div className="uc-session-row">
+      <div className="uc-session-box">
+        <div className="uc-session-label">Current Session</div>
+        <p className="uc-session-time">{request.currentSession}</p>
+      </div>
+      {request.preferredSwapTo && (
+        <>
+          <div className="uc-swap-arrow-horizontal">→</div>
+          <div className="uc-session-box">
+            <div className="uc-session-label">Preferred Swap To</div>
+            <p className="uc-session-time">{request.preferredSwapTo}</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // Shared card for both tabs. `pending` toggles the action buttons and badge.
+  const renderCard = (request, pending) => (
+    <div key={request.id} className={`uc-request-card ${isUrgent(request) ? 'urgent-card' : ''}`}>
+      <div className="uc-request-header">
+        <div className="uc-tutor-info">
+          <h3>{request.tutorName}</h3>
+          <p className="uc-submitted-date">Submitted {request.submittedDate}</p>
+        </div>
+        <div className="uc-request-badges">
+          {pending && isUrgent(request) && <span className="uc-badge urgent">URGENT</span>}
+          {isAppealed(request) && <span className="uc-badge appealed">APPEALED</span>}
+          <span className={`uc-badge ${request.requestType === 'Session swap' ? 'swap' : 'change'}`}>
+            {request.requestType}
+          </span>
+          {pending ? (
+            <span className="uc-badge pending">Pending</span>
+          ) : (
+            <span className={`uc-badge ${(request.status || '').toLowerCase()}`}>{request.status}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="uc-request-body">
+        {renderSessionRow(request)}
+        {!pending && request.reviewNotes && (request.status || '').toLowerCase() === 'suggested' && (
+          <div className="uc-session-box suggested">
+            <div className="uc-session-label">Suggested Session</div>
+            <p className="uc-session-time">{request.reviewNotes}</p>
+          </div>
+        )}
+        {renderReasonSections(request)}
+      </div>
+
+      {pending && (
+        <div className="uc-action-buttons">
+          <button className="uc-btn approve" onClick={() => handleApprove(request)}>Approve</button>
+          <button className="uc-btn reject"  onClick={() => handleReject(request)}>Reject</button>
+          <button className="uc-btn suggest" onClick={() => handleSuggest(request)}>Suggest</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="uc-dashboard-container">
       <UCSidebar activePage="requests" />
@@ -264,134 +341,63 @@ const UCRequests = () => {
       <main className="uc-main-content">
         <UCPageHeader title="Request & Swap" />
 
-        <div className="uc-two-col-layout">
-        {/* Pending Status */}
-        <section className="uc-section">
-          <div className="uc-section-header">
-            <div className="uc-section-title-row">
-              <h2>Pending Status</h2>
-              <div className="uc-status-legend">
-                <div className="uc-legend-item"><span className="uc-legend-box changed"></span>Changed</div>
-                <div className="uc-legend-item"><span className="uc-legend-box swap"></span>Swap</div>
+        <div className="requests-tabs-row">
+          <div className="requests-tabs">
+            <button
+              className={`requests-tab ${activeTab === 'pending' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pending')}
+            >
+              Pending Status
+              {visiblePending.length > 0 && <span className="requests-tab-count">{visiblePending.length}</span>}
+            </button>
+            <button
+              className={`requests-tab ${activeTab === 'confirmed' ? 'active' : ''}`}
+              onClick={() => setActiveTab('confirmed')}
+            >
+              Confirmation Status
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'pending' && (
+          <section className="uc-section">
+            <div className="uc-section-header">
+              <div className="uc-section-title-row">
+                <h2>Pending Status</h2>
+                <div className="uc-status-legend">
+                  <div className="uc-legend-item"><span className="uc-legend-box changed"></span>Changed</div>
+                  <div className="uc-legend-item"><span className="uc-legend-box swap"></span>Swap</div>
+                </div>
               </div>
+              <p className="uc-pending-count">{visiblePending.length} pending review...</p>
             </div>
-            <p className="uc-pending-count">{pendingRequests.length} pending review...</p>
-          </div>
 
-          {pendingRequests.length === 0 ? (
-            <div className="uc-empty-state"><p>No pending requests</p></div>
-          ) : (
-            <div className="uc-card-list">
-              {pendingRequests.map(request => (
-                <div key={request.id} className={`uc-request-card ${isUrgent(request) ? 'urgent-card' : ''}`}>
-                  <div className="uc-request-header">
-                    <div className="uc-tutor-info">
-                      <h3>{request.tutorName}</h3>
-                      <p className="uc-submitted-date">Submitted {request.submittedDate}</p>
-                    </div>
-                    <div className="uc-request-badges">
-                      {isUrgent(request) && <span className="uc-badge urgent">URGENT</span>}
-                      {request.reason && request.reason.includes(APPEAL_MARKER) && (
-                        <span className="uc-badge appealed">APPEALED</span>
-                      )}
-                      <span className={`uc-badge ${request.requestType === 'Session swap' ? 'swap' : 'change'}`}>
-                        {request.requestType}
-                      </span>
-                      <span className="uc-badge pending">Pending</span>
-                    </div>
-                  </div>
+            {visiblePending.length === 0 ? (
+              <div className="uc-empty-state"><p>No pending requests</p></div>
+            ) : (
+              <div className="uc-card-list">
+                {visiblePending.map(r => renderCard(r, true))}
+              </div>
+            )}
+          </section>
+        )}
 
-                  <div className="uc-request-body">
-                    <div className="uc-session-row">
-                    <div className="uc-session-box">
-                      <div className="uc-session-label">Current Session</div>
-                      <p className="uc-session-time">{request.currentSession}</p>
-                    </div>
-                    {request.preferredSwapTo && (
-                      <>
-                        <div className="uc-swap-arrow-horizontal">→</div>
-                        <div className="uc-session-box">
-                          <div className="uc-session-label">Preferred Swap To</div>
-                          <p className="uc-session-time">{request.preferredSwapTo}</p>
-                        </div>
-                      </>   
-                    )}
-                  </div>
-                    {renderReasonSections(request)}
-                  </div>
-
-                  <div className="uc-action-buttons">
-                    <button className="uc-btn approve" onClick={() => handleApprove(request)}>Approve</button>
-                    <button className="uc-btn reject"  onClick={() => handleReject(request)}>Reject</button>
-                    <button className="uc-btn suggest" onClick={() => handleSuggest(request)}>Suggest</button>
-                  </div>
-                </div>
-              ))}
+        {activeTab === 'confirmed' && (
+          <section className="uc-section">
+            <div className="uc-section-header">
+              <h2>Confirmation Status</h2>
             </div>
-          )}
-        </section>
 
-        {/* Confirmation Status */}
-        <section className="uc-section">
-          <div className="uc-section-header">
-            <h2>Confirmation Status</h2>
-          </div>
-
-          {processedRequests.length === 0 ? (
-            <div className="uc-empty-state"><p>No confirmed requests yet</p></div>
-          ) : (
-            <div className="uc-card-list">
-              {processedRequests.map(request => (
-                <div key={request.id} className={`uc-request-card ${isUrgent(request) ? 'urgent-card' : ''}`}>
-                  <div className="uc-request-header">
-                    <div className="uc-tutor-info">
-                      <h3>{request.tutorName}</h3>
-                      <p className="uc-submitted-date">Submitted {request.submittedDate}</p>
-                    </div>
-                    <div className="uc-request-badges">
-                      {request.reason && request.reason.includes(APPEAL_MARKER) && (
-                        <span className="uc-badge appealed">APPEALED</span>
-                      )}
-                      <span className={`uc-badge ${request.requestType === 'Session swap' ? 'swap' : 'change'}`}>
-                        {request.requestType}
-                      </span>
-                      <span className={`uc-badge ${(request.status || '').toLowerCase()}`}>
-                        {request.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="uc-request-body">
-                    <div className="uc-session-row">
-                      <div className="uc-session-box">
-                        <div className="uc-session-label">Current Session</div>
-                        <p className="uc-session-time">{request.currentSession}</p>
-                      </div>
-                      {request.preferredSwapTo && (
-                        <>
-                          <div className="uc-swap-arrow-horizontal">→</div>
-                          <div className="uc-session-box">
-                            <div className="uc-session-label">Preferred Swap To</div>
-                            <p className="uc-session-time">{request.preferredSwapTo}</p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {request.reviewNotes && (request.status || '').toLowerCase() === 'suggested' && (
-                      <div className="uc-session-box suggested">
-                        <div className="uc-session-label">Suggested Session</div>
-                        <p className="uc-session-time">{request.reviewNotes}</p>
-                      </div>
-                    )}
-                    {renderReasonSections(request)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+            {visibleProcessed.length === 0 ? (
+              <div className="uc-empty-state"><p>No confirmed requests yet</p></div>
+            ) : (
+              <div className="uc-card-list">
+                {visibleProcessed.map(r => renderCard(r, false))}
+              </div>
+            )}
+          </section>
+        )}
+      </main>
 
       {/* Approve Modal */}
       {showApproveModal && (
