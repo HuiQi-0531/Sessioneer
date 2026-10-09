@@ -441,13 +441,15 @@ router.get('/sessions', verifyToken, async (req, res) => {
           FROM session_tutors st
           JOIN users u ON u.id = st.tutor_id
           WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
+            -- a tutor only ever sees their own name here (bug 5a)
+            AND ($2::boolean OR st.tutor_id = $1)
         ) AS assigned_tutor_name
       FROM sessions s
       LEFT JOIN units un ON s.unit_id = un.id
       -- Only units the caller belongs to (this used to return every unit's sessions).
       WHERE s.unit_id IN (${LINKED_UNITS_SQL})
       ORDER BY s.day, s.start_time
-    `, [req.user.id]);
+    `, [req.user.id, req.user.role === 'coordinator' || req.user.role === 'admin']);
 
     res.json(result.rows);
   } catch (error) {

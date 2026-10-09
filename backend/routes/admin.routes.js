@@ -45,7 +45,7 @@ const {
   isValidReviewStatus,
   unitLabelWithSemester
 } = require('../utils/requestLabels');
-const { isBlank, endsAfterStart, getMissingAdminSessionFields: getMissingSessionFields } = require('../utils/sessionRules');
+const { isBlank, endsAfterStart, getMissingAdminSessionFields: getMissingSessionFields, codePrefixForType, nextSessionCode, shouldRegenerateCode } = require('../utils/sessionRules');
 const {
   findOverlappingSessions,
   calcHoursIfAssigned,
@@ -1859,6 +1859,22 @@ router.put('/sessions/:id', async (req, res) => {
       if (clash) return res.status(409).json({ error: clash });
     }
 
+    // Bug 5b: the code follows a type change (TUT03 -> WOR01).
+    let newSessionCode = null;
+    if (shouldRegenerateCode({
+      currentType: current.session_type,
+      newType: sessionType,
+      currentCode: current.session_code,
+      requestedCode: undefined
+    })) {
+      const prefix = codePrefixForType(sessionType);
+      const used = await pool.query(
+        'SELECT session_code FROM sessions WHERE unit_id = $1 AND session_code LIKE $2',
+        [unitId, `${prefix}%`]
+      );
+      newSessionCode = nextSessionCode(prefix, used.rows.map(r => r.session_code));
+    }
+
     const result = await pool.query(
       `
       UPDATE sessions
@@ -1871,11 +1887,12 @@ router.put('/sessions/:id', async (req, res) => {
           session_type = $7,
           capacity = $8,
           required_tutors = $9,
-          status = $10
+          status = $10,
+          session_code = COALESCE($12, session_code)
       WHERE id = $11
       RETURNING *
       `,
-      [unitId, day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, id]
+      [unitId, day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, id, newSessionCode]
     );
 
     if (result.rows.length === 0) {

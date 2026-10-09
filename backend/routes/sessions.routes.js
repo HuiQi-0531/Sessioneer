@@ -28,9 +28,11 @@ const {
   suggestedTutorCount,
   codePrefixForType,
   nextSessionCode,
+  shouldRegenerateCode,
   validateSessionInput,
   formatSessionRow,
   formatCoveringSessionRow,
+  toTutorTimetableRow,
   prepareImportRow,
   buildConfirmationUpdate,
   checkAssignSlot
@@ -190,7 +192,8 @@ router.get('/', verifyToken, async (req, res) => {
       const covering = (await getActiveCoverSessions(req.user.id))
         .filter(s => s.unit_id === unitId) // this route is scoped to one unit
         .map(formatCoveringSessionRow);
-      return res.json([...assigned, ...covering]);
+      // Tutors get the cut-down view: no other tutor's name or accept status.
+      return res.json([...assigned, ...covering].map(row => toTutorTimetableRow(row, req.user.id)));
     }
     res.json(assigned);
   } catch (error) {
@@ -243,10 +246,26 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
 
     const formatted = result.rows.map(formatSessionRow);
     if (req.user.role !== 'coordinator') {
+      // Bug 5a: on a session with two tutors, keep only the caller's own
+      // entry, so their co-tutor's accept status / decline reason stays private.
+      const ownOnly = formatted.map(row => {
+        const mine = (row.tutors || []).find(t => t.tutorId === req.user.id);
+        const myDecline = (row.declinedTutors || []).find(t => t.tutorId === req.user.id);
+        return {
+          ...row,
+          tutors: mine ? [mine] : [],
+          declinedTutors: myDecline ? [myDecline] : [],
+          assignedTutorId: mine?.tutorId || null,
+          assignedTutorName: mine?.tutorName || null,
+          tutorConfirmed: mine ? mine.confirmed : (myDecline ? false : null),
+          tutorRejectReason: mine?.rejectReason || myDecline?.rejectReason || null
+        };
+      });
       const covering = (await getActiveCoverSessions(req.user.id))
         .filter(s => s.unit_id === unitId)
-        .map(formatCoveringSessionRow);
-      return res.json([...formatted, ...covering]);
+        .map(formatCoveringSessionRow)
+        .map(row => toTutorTimetableRow(row, req.user.id));
+      return res.json([...ownOnly, ...covering]);
     }
     res.json(formatted);
   } catch (error) {
@@ -441,7 +460,15 @@ router.put('/:sessionId', verifyToken, requireRole('coordinator'), async (req, r
     }
 
     let sessionCode = undefined;
-    if (req.body.sessionCode !== undefined) {
+    if (shouldRegenerateCode({
+      currentType: current.session_type,
+      newType: sessionType,
+      currentCode: current.session_code,
+      requestedCode: req.body.sessionCode
+    })) {
+      // Bug 5b: Tutorial -> Workshop turns TUT03 into the next WOR code.
+      sessionCode = await generateNextSessionCode(pool, unitId, sessionType);
+    } else if (req.body.sessionCode !== undefined) {
       sessionCode = req.body.sessionCode ? String(req.body.sessionCode).trim().toUpperCase() : null;
       if (sessionCode) {
         const dupeCheck = await pool.query(

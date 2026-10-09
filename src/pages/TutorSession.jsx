@@ -20,18 +20,15 @@ const HOUR_LABELS = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, 
   return `${hour}am`;
 });
 
+// Bug 5a: a tutor sees only whether a class is theirs, taken, or open -
+// never who teaches it or whether they accepted. The backend sends just
+// isMine / isFilled for this page.
 const getBlockState = (session) => {
-  const tutors = session.tutors || [];
-  if (tutors.length === 0) return 'unassigned';
-  const anyConfirmed = tutors.some(t => t.confirmed === true);
-  return anyConfirmed ? 'confirmed' : 'pending';
+  if (session.isMine) return 'mine';
+  if (session.isFilled) return 'taken';
+  return 'open';
 };
-
-const getTutorDisplayLines = (session) => {
-  const tutors = session.tutors || [];
-  if (tutors.length === 0) return ['Unassigned'];
-  return tutors.map(t => t.confirmed === true ? t.tutorName : `${t.tutorName} (pending)`);
-};
+const BLOCK_STATE_LABEL = { mine: 'My session', taken: 'Taken', open: 'Open' };
 
 const timeToMinutes = (timeStr) => {
   const [h, m] = timeStr.split(':').map(Number);
@@ -229,9 +226,9 @@ const TutorSession = () => {
             ) : (
               <>
                 <div className="sb-grid-legend">
-                  <span className="sb-legend-item"><span className="sb-legend-dot assigned"></span>Confirmed</span>
-                  <span className="sb-legend-item"><span className="sb-legend-dot pending"></span>Awaiting confirmation</span>
-                  <span className="sb-legend-item"><span className="sb-legend-dot unassigned"></span>Unassigned</span>
+                  <span className="sb-legend-item"><span className="sb-legend-dot ts-dot-mine"></span>My session</span>
+                  <span className="sb-legend-item"><span className="sb-legend-dot ts-dot-taken"></span>Taken</span>
+                  <span className="sb-legend-item"><span className="sb-legend-dot ts-dot-open"></span>Open</span>
                 </div>
                 <div className="sb-grid-wrapper">
                   <div
@@ -270,7 +267,8 @@ const TutorSession = () => {
                     return (
                       <div
                         key={session.id}
-                        className={`sb-grid-block ${state === 'confirmed' ? 'assigned' : state === 'pending' ? 'pending' : 'unassigned'}`}
+                        className={`sb-grid-block ts-block-${state}`}
+                        title={`${session.sessionCode || session.sessionType || 'Session'} · ${formatTimeRange(session.startTime, session.endTime)}${session.location ? ` · ${session.location}` : ''} · ${BLOCK_STATE_LABEL[state]}`}
                         style={{
                           gridColumn: dayIndex + 2,
                           gridRow: `${rowStart} / ${rowEnd}`,
@@ -284,10 +282,7 @@ const TutorSession = () => {
                           {session.sessionCode ? `${session.sessionCode}` : (session.sessionType || 'Session')}
                           {session.location ? ` · ${session.location}` : ''}
                           </div>
-                          <div className="sb-grid-block-tutor">
-                            {getTutorDisplayLines(session).map((line, i) => (
-                              <div key={i}>{line}</div>
-                            ))}                          </div>
+                          <div className="sb-grid-block-tutor">{BLOCK_STATE_LABEL[state]}</div>
                         </div>
                       );
                     })}

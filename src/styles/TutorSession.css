@@ -385,3 +385,23 @@
         padding: 20px;
     }
 }
+
+/* Bug 5a: tutor view colours - mine (green) / taken (grey) / open (blue). No names shown. */
+.sb-grid-block.ts-block-mine { background-color: #dcfce7; border: 1px solid #86efac; }
+.sb-grid-block.ts-block-mine .sb-grid-block-time,
+.sb-grid-block.ts-block-mine .sb-grid-block-type,
+.sb-grid-block.ts-block-mine .sb-grid-block-tutor { color: #14532d; }
+
+.sb-grid-block.ts-block-taken { background-color: #e5e7eb; border: 1px solid #9ca3af; }
+.sb-grid-block.ts-block-taken .sb-grid-block-time,
+.sb-grid-block.ts-block-taken .sb-grid-block-type,
+.sb-grid-block.ts-block-taken .sb-grid-block-tutor { color: #4b5563; }
+
+.sb-grid-block.ts-block-open { background-color: #e0f2fe; border: 1px solid #7dd3fc; }
+.sb-grid-block.ts-block-open .sb-grid-block-time,
+.sb-grid-block.ts-block-open .sb-grid-block-type,
+.sb-grid-block.ts-block-open .sb-grid-block-tutor { color: #075985; }
+
+.sb-legend-dot.ts-dot-mine { background-color: #dcfce7; border: 1px solid #86efac; }
+.sb-legend-dot.ts-dot-taken { background-color: #e5e7eb; border: 1px solid #9ca3af; }
+.sb-legend-dot.ts-dot-open { background-color: #e0f2fe; border: 1px solid #7dd3fc; }

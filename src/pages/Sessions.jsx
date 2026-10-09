@@ -13,6 +13,10 @@ import '../styles/Sessions.css';
 const STUDENTS_PER_TUTOR = 30;
 const suggestedTutorCount = (capacity) => Math.floor((capacity || 0) / STUDENTS_PER_TUTOR) + 1;
 
+// Same prefixes as backend/utils/sessionRules.js (CODE_PREFIXES).
+const CODE_PREFIXES = { tutorial: 'TUT', consultation: 'CON', practical: 'PRC', lecture: 'LEC', workshop: 'WOR' };
+const codePrefixForType = (type) => CODE_PREFIXES[String(type || '').trim().toLowerCase()] || 'SES';
+
 const emptyForm = {
   day: '',
   startTime: '',
@@ -200,6 +204,27 @@ const Sessions = () => {
         requiredTutors: suggestedTutorCount(value ? parseInt(value, 10) : null)
       });
       return;
+    }
+
+    // Bug 5b: changing the type also changes an automatic code
+    // (TUT03 -> next WOR code). A code the UC typed themselves is left alone.
+    // The backend does the same, so this is just the preview in the form.
+    if (name === 'sessionType') {
+      const oldPrefix = codePrefixForType(formData.sessionType);
+      const code = String(formData.sessionCode || '').trim().toUpperCase();
+      const looksAutomatic = !code || new RegExp(`^${oldPrefix}\\d+$`).test(code);
+      if (value && value !== formData.sessionType && looksAutomatic) {
+        const newPrefix = codePrefixForType(value);
+        const used = sessions
+          .filter(session => session.id !== editingSessionId)
+          .map(session => String(session.sessionCode || ''))
+          .map(c => c.match(new RegExp(`^${newPrefix}(\\d+)$`)))
+          .filter(Boolean)
+          .map(match => parseInt(match[1], 10));
+        const next = (used.length ? Math.max(...used) : 0) + 1;
+        setFormData({ ...formData, sessionType: value, sessionCode: `${newPrefix}${String(next).padStart(2, '0')}` });
+        return;
+      }
     }
 
     setFormData({ ...formData, [name]: value });

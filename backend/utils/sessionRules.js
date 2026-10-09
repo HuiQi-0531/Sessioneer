@@ -24,6 +24,24 @@ const codePrefixForType = (sessionType) => {
   return match ? CODE_PREFIXES[match] : 'SES';
 };
 
+// Bug 5b: when a session's type changes (Tutorial -> Workshop), its code
+// should follow (TUT03 -> WOR01). Only an automatic-looking code is
+// replaced: blank, or the old type's prefix + number. A code the UC typed
+// themselves in this edit (different from the stored one) is kept.
+// requestedCode: what the edit form sent (undefined = not sent).
+const shouldRegenerateCode = ({ currentType, newType, currentCode, requestedCode }) => {
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  if (!newType || norm(newType) === norm(currentType)) return false;
+  const stored = String(currentCode || '').trim().toUpperCase();
+  const requested = requestedCode === undefined
+    ? stored
+    : String(requestedCode || '').trim().toUpperCase();
+  if (!requested) return true;
+  if (requested !== stored) return false; // the UC typed a new code: keep it
+  const oldPrefix = codePrefixForType(currentType);
+  return new RegExp(`^${oldPrefix}\\d+$`).test(stored);
+};
+
 // Given the codes already used in a unit, returns the next free one,
 // e.g. TUT01..TUT03 exist -> TUT04. (Was the second half of generateNextSessionCode.)
 const nextSessionCode = (prefix, existingCodes) => {
@@ -155,6 +173,38 @@ const formatSessionRow = (s) => {
   };
 };
 
+// Bug 5a: what a TUTOR may see of a unit's timetable. Time, place, code,
+// type and three facts: is it mine, is it taken, has it space. No other
+// tutor's name, confirmation status or decline reason. tutors[] keeps only
+// ids (the Messages profile uses them to list a contact's classes).
+const toTutorTimetableRow = (row, viewerId) => {
+  const activeIds = (row.tutors || []).map(t => t.tutorId);
+  const isMine = Boolean(row.isCovering) || activeIds.includes(viewerId);
+  const required = Number(row.requiredTutors || 1);
+  return {
+    id: row.id,
+    sessionCode: row.sessionCode,
+    day: row.day,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    location: row.location,
+    campus: row.campus,
+    sessionType: row.sessionType,
+    requiredTutors: row.requiredTutors,
+    status: row.status,
+    unitCode: row.unitCode,
+    isMine,
+    isFilled: activeIds.length >= required,
+    tutors: activeIds.map(tutorId => ({ tutorId })),
+    ...(row.isCovering ? {
+      isCovering: true,
+      coverStartDate: row.coverStartDate,
+      coverEndDate: row.coverEndDate,
+      coverOccurrenceCount: row.coverOccurrenceCount
+    } : {})
+  };
+};
+
 const formatCoveringSessionRow = (s) => ({
   ...formatSessionRow(s),
   isCovering: true,
@@ -271,6 +321,7 @@ module.exports = {
   suggestedTutorCount,
   codePrefixForType,
   nextSessionCode,
+  shouldRegenerateCode,
   isBlank,
   endsAfterStart,
   getMissingSessionFields,
@@ -278,6 +329,7 @@ module.exports = {
   validateSessionInput,
   formatSessionRow,
   formatCoveringSessionRow,
+  toTutorTimetableRow,
   prepareImportRow,
   buildConfirmationUpdate,
   checkAssignSlot
