@@ -7,7 +7,9 @@ jest.mock('../config/api', () => ({
   sessionsAPI: { getFresh: jest.fn().mockResolvedValue([]) },
   ucAPI: { getAllRequests: jest.fn(), getFreshRequests: jest.fn(), reviewRequest: jest.fn() }
 }));
-const mockUnitContext = { allUnits: [{ id: 'unit1', unitCode: 'CAB201', roles: ['coordinator'] }] };
+// The page only lists requests for the active unit, so the mock needs one.
+const mockUnit = { id: 'unit1', unitCode: 'CAB201', roles: ['coordinator'] };
+const mockUnitContext = { allUnits: [mockUnit], activeUnit: mockUnit };
 jest.mock('../context/ActiveUnitContext', () => ({ useActiveUnit: () => mockUnitContext }));
 jest.mock('../components/UCSidebar', () => () => null);
 jest.mock('../components/UCPageHeader', () => ({ title }) => <h1>{title}</h1>);

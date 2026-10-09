@@ -109,8 +109,9 @@ const seed = async () => {
 
   // Cover requests: one Lecture, one Consultation, one Tutorial, all in unit A
   const batch = (await query(
+    // Dates follow today, so the cover never expires before the test runs.
     `INSERT INTO cover_batches (unit_id, created_by_id, reason, start_date, end_date)
-     VALUES ($1, $2, 'RBAC cover', '2026-10-01', '2026-10-07') RETURNING id`,
+     VALUES ($1, $2, 'RBAC cover', CURRENT_DATE, CURRENT_DATE + 6) RETURNING id`,
     [unitA.id, u.ucA.id]
   )).rows[0].id;
   const cover = async (sessionId) => (await query(
@@ -129,7 +130,7 @@ const seed = async () => {
   };
   const batchB = (await query(
     `INSERT INTO cover_batches (unit_id, created_by_id, reason, start_date, end_date)
-     VALUES ($1, $2, 'B cover', '2026-10-01', '2026-10-07') RETURNING id`,
+     VALUES ($1, $2, 'B cover', CURRENT_DATE, CURRENT_DATE + 6) RETURNING id`,
     [unitB.id, u.ucB.id]
   )).rows[0].id;
   await query(
