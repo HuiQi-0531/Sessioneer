@@ -1,6 +1,7 @@
 // Allocation checks shared by the assign route and swap/change requests.
 // Both use (and the tests check) this one copy.
 const { timeRangesOverlap, sessionDurationHours } = require('./normalise');
+const { sameTermUnitIdsSql } = require('./termRules');
 const { requiresSuperTutor } = require('./roles');
 
 // The tutor's other sessions that clash with this one (same day, times overlap).
@@ -40,6 +41,8 @@ const findEditClash = async (clientOrPool, sessionId, day, startTime, endTime) =
     WHERE mine.session_id = $1
       AND mine.tutor_confirmed IS DISTINCT FROM FALSE
       AND theirs.tutor_confirmed IS DISTINCT FROM FALSE
+      -- only the same semester + year as the session being edited (bug 15)
+      AND other.unit_id IN ${sameTermUnitIdsSql('(SELECT unit_id FROM sessions WHERE id = $1)')}
     `,
     [sessionId]
   );

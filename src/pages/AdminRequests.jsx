@@ -184,7 +184,10 @@ const AdminRequests = () => {
           return;
         }
 
-        await adminAPI.reviewRequest(actionRequest.id, statusMap[actionType], note);
+        const suggestedId = actionType === 'suggest'
+          ? suggestionSessions.find(session => session.label === selectedSuggestion)?.id || null
+          : null;
+        await adminAPI.reviewRequest(actionRequest.id, statusMap[actionType], note, suggestedId);
       }
 
       await loadRequests();

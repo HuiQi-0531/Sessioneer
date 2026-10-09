@@ -13,6 +13,13 @@ test('M-13 an admin display label with a session type resolves to the target ID'
   expect(await resolveSessionId(client, 'unit', null, 'Tutorial - MON 09:00 - 10:00 | GP-P-101')).toBe('target');
 });
 
+test('BUG-8i: a UC suggestion label with seconds ("11:00:00") still resolves to the session', async () => {
+  const client = { query: jest.fn().mockResolvedValue({ rows: [{
+    id: 'wed', day: 'WED', start_time: '11:00:00', end_time: '12:00:00', location: 'GP-P-103', session_type: 'Tutorial'
+  }] }) };
+  expect(await resolveSessionId(client, 'unit', null, 'WED 11:00:00 - 12:00:00 GP-P-103')).toBe('wed');
+});
+
 describe('comparable', () => {
   test('LG-103: spaces around a hyphen are removed', () => {
     expect(comparable('Mon 10:00 - 12:00')).toBe('MON 10:00-12:00');

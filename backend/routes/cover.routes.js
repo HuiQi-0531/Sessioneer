@@ -3,6 +3,7 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { sameTermUnitIdsSql } = require('../utils/termRules');
 const { escapeHtml, sendEmail } = require('../utils/email');
 const { TUTOR_LIKE_ROLES } = require('../utils/roles');
 const {
@@ -297,7 +298,7 @@ router.get('/cover-requests/open', verifyToken, requireRole('tutor', 'coordinato
         cb.end_date as "endDate",
         s.id as "sessionId", s.session_code as "sessionCode", s.day, s.start_time as "startTime", s.end_time as "endTime",
         s.location, s.session_type as "sessionType",
-        un.unit_code as "unitCode", un.unit_name as "unitName",
+        un.id as "unitId", un.unit_code as "unitCode", un.unit_name as "unitName",
         TRIM(CONCAT(orig.name, ' ', COALESCE(orig.last_name, ''))) as "originalTutorName"
       FROM cover_requests cr
       JOIN cover_batches cb ON cb.id = cr.batch_id
@@ -380,6 +381,7 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
       JOIN sessions s ON s.id = st.session_id
       JOIN units un ON un.id = s.unit_id
       WHERE st.tutor_id = $1 AND st.tutor_confirmed IS DISTINCT FROM FALSE
+        AND s.unit_id IN ${sameTermUnitIdsSql('$2')}
       UNION ALL
       SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code, cb.start_date, cb.end_date
       FROM cover_requests cr
@@ -388,7 +390,7 @@ router.post('/cover-requests/:id/claim', verifyToken, requireRole('tutor', 'coor
       JOIN units un ON un.id = s.unit_id
       WHERE cr.claimed_by_id = $1 AND cr.status = 'claimed'
       `,
-      [req.user.id]
+      [req.user.id, request.unit_id]
     );
     const clash = findCoverClash(request, commitments.rows);
     if (clash) {

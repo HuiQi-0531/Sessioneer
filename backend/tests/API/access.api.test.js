@@ -91,16 +91,22 @@ describe('API access boundaries', () => {
   });
 
   add('a tutor cannot edit another tutor request', async (current) => {
+    // "other" must actually hold the session to raise a request on it.
+    await query('INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES ($1, $2, TRUE)', [current.s.open, current.u.other.id]);
     const created = await api('post', '/requests', current.tokens.other, {
       unitCode: 'API101', requestType: 'Session Swap', reason: 'mine', currentSessionId: current.s.open
     });
+    expect(created.status).toBe(201);
     expect((await api('patch', `/requests/${created.body.id}`, current.tokens.tutor, { reason: 'stolen' })).status).toBe(404);
   });
 
   add('a tutor cannot delete another tutor request', async (current) => {
+    // "other" must actually hold the session to raise a request on it.
+    await query('INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed) VALUES ($1, $2, TRUE)', [current.s.open, current.u.other.id]);
     const created = await api('post', '/requests', current.tokens.other, {
       unitCode: 'API101', requestType: 'Session Swap', reason: 'mine', currentSessionId: current.s.open
     });
+    expect(created.status).toBe(201);
     expect((await api('delete', `/requests/${created.body.id}`, current.tokens.tutor)).status).toBe(404);
   });
 

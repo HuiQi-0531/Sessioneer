@@ -1,5 +1,6 @@
 const { timeRangesOverlap, sessionDurationHours } = require('./normalise');
 const { requiresSuperTutor } = require('./roles');
+const { sameTermUnitIdsSql } = require('./termRules');
 
 class AllocationError extends Error {
   constructor(message, status = 400) {
@@ -8,7 +9,10 @@ class AllocationError extends Error {
   }
 }
 
+// Seconds are dropped ("11:00:00" -> "11:00") so a label built from raw
+// database times still matches the timetable.
 const comparable = (value) => String(value || '')
+  .replace(/\b(\d{1,2}:\d{2}):\d{2}\b/g, '$1')
   .replace(/\s*[-–]\s*/g, '-')
   .replace(/\s*\|\s*/g, '|')
   .replace(/\s+/g, ' ')
@@ -58,15 +62,18 @@ const unassignTutor = async (client, sessionId, tutorId) => {
   );
 };
 
-const assignTutor = async (client, sessionId, tutorId) => {
+// confirmed: true when the tutor already agreed to this session (they asked
+// for it, or accepted the coordinator's suggestion), so they are not asked to
+// confirm it a second time. null leaves it "Awaiting response".
+const assignTutor = async (client, sessionId, tutorId, confirmed = null) => {
   await client.query(
     `
     INSERT INTO session_tutors (session_id, tutor_id, tutor_confirmed, tutor_reject_reason)
-    VALUES ($1, $2, NULL, NULL)
+    VALUES ($1, $2, $3, NULL)
     ON CONFLICT (session_id, tutor_id)
-    DO UPDATE SET tutor_confirmed = NULL, tutor_reject_reason = NULL
+    DO UPDATE SET tutor_confirmed = $3, tutor_reject_reason = NULL
     `,
-    [sessionId, tutorId]
+    [sessionId, tutorId, confirmed]
   );
 };
 
@@ -115,8 +122,9 @@ const assertNoOverlap = async (client, tutorId, session, ignoreSessionId) => {
       AND st.tutor_confirmed IS DISTINCT FROM false
       AND s.id <> $2
       AND ($3::uuid IS NULL OR s.id <> $3)
+      AND s.unit_id IN ${sameTermUnitIdsSql('$4')}
     `,
-    [tutorId, session.id, ignoreSessionId || null]
+    [tutorId, session.id, ignoreSessionId || null, session.unit_id]
   );
   const conflict = result.rows.find((other) =>
     other.day === session.day &&
@@ -158,8 +166,9 @@ const assertHoursAndRole = async (client, tutorId, session, unitId, ignoreSessio
       AND st.tutor_confirmed IS DISTINCT FROM false
       AND s.id <> $2
       AND ($3::uuid IS NULL OR s.id <> $3)
+      AND s.unit_id IN ${sameTermUnitIdsSql('$4')}
     `,
-    [tutorId, session.id, ignoreSessionId || null]
+    [tutorId, session.id, ignoreSessionId || null, unitId]
   );
   const existingHours = otherResult.rows.reduce(
     (sum, other) => sum + sessionDurationHours(other.start_time, other.end_time),
@@ -198,11 +207,16 @@ const applyApprovedChangeRequest = async (client, request) => {
   const currentSessionId = await resolveSessionId(
     client, unitId, request.current_session_id, request.current_session
   );
-  const targetSessionId = await resolveSessionId(
-    client, unitId, request.suggested_session_id, request.review_notes
-  ) || await resolveSessionId(
-    client, unitId, request.preferred_session_id, request.preferred_swap_to
-  );
+  // Which session the tutor moves to:
+  //  - Suggested request (tutor accepting the coordinator's suggestion):
+  //    ONLY the suggested session. It must never fall back to the tutor's own
+  //    preferred session, which used to move them somewhere the UC did not pick.
+  //  - Otherwise (UC/Admin approving the request as submitted): the tutor's
+  //    preferred session. Old suggestion text left in review_notes is ignored.
+  const isAcceptingSuggestion = String(request.status || '').toLowerCase() === 'suggested';
+  const targetSessionId = isAcceptingSuggestion
+    ? await resolveSessionId(client, unitId, request.suggested_session_id, request.review_notes)
+    : await resolveSessionId(client, unitId, request.preferred_session_id, request.preferred_swap_to);
 
   if (!currentSessionId) {
     throw new AllocationError("Could not match the tutor's current session on the timetable");
@@ -220,8 +234,9 @@ const applyApprovedChangeRequest = async (client, request) => {
   }
 
   if (!targetSessionId) {
-    throw new AllocationError(
-      'This swap has no target session. The tutor must choose a preferred session, or use Suggest first.'
+    throw new AllocationError(isAcceptingSuggestion
+      ? 'The suggested session could not be found on the timetable. Ask the unit coordinator to suggest it again.'
+      : 'This swap has no target session. The tutor must choose a preferred session, or use Suggest first.'
     );
   }
 
@@ -253,7 +268,8 @@ const applyApprovedChangeRequest = async (client, request) => {
 
   // Remove this tutor from the original session, then add them to the target.
   await unassignTutor(client, currentSessionId, tutorId);
-  await assignTutor(client, targetSessionId, tutorId);
+  // The tutor asked for this session or accepted it, so it is already confirmed.
+  await assignTutor(client, targetSessionId, tutorId, true);
   await client.query(
     `
     INSERT INTO unit_memberships (unit_id, user_id, role)
@@ -266,8 +282,31 @@ const applyApprovedChangeRequest = async (client, request) => {
   return { action: 'moved', fromSessionId: currentSessionId, toSessionId: targetSessionId };
 };
 
+// Resolves the session a coordinator/admin is suggesting. Prefers the id the
+// page sends; falls back to reading the label. Throws if it cannot be found,
+// is not in this unit, or is a different session type from the current one.
+const resolveSuggestedSession = async (client, request, { suggestedSessionId, reviewNotes }) => {
+  const targetId = suggestedSessionId
+    || await resolveSessionId(client, request.unit_id, null, reviewNotes);
+  if (!targetId) {
+    throw new AllocationError('Could not find the suggested session on the timetable. Please pick it again.');
+  }
+  const currentId = await resolveSessionId(
+    client, request.unit_id, request.current_session_id, request.current_session
+  );
+  if (!currentId) {
+    throw new AllocationError("Could not match the tutor's current session on the timetable");
+  }
+  if (targetId === currentId) {
+    throw new AllocationError('The suggested session is the tutor\'s current session');
+  }
+  await assertSameSessionType(client, request.unit_id, currentId, targetId);
+  return targetId;
+};
+
 module.exports = {
   AllocationError,
+  resolveSuggestedSession,
   assertSameSessionType,
   applyApprovedChangeRequest,
   resolveSessionId,

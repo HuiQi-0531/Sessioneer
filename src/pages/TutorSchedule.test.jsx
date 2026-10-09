@@ -4,7 +4,9 @@ import TutorSchedule from './TutorSchedule';
 import { sessionsAPI } from '../config/api';
 
 jest.mock('../config/api', () => ({ sessionsAPI: { getMyAssigned: jest.fn(), confirmSession: jest.fn() } }));
-const mockUnitContext = { allUnits: [{ id: 'unit1', unitCode: 'CAB201', roles: ['tutor'] }], isLoading: false };
+const unit2026 = { id: 'unit1', unitCode: 'CAB201', semester: 'Semester 2', year: 2026, roles: ['tutor'] };
+const unit2027 = { id: 'unit2027', unitCode: 'CAB201', semester: 'Semester 2', year: 2027, roles: ['tutor'] };
+const mockUnitContext = { allUnits: [unit2027, unit2026], activeUnit: unit2026, isLoading: false };
 jest.mock('../context/ActiveUnitContext', () => ({ useActiveUnit: () => mockUnitContext }));
 jest.mock('../components/TutorSidebar', () => () => null);
 jest.mock('../components/UCPageHeader', () => ({ title }) => <h1>{title}</h1>);
@@ -69,4 +71,11 @@ test('FE-25 Decline needs a reason, then sends it trimmed', async () => {
   fireEvent.change(screen.getByPlaceholderText(/explain why/), { target: { value: '  sick  ' } });
   fireEvent.click(modalButton);
   await waitFor(() => expect(sessionsAPI.confirmSession).toHaveBeenCalledWith('unit1', 'TUT01', false, 'sick'));
+});
+
+test('BUG-15 My Schedule only shows the Active Unit\'s semester, not the same unit next year', async () => {
+  render(<TutorSchedule />);
+  await screen.findByText('TUT01');
+  expect(sessionsAPI.getMyAssigned).toHaveBeenCalledWith('unit1', { includeDeclined: true });
+  expect(sessionsAPI.getMyAssigned).not.toHaveBeenCalledWith('unit2027', expect.anything());
 });

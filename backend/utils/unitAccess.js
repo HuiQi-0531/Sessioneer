@@ -88,7 +88,7 @@ const shareAnyUnit = async (userIdA, userIdB, clientOrPool = pool) => {
 const resolveUnitForUser = async ({ unitId, unitCode }, userId, clientOrPool = pool) => {
   if (unitId) {
     const byId = await clientOrPool.query(
-      'SELECT id, unit_code, unit_name, unit_coordinator_id, availability_locked, availability_deadline FROM units WHERE id = $1',
+      'SELECT id, unit_code, unit_name, semester, year, unit_coordinator_id, availability_locked, availability_deadline FROM units WHERE id = $1',
       [unitId]
     );
     return byId.rows[0] || null;
@@ -96,7 +96,7 @@ const resolveUnitForUser = async ({ unitId, unitCode }, userId, clientOrPool = p
   if (!unitCode) return null;
   const result = await clientOrPool.query(
     `
-    SELECT u.id, u.unit_code, u.unit_name, u.unit_coordinator_id, u.availability_locked, u.availability_deadline,
+    SELECT u.id, u.unit_code, u.unit_name, u.semester, u.year, u.unit_coordinator_id, u.availability_locked, u.availability_deadline,
            (u.id IN (${LINKED_UNITS_SQL.replace(/\$1/g, '$$2')})) AS is_linked
     FROM units u
     WHERE UPPER(TRIM(u.unit_code)) = UPPER(TRIM($1))

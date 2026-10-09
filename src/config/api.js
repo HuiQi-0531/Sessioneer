@@ -434,7 +434,8 @@ export const ucAPI = {
 reviewRequest: async (
   id,
   status,
-  reviewNotes
+  reviewNotes,
+  suggestedSessionId = null
 ) => {
   const response = await fetch(
     `${API_URL}/uc/requests/${id}/review`,
@@ -446,7 +447,10 @@ reviewRequest: async (
       },
       body: JSON.stringify({
         status,
-        reviewNotes
+        reviewNotes,
+        // The exact session being suggested, so the backend never has to
+        // guess it from the label text.
+        ...(suggestedSessionId ? { suggestedSessionId } : {})
       })
     }
   );
@@ -742,6 +746,19 @@ export const sessionsAPI = {
 
     assignedSessionsCache.set(cacheKey, { promise, updatedAt: now });
     return promise;
+  },
+
+  // Sessions this tutor may ask to swap into (same type, has space). Works
+  // before the draft timetable is released. Never cached: it depends on the
+  // chosen current session and changes as people are assigned.
+  getSwapTargets: async (unitId, currentSessionId) => {
+    const response = await fetch(
+      `${API_URL}/units/${unitId}/sessions/swap-targets?currentSessionId=${encodeURIComponent(currentSessionId)}`,
+      { headers: authHeader() }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to load sessions you can swap to');
+    return data;
   },
 
   getFreshMyAssigned: async (unitId) => {
@@ -1757,11 +1774,11 @@ export const adminAPI = {
     return result;
   },
 
-  reviewRequest: async (requestId, status, reviewNotes) => {
+  reviewRequest: async (requestId, status, reviewNotes, suggestedSessionId = null) => {
     const response = await fetch(`${API_URL}/admin/requests/${requestId}/review`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ status, reviewNotes })
+      body: JSON.stringify({ status, reviewNotes, ...(suggestedSessionId ? { suggestedSessionId } : {}) })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Failed to review request');

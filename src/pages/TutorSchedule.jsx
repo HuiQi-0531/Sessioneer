@@ -3,6 +3,7 @@ import { sessionsAPI } from '../config/api';
 import html2canvas from 'html2canvas';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import { unitHasTutorAccess } from '../utils/roles';
+import { isSameTerm } from '../utils/unitTerm';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import '../styles/UCRequests.css';
@@ -51,7 +52,7 @@ const getMyStatus = (session, myId) => {
 };
 
 const TutorSchedule = () => {
-  const { allUnits, isLoading: unitLoading } = useActiveUnit();
+  const { allUnits, activeUnit, isLoading: unitLoading } = useActiveUnit();
 
   const myId = useMemo(() => getCurrentUserId(), []);
 
@@ -66,9 +67,15 @@ const TutorSchedule = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const gridRef = React.useRef(null);
 
+  // Only units in the same semester as the Active Unit: this page is one
+  // weekly timetable, and next year's MON 09:00 class is not this week's.
+  // (It used to merge every semester, so 2026 and 2027 classes overlapped.)
   const tutorUnits = useMemo(
-    () => allUnits.filter(unit => unitHasTutorAccess(unit)),
-    [allUnits]
+    () => allUnits.filter(unit =>
+      unitHasTutorAccess(unit) &&
+      (activeUnit ? isSameTerm(unit, activeUnit) : unit.isActive !== false)
+    ),
+    [allUnits, activeUnit]
   );
 
   useEffect(() => {

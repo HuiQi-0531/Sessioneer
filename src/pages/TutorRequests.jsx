@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { requestsAPI, sessionsAPI, coverAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
@@ -48,8 +48,20 @@ const INITIAL_FORM = {
   priority: 'Normal', currentSession: '', preferredSwapTo: '', reason: '',
 };
 
+// "Semester 2, 2026": the same unit code runs every semester, so the
+// semester is always shown next to it.
+const unitTermLabel = (unit) => [unit?.semester, unit?.year].filter(Boolean).join(', ');
+
+// Requests and cover requests belong to one unit (one semester). Match by id;
+// matching by code alone mixed CAB201 2026 and CAB201 2027 together.
+const belongsToUnit = (item, unit) => {
+  if (!unit) return false;
+  if (item.unitId != null) return String(item.unitId) === String(unit.id);
+  return String(item.unitCode || '').trim().toUpperCase() === String(unit.unitCode || '').trim().toUpperCase();
+};
+
 const TutorRequests = () => {
-  const { allUnits, activeUnit, isLoading: unitsLoading } = useActiveUnit();
+  const { activeUnit, isLoading: unitsLoading } = useActiveUnit();
 
   const [showModal, setShowModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -64,6 +76,13 @@ const TutorRequests = () => {
   const [unitSessions, setUnitSessions] = useState([]);
   const [swapTargetSessions, setSwapTargetSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isLoadingTargets, setIsLoadingTargets] = useState(false);
+  const [targetsError, setTargetsError] = useState('');
+  const [isResponding, setIsResponding] = useState(false);
+  // Each load gets a number; a reply that arrives after a newer load started
+  // is ignored, so a slow answer can't overwrite the current list.
+  const sessionsLoadRef = useRef(0);
+  const targetsLoadRef = useRef(0);
 
   const [showAppealModal, setShowAppealModal] = useState(false);
   const [appealRequest, setAppealRequest] = useState(null);
@@ -71,17 +90,11 @@ const TutorRequests = () => {
   const [appealError, setAppealError] = useState('');
   const [isAppealing, setIsAppealing] = useState(false);
 
-  const activeRequests = activeUnit
-    ? requests.filter(r => isActive(r.status) && r.unitCode === activeUnit.unitCode)
-    : [];
-  const processedRequests = activeUnit
-    ? requests.filter(r => isProcessed(r.status) && r.unitCode === activeUnit.unitCode)
-    : [];
+  const activeRequests = requests.filter(r => isActive(r.status) && belongsToUnit(r, activeUnit));
+  const processedRequests = requests.filter(r => isProcessed(r.status) && belongsToUnit(r, activeUnit));
 
   const [coverRequests, setCoverRequests] = useState([]);
-  const filteredCoverRequests = activeUnit
-    ? coverRequests.filter(r => r.unitCode === activeUnit.unitCode)
-    : [];
+  const filteredCoverRequests = coverRequests.filter(r => belongsToUnit(r, activeUnit));
   const [isLoadingCover, setIsLoadingCover] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
   const [coverMessage, setCoverMessage] = useState(null);
@@ -149,21 +162,40 @@ const TutorRequests = () => {
   }, [formData.selectedUnit]);
 
   const loadSessionsForUnit = async (unitId) => {
+    const loadId = ++sessionsLoadRef.current;
     setIsLoadingSessions(true);
     try {
-      const [mine, all] = await Promise.all([
-        sessionsAPI.getMyAssigned(unitId),
-        sessionsAPI.getAll(unitId).catch(() => [])
-      ]);
-      const targets = Array.isArray(all) ? all : (all?.sessions || []);
+      const mine = await sessionsAPI.getMyAssigned(unitId);
+      if (loadId !== sessionsLoadRef.current) return;
       setUnitSessions(mine.filter(s => !s.isCovering));
-      setSwapTargetSessions(targets.filter(s => !s.isCovering));
     } catch (err) {
+      if (loadId !== sessionsLoadRef.current) return;
       console.error('Error loading your sessions for this unit:', err);
       setUnitSessions([]);
-      setSwapTargetSessions([]);
     } finally {
-      setIsLoadingSessions(false);
+      if (loadId === sessionsLoadRef.current) setIsLoadingSessions(false);
+    }
+  };
+
+  // "Preferred swap to" options come from the backend: same type as the
+  // chosen session and still has space. This works before the UC releases
+  // the draft timetable (the old full-timetable call returned nothing then).
+  const loadSwapTargets = async (unitId, currentSessionId) => {
+    const loadId = ++targetsLoadRef.current;
+    setSwapTargetSessions([]);
+    setTargetsError('');
+    if (!unitId || !currentSessionId) { setIsLoadingTargets(false); return; }
+    setIsLoadingTargets(true);
+    try {
+      const targets = await sessionsAPI.getSwapTargets(unitId, currentSessionId);
+      if (loadId !== targetsLoadRef.current) return;
+      setSwapTargetSessions(targets);
+    } catch (err) {
+      if (loadId !== targetsLoadRef.current) return;
+      console.error('Error loading swap targets:', err);
+      setTargetsError(err.message || 'Could not load sessions to swap to');
+    } finally {
+      if (loadId === targetsLoadRef.current) setIsLoadingTargets(false);
     }
   };
 
@@ -190,15 +222,25 @@ const TutorRequests = () => {
     });
   };
 
-  const selectedUnitObj = allUnits.find(u => u.id === formData.selectedUnit);
+  // The request is always for the Active Unit (sidebar). Picking a unit in
+  // the form showed every semester as an identical "CAB201".
+  const selectedUnitObj = activeUnit && activeUnit.id === formData.selectedUnit ? activeUnit : null;
   const selectedCurrentSession = unitSessions.find(
     s => sessionValue(s, selectedUnitObj?.unitCode) === formData.currentSession
   );
-  const eligibleSwapTargets = swapTargetSessions.filter(s =>
-    selectedCurrentSession && s.id !== selectedCurrentSession.id &&
-    String(s.sessionType || '').trim().toLowerCase() ===
-      String(selectedCurrentSession.sessionType || '').trim().toLowerCase()
-  );
+  const eligibleSwapTargets = selectedCurrentSession ? swapTargetSessions : [];
+
+  useEffect(() => {
+    loadSwapTargets(formData.selectedUnit, selectedCurrentSession?.id || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.selectedUnit, selectedCurrentSession?.id]);
+
+  const openRequestModal = () => {
+    if (!activeUnit) return;
+    setErrors({});
+    setFormData({ ...INITIAL_FORM, selectedUnit: activeUnit.id });
+    setShowModal(true);
+  };
 
   const handleSubmit = async () => {
   const errs = {};
@@ -246,7 +288,10 @@ const TutorRequests = () => {
   };
 
   const confirmSuggestionResponse = async () => {
-    if (!selectedSuggestion || !suggestionAction) return;
+    // Ignore a second click while the first one is still being saved (it used
+    // to send the accept twice and show "Only the unit coordinator can approve").
+    if (!selectedSuggestion || !suggestionAction || isResponding) return;
+    setIsResponding(true);
     try {
       await requestsAPI.update(selectedSuggestion.id, { status: suggestionAction === 'accept' ? 'accepted' : 'rejected' });
       await fetchRequests();
@@ -255,7 +300,11 @@ const TutorRequests = () => {
       setShowSuggestedModal(false);
       setSelectedSuggestion(null);
       setSuggestionAction(null);
-    } catch (err) { alert(`Failed to respond: ${err.message}`); }
+    } catch (err) {
+      alert(`Failed to respond: ${err.message}`);
+    } finally {
+      setIsResponding(false);
+    }
   };
 
   const handleOpenAppeal = (req) => {
@@ -491,7 +540,7 @@ const TutorRequests = () => {
                 Confirmation Status
               </button>
             </div>
-            <button className="add-request-btn" onClick={() => setShowModal(true)}>+ Request</button>
+            <button className="add-request-btn" onClick={openRequestModal} disabled={!activeUnit}>+ Request</button>
           </div>
 
             {activeTab === 'cover' && (
@@ -631,14 +680,19 @@ const TutorRequests = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Unit <span className="required">*</span></label>
-                <select name="selectedUnit" value={formData.selectedUnit} onChange={handleInputChange}
-                  className={`form-select ${errors.selectedUnit ? 'error' : ''}`}>
-                  <option value="">
-                    {unitsLoading ? '— Loading units —' : '— Select a unit —'}
-                  </option>
-                  {allUnits.map(u => <option key={u.id} value={u.id}>{u.unitCode}</option>)}
-                </select>
+                <label>Unit</label>
+                <input
+                  type="text"
+                  className={`form-select ${errors.selectedUnit ? 'error' : ''}`}
+                  value={unitsLoading
+                    ? 'Loading...'
+                    : selectedUnitObj
+                      ? `${selectedUnitObj.unitCode}${unitTermLabel(selectedUnitObj) ? ` · ${unitTermLabel(selectedUnitObj)}` : ''}`
+                      : 'No active unit'}
+                  readOnly
+                  disabled
+                />
+                <p className="helper-text">This is your Active Unit. To request in another unit, switch it in the sidebar first.</p>
                 {errors.selectedUnit && <p className="error-message">{errors.selectedUnit}</p>}
               </div>
               <div className="form-group">
@@ -661,11 +715,17 @@ const TutorRequests = () => {
                   name="preferredSwapTo"
                   value={formData.preferredSwapTo}
                   onChange={handleInputChange}
-                  disabled={!formData.selectedUnit || isLoadingSessions}
+                  disabled={!selectedCurrentSession || isLoadingTargets}
                   className="form-select"
                 >
                   <option value="">
-                    {!formData.selectedUnit ? '— Select a unit first —' : isLoadingSessions ? '— Loading —' : '— Select a session —'}
+                    {!selectedCurrentSession
+                      ? '— Select your current session first —'
+                      : isLoadingTargets
+                        ? '— Loading —'
+                        : eligibleSwapTargets.length === 0
+                          ? `— No other ${selectedCurrentSession.sessionType || 'session'} with space —`
+                          : '— Select a session —'}
                   </option>
                   {eligibleSwapTargets
                     .map(s => (
@@ -674,6 +734,7 @@ const TutorRequests = () => {
                       </option>
                     ))}
                 </select>
+                {targetsError && <p className="error-message">{targetsError}</p>}
               </div>
               <div className="form-group">
                 <label>Reason for request <span className="required">*</span></label>
@@ -725,8 +786,9 @@ const TutorRequests = () => {
             <div className="modal-footer">
               <button className="btn-cancel" onClick={() => setShowSuggestedModal(false)}>Cancel</button>
               <button className={suggestionAction === 'accept' ? 'btn-submit' : 'btn-submit reject-btn'}
-                onClick={confirmSuggestionResponse}>
-                {suggestionAction === 'accept' ? 'Accept' : 'Reject'}
+                onClick={confirmSuggestionResponse}
+                disabled={isResponding}>
+                {isResponding ? 'Saving...' : suggestionAction === 'accept' ? 'Accept' : 'Reject'}
               </button>
             </div>
           </div>

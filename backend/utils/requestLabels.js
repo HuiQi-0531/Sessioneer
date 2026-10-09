@@ -123,7 +123,15 @@ const buildCoordinatorReviewNotification = (statusLower, status, unitCode, revie
 const REVIEW_STATUSES = new Set(['accepted', 'rejected', 'suggested']);
 const isValidReviewStatus = (statusLower) => REVIEW_STATUSES.has(statusLower);
 
+// "CAB201 (Semester 2, 2026)". The same code runs in several semesters, so
+// notices name the semester; otherwise a UC can't tell which unit to open.
+const unitLabelWithSemester = (unitCode, semester, year) => {
+  const term = [semester, year].filter(Boolean).join(', ');
+  return term ? `${unitCode} (${term})` : String(unitCode || '');
+};
+
 module.exports = {
+  unitLabelWithSemester,
   labelFromSessionValue,
   normaliseSessionLabel,
   getSessionComparableLabel,

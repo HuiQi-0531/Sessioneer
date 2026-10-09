@@ -42,7 +42,8 @@ const {
   buildSuggestionSessions,
   buildReviewEmailSubject,
   buildAdminReviewNotification,
-  isValidReviewStatus
+  isValidReviewStatus,
+  unitLabelWithSemester
 } = require('../utils/requestLabels');
 const { isBlank, endsAfterStart, getMissingAdminSessionFields: getMissingSessionFields } = require('../utils/sessionRules');
 const {
@@ -57,10 +58,12 @@ const {
 } = require('../utils/allocationRules');
 const { normaliseUnitCode, deleteUnitCascade } = require('../utils/unitRules');
 const { superTutorDowngradeError } = require('../utils/unitAccess');
+const { sameTermUnitIdsSql } = require('../utils/termRules');
 const { shouldApplyChange } = require('../utils/changeRequestRules');
 const {
   AllocationError,
   applyApprovedChangeRequest,
+  resolveSuggestedSession,
   assertSameSessionType,
   resolveSessionId
 } = require('../utils/applyChangeRequest');
@@ -1504,7 +1507,7 @@ router.patch('/requests/:id/review', async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { status, reviewNotes } = req.body;
+    const { status, reviewNotes, suggestedSessionId: bodySuggestedId } = req.body;
     const statusLower = String(status || '').trim().toLowerCase();
 
     if (!isValidReviewStatus(statusLower)) {
@@ -1520,12 +1523,11 @@ router.patch('/requests/:id/review', async (req, res) => {
     await client.query('BEGIN');
 
     let suggestedSessionId = existing.suggested_session_id;
-    if (statusLower === 'suggested' && reviewNotes) {
-      suggestedSessionId = await resolveSessionId(client, existing.unit_id, null, reviewNotes);
-      if (suggestedSessionId) {
-        const currentId = await resolveSessionId(client, existing.unit_id, existing.current_session_id, existing.current_session);
-        await assertSameSessionType(client, existing.unit_id, currentId, suggestedSessionId);
-      }
+    if (statusLower === 'suggested') {
+      suggestedSessionId = await resolveSuggestedSession(client, existing, {
+        suggestedSessionId: bodySuggestedId || null,
+        reviewNotes
+      });
     }
 
     // Approving must also move the tutor on the timetable (session_tutors),
@@ -1542,7 +1544,7 @@ router.patch('/requests/:id/review', async (req, res) => {
         review_notes = $2,
         reviewed_by_id = $3,
         reviewed_at = NOW(),
-        suggested_session_id = COALESCE($5, suggested_session_id)
+        suggested_session_id = CASE WHEN $6 THEN $5 ELSE suggested_session_id END
       WHERE id = $4
       RETURNING
         id,
@@ -1557,7 +1559,7 @@ router.patch('/requests/:id/review', async (req, res) => {
         tutor_id,
         unit_id
       `,
-      [statusLower, reviewNotes || '', req.user.id, id, suggestedSessionId || null]
+      [statusLower, reviewNotes || '', req.user.id, id, suggestedSessionId || null, statusLower === 'suggested']
     );
 
     await client.query('COMMIT');
@@ -1568,6 +1570,8 @@ router.patch('/requests/:id/review', async (req, res) => {
       SELECT
         un.unit_code,
         un.unit_name,
+        un.semester,
+        un.year,
         TRIM(CONCAT(tutor.name, ' ', COALESCE(tutor.last_name, ''))) AS tutor_name,
         tutor.email AS tutor_email
       FROM units un
@@ -1580,7 +1584,11 @@ router.patch('/requests/:id/review', async (req, res) => {
     const details = detailsResult.rows[0] || {};
     const unitCode = details.unit_code || 'your unit';
 
-    const { title, content } = buildAdminReviewNotification(statusLower, unitCode, reviewNotes);
+    const { title, content } = buildAdminReviewNotification(
+      statusLower,
+      details.unit_code ? unitLabelWithSemester(details.unit_code, details.semester, details.year) : unitCode,
+      reviewNotes
+    );
 
     if (updated.tutor_id) {
       await createNotification({
@@ -2015,7 +2023,8 @@ router.post('/sessions/:id/assignments', async (req, res) => {
       JOIN session_tutors st ON st.session_id = s.id
       JOIN units un ON un.id = s.unit_id
       WHERE s.id <> $1 AND st.tutor_id = $2 AND st.tutor_confirmed IS DISTINCT FROM false
-    `, [id, tutorId]);
+        AND s.unit_id IN ${sameTermUnitIdsSql('$3')}
+    `, [id, tutorId, session.unit_id]);
     const [overlap] = findOverlappingSessions(session, otherResult.rows);
     if (overlap) {
       throw sessionAssignmentError(409, `This staff member has an overlapping session in ${overlap.unit_code}`);

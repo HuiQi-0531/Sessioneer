@@ -1,4 +1,5 @@
 const express = require('express');
+const { sameTermUnitIdsSql } = require('../utils/termRules');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const {
@@ -131,6 +132,7 @@ router.get('/', verifyToken, async (req, res) => {
       WHERE st.tutor_confirmed = TRUE
         AND s.unit_id <> $1
         AND st.tutor_id = ANY($2::uuid[])
+        AND s.unit_id IN ${sameTermUnitIdsSql('$1')}
       `,
       [unit_id, grid.tutors.map(t => t.id)]
     );

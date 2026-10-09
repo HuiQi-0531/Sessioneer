@@ -100,14 +100,21 @@ const UCRequests = () => {
   const handleReject  = (request) => { setSelectedRequest(request); setShowRejectModal(true); };
 
   const formatSessionSuggestion = (session) => {
-    const time = [session.startTime, session.endTime].filter(Boolean).join(' - ');
+    // Database times come back as "11:00:00"; show and store them as "11:00".
+    const start = session.startTime ? String(session.startTime).slice(0, 5) : '';
+    const end = session.endTime ? String(session.endTime).slice(0, 5) : '';
+    const time = [start, end].filter(Boolean).join(' - ');
     const room = session.location || session.campus || 'Location TBC';
+    const typePrefix = session.sessionType ? `${session.sessionType} - ` : '';
     return {
       id: session.id,
+      sessionCode: session.sessionCode || null,
       day: session.day || 'TBC',
       time: time || 'Time TBC',
       room,
-      value: `${session.day || 'TBC'} ${time || 'Time TBC'} ${room}`,
+      // Same shape the admin page uses: "Tutorial - WED 11:00 - 12:00 | GP-P-103".
+      // This is the text the tutor sees as "UC Suggested".
+      value: `${session.sessionCode ? `${session.sessionCode} · ` : ''}${typePrefix}${session.day || 'TBC'} ${time || 'Time TBC'} | ${room}`,
       availabilityLabel: session.availabilityLabel || 'Available'
     };
   };
@@ -230,14 +237,18 @@ const UCRequests = () => {
 
   const finalizeSuggest = async () => {
     if (!selectedRequest || !selectedSession) return;
+    const chosen = availableSessions.find(session => session.value === selectedSession);
     try {
-      await ucAPI.reviewRequest(selectedRequest.id, 'suggested', selectedSession);
+      await ucAPI.reviewRequest(selectedRequest.id, 'suggested', selectedSession, chosen?.id || null);
       await fetchRequests();
       setShowSuggestConfirmModal(false);
       setSelectedRequest(null);
       setSelectedSession('');
       setAvailableSessions([]);
-    } catch (error) { console.error('Error suggesting session:', error); }
+    } catch (error) {
+      console.error('Error suggesting session:', error);
+      alert(error.message || 'Failed to suggest session');
+    }
   };
 
   const belongsToActiveUnit = (req) => {

@@ -9,6 +9,7 @@ const {
 const { createNotification, getUserDisplayName } = require('../utils/notify');
 const { noticeSessionUpdated, noticeTutorRemoved, loadNoticeUser } = require('../utils/reminders');
 const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { sameTermUnitIdsSql } = require('../utils/termRules');
 const { TUTOR_LIKE_ROLES, requiresSuperTutor } = require('../utils/roles');
 const { scoreCandidate, sortCandidates } = require('../utils/candidateScoring');
 const {
@@ -251,6 +252,74 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
   } catch (error) {
     console.error('Error fetching assigned sessions:', error);
     res.status(500).json({ error: 'Failed to fetch assigned sessions' });
+  }
+});
+
+/**
+ * GET /units/:unitId/sessions/swap-targets?currentSessionId=...
+ * For the tutor's "Preferred swap to" list. Works before the draft timetable
+ * is released, because it only returns what a tutor needs to pick a target:
+ * same session type as the session they hold, not the one they hold, and
+ * still has space. No tutor names or confirmation status are included.
+ */
+router.get('/swap-targets', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const currentSessionId = String(req.query.currentSessionId || '').trim();
+    if (!currentSessionId) {
+      return res.status(400).json({ error: 'currentSessionId is required' });
+    }
+
+    const current = await pool.query(
+      `SELECT s.id, s.session_type
+       FROM sessions s
+       JOIN session_tutors st ON st.session_id = s.id
+       WHERE s.id::text = $1 AND s.unit_id = $2 AND st.tutor_id = $3
+         AND st.tutor_confirmed IS DISTINCT FROM FALSE`,
+      [currentSessionId, unitId, req.user.id]
+    );
+    if (current.rows.length === 0) {
+      return res.status(403).json({ error: 'That session is not one of your sessions in this unit' });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT s.id, s.session_code, s.day, s.start_time, s.end_time, s.location, s.session_type
+      FROM sessions s
+      WHERE s.unit_id = $1
+        AND s.id <> $2
+        AND LOWER(TRIM(COALESCE(s.session_type, ''))) = LOWER(TRIM(COALESCE($3, '')))
+        AND NOT EXISTS (
+          SELECT 1 FROM session_tutors mine
+          WHERE mine.session_id = s.id AND mine.tutor_id = $4
+            AND mine.tutor_confirmed IS DISTINCT FROM FALSE
+        )
+        AND (
+          SELECT COUNT(*) FROM session_tutors st
+          WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
+        ) < COALESCE(s.required_tutors, 1)
+      ORDER BY
+        CASE s.day
+          WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3
+          WHEN 'THU' THEN 4 WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6 ELSE 7
+        END,
+        s.start_time
+      `,
+      [unitId, current.rows[0].id, current.rows[0].session_type, req.user.id]
+    );
+
+    res.json(result.rows.map(s => ({
+      id: s.id,
+      sessionCode: s.session_code || null,
+      day: s.day,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      location: s.location,
+      sessionType: s.session_type
+    })));
+  } catch (error) {
+    console.error('Error fetching swap targets:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions you can swap to' });
   }
 });
 
@@ -630,8 +699,9 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       JOIN session_tutors st ON st.session_id = s.id
       JOIN units un ON un.id = s.unit_id
       WHERE s.id != $1 AND st.tutor_confirmed IS DISTINCT FROM false
+        AND s.unit_id IN ${sameTermUnitIdsSql('$2')}
       `,
-      [sessionId]
+      [sessionId, unitId]
     );
 
     const activeCoversResult = await pool.query(ACTIVE_COVERS_SQL, [null]);
@@ -725,8 +795,9 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       JOIN session_tutors st ON st.session_id = s.id
       JOIN units un ON un.id = s.unit_id
       WHERE s.id != $1 AND st.tutor_id = $2 AND st.tutor_confirmed IS DISTINCT FROM false
+        AND s.unit_id IN ${sameTermUnitIdsSql('$3')}
       `,
-      [sessionId, tutorId]
+      [sessionId, tutorId, unitId]
     );
 
     const [conflictingSession] = findOverlappingSessions(session, otherSessionsResult.rows);
@@ -960,6 +1031,7 @@ router.patch('/:sessionId/confirm', verifyToken, requireRole('tutor', 'coordinat
         JOIN sessions s ON s.id = st.session_id
         JOIN units un ON un.id = s.unit_id
         WHERE st.tutor_id = $1 AND st.tutor_confirmed = TRUE AND s.id <> $2
+          AND s.unit_id IN ${sameTermUnitIdsSql('(SELECT unit_id FROM sessions WHERE id = $2)')}
         UNION ALL
         SELECT s.id, s.day, s.start_time, s.end_time, un.unit_code, cb.start_date, cb.end_date
         FROM cover_requests cr

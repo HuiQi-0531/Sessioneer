@@ -42,7 +42,7 @@ describe('applyApprovedChangeRequest (fake database)', () => {
       sessions: { B: { ...target, session_type: 'Lecture' } }, isSuper: true
     });
     await expect(applyApprovedChangeRequest(client, {
-      ...base, request_type: 'Session Swap', suggested_session_id: 'B', preferred_session_id: 'A'
+      ...base, status: 'Suggested', request_type: 'Session Swap', suggested_session_id: 'B', preferred_session_id: 'A'
     })).rejects.toThrow('same session type');
     expect(client.writes).toEqual([]);
   });
@@ -75,6 +75,38 @@ describe('applyApprovedChangeRequest (fake database)', () => {
     const client = makeClient({ tutorsBySession: { A: ['t1'], B: ['t2'] }, sessions: { B: target } });
     await expect(applyApprovedChangeRequest(client, { ...base, request_type: 'Session Swap', preferred_session_id: 'B' }))
       .rejects.toThrow('This session already has a tutor and is full');
+  });
+  test('BUG-8i: accepting a suggestion moves the tutor to the SUGGESTED session, not their preferred one', async () => {
+    const client = makeClient({
+      tutorsBySession: { A: ['t1'], B: [], C: [] },
+      sessions: { B: target, C: { ...target, id: 'C', day: 'THU' } }
+    });
+    await expect(applyApprovedChangeRequest(client, {
+      ...base, status: 'Suggested', request_type: 'Session Swap',
+      suggested_session_id: 'C', preferred_session_id: 'B'
+    })).resolves.toEqual({ action: 'moved', fromSessionId: 'A', toSessionId: 'C' });
+  });
+  test('BUG-8i: a suggestion that cannot be found is refused instead of falling back to the preferred session', async () => {
+    const client = makeClient({ tutorsBySession: { A: ['t1'], B: [] }, sessions: { B: target } });
+    await expect(applyApprovedChangeRequest(client, {
+      ...base, status: 'Suggested', request_type: 'Session Swap', preferred_session_id: 'B'
+    })).rejects.toThrow('suggested session could not be found');
+  });
+  test('BUG-8i: approving a Pending request ignores an old suggestion and uses the preferred session', async () => {
+    const client = makeClient({
+      tutorsBySession: { A: ['t1'], B: [], C: [] },
+      sessions: { B: target, C: { ...target, id: 'C', day: 'THU' } }
+    });
+    await expect(applyApprovedChangeRequest(client, {
+      ...base, status: 'Pending', request_type: 'Session Swap',
+      suggested_session_id: 'C', preferred_session_id: 'B'
+    })).resolves.toEqual({ action: 'moved', fromSessionId: 'A', toSessionId: 'B' });
+  });
+  test('BUG-8ii: the moved tutor is saved as confirmed, not "Awaiting response"', async () => {
+    const client = makeClient({ tutorsBySession: { A: ['t1'], B: [] }, sessions: { B: target } });
+    await applyApprovedChangeRequest(client, { ...base, request_type: 'Session Swap', preferred_session_id: 'B' });
+    const insert = client.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO session_tutors'));
+    expect(insert[1]).toEqual(['B', 't1', true]);
   });
   test('LG-231: a free target session moves the tutor', async () => {
     const client = makeClient({ tutorsBySession: { A: ['t1'], B: [] }, sessions: { B: target } });
