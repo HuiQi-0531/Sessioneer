@@ -73,7 +73,7 @@ export default function UCAvailability({ onSendReminder }) {
     setIsLoadingData(true);
     setLoadError("");
     try {
-      const data = await availabilityAPI.get(activeUnit.unitCode);
+      const data = await availabilityAPI.get(activeUnit.unitCode, activeUnit.id);
       setTutors(data.tutors ?? []);
       setAvailability(data.availability ?? {});
       setSubmissionStatus(data.submissionStatus ?? []);

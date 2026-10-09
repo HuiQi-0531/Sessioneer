@@ -208,7 +208,7 @@ const TutorAvailability = () => {
           // Same as before: check every open unit, first one with actual
           // submitted data wins and becomes the shared grid shown here.
           for (const unit of tutorUnits) {
-            const data = await availabilityAPI.get(unit.unitCode);
+            const data = await availabilityAPI.get(unit.unitCode, unit.id);
             const backendAvailability = hydrateTutorAvailability(data);
             const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
 
@@ -224,7 +224,7 @@ const TutorAvailability = () => {
           // has nothing yet, the grid starts blank (prefilled means
           // "prefilled with whatever's already saved for this unit",
           // which is nothing the first time).
-          const data = await availabilityAPI.get(selectedUnit.unitCode);
+          const data = await availabilityAPI.get(selectedUnit.unitCode, selectedUnit.id);
           const backendAvailability = hydrateTutorAvailability(data);
           const hasSubmittedAvailability = Object.keys(backendAvailability).length > 0;
 

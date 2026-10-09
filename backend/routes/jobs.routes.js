@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUnitCoordinatorSql } = require('../utils/unitAccess');
 const pool = require('../db');
 const { escapeHtml, sendEmail } = require('../utils/email');
 const { frontendUrl } = require('../utils/urls');
@@ -167,6 +168,7 @@ router.post('/availability-deadline-reminders', verifyCronSecret, async (req, re
         JOIN users u ON u.id = um.user_id
         WHERE um.unit_id = $1
           AND um.role IN ('tutor', 'super_tutor')
+          AND NOT ${isUnitCoordinatorSql('u.id', '$1')}
           AND u.email IS NOT NULL
           AND COALESCE(u.account_status, 'active') = 'active'
           AND NOT EXISTS (

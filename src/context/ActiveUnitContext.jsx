@@ -120,7 +120,7 @@ export const ActiveUnitProvider = ({ children }) => {
 
   useEffect(() => {
     if (!activeUnit?.unitCode) return;
-    availabilityAPI.prefetch(activeUnit.unitCode).catch(() => {
+    availabilityAPI.prefetch(activeUnit.unitCode, activeUnit.id).catch(() => {
       // Prefetch is only a speed improvement. The page itself will show errors if loading fails.
     });
   }, [activeUnit?.unitCode]);
@@ -162,7 +162,7 @@ export const ActiveUnitProvider = ({ children }) => {
     tutorDashboardAPI.prefetch().catch(() => {
       // Tutor Dashboard will show its own error/loading state if the real page load fails.
     });
-    availabilityAPI.prefetch(activeUnit.unitCode).catch(() => {
+    availabilityAPI.prefetch(activeUnit.unitCode, activeUnit.id).catch(() => {
       // Tutor Availability will show its own error/loading state if the real page load fails.
     });
     requestsAPI.prefetch().catch(() => {

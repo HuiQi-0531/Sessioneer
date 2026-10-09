@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { getCoordinatorUnitId, resolveUnitForUser } = require('../utils/unitAccess');
+const { getCoordinatorUnitId, resolveUnitForUser, isUnitCoordinatorSql } = require('../utils/unitAccess');
 
 const router = express.Router();
 
@@ -28,9 +28,17 @@ const tools = [
   }
 ];
 
-const listUnsubmittedTutors = async (unitCode, coordinatorId) => {
-  // The same code can exist in several semesters; prefer the coordinator's own.
-  const unit = await resolveUnitForUser({ unitCode }, coordinatorId);
+const listUnsubmittedTutors = async (unitCode, coordinatorId, activeUnitId) => {
+  // The same code can exist in several semesters. If the UC is looking at a
+  // unit with this code right now, use that one; otherwise prefer their newest.
+  let unit = null;
+  if (activeUnitId) {
+    const active = await resolveUnitForUser({ unitId: activeUnitId }, coordinatorId);
+    if (active && String(active.unit_code).trim().toUpperCase() === String(unitCode || '').trim().toUpperCase()) {
+      unit = active;
+    }
+  }
+  if (!unit) unit = await resolveUnitForUser({ unitCode }, coordinatorId);
   if (!unit) return { error: `Couldn't find a unit called "${unitCode}"` };
 
   const ownedUnitId = await getCoordinatorUnitId(unit.id, coordinatorId);
@@ -46,6 +54,7 @@ const listUnsubmittedTutors = async (unitCode, coordinatorId) => {
       SELECT DISTINCT tutor_id FROM availability WHERE is_submitted = TRUE AND unit_id = $1
     ) sub ON sub.tutor_id = u.id
     WHERE sub.tutor_id IS NULL
+      AND NOT ${isUnitCoordinatorSql('u.id', '$1')}
     ORDER BY name
     `,
     [unit.id]
@@ -55,7 +64,7 @@ const listUnsubmittedTutors = async (unitCode, coordinatorId) => {
 };
 
 const executeTool = async (name, args, req) => {
-  if (name === 'list_unsubmitted_tutors') return listUnsubmittedTutors(args.unitCode, req.user.id);
+  if (name === 'list_unsubmitted_tutors') return listUnsubmittedTutors(args.unitCode, req.user.id, req.body.activeUnitId);
   return { error: `Unknown tool: ${name}` };
 };
 

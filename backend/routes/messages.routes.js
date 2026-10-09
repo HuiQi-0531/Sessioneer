@@ -131,11 +131,12 @@ const uploadAttachment = async (file, senderId, req) => {
 };
 
 const canAccessUnit = async (user, unitId) => {
-  if (user.role === 'coordinator') {
-    return !!(await getCoordinatorUnitId(unitId, user.id));
+  if (user.role === 'coordinator' && await getCoordinatorUnitId(unitId, user.id)) {
+    return true;
   }
 
-  if (user.role === 'tutor') {
+  // A coordinator account can also be a tutor on another unit.
+  if (user.role === 'tutor' || user.role === 'coordinator') {
     const result = await pool.query(
       `
       SELECT 1 WHERE EXISTS (

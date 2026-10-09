@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
+import { pickMessageUnits, messageUnitLabel, initialMessageUnitId } from '../utils/messageUnits';
 import { getSocket } from '../utils/socket';
 import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
@@ -18,7 +19,7 @@ const TutorMessages = () => {
 
 
   const messageUnits = React.useMemo(
-    () => allUnits.filter(unit => unitHasTutorAccess(unit) && unit.isActive),
+    () => pickMessageUnits(allUnits, unitHasTutorAccess),
     [allUnits]
   );
 
@@ -56,10 +57,11 @@ const TutorMessages = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedUnitId && activeUnit) {
-      setSelectedUnitId(activeUnit.id);
+    if (!selectedUnitId) {
+      const firstId = initialMessageUnitId(messageUnits, activeUnit);
+      if (firstId) setSelectedUnitId(firstId);
     }
-  }, [activeUnit, selectedUnitId]);
+  }, [activeUnit, messageUnits, selectedUnitId]);
 
   const loadContacts = useCallback(async (unitId) => {
     try {
@@ -381,7 +383,7 @@ const TutorMessages = () => {
                 className={`msg-unit-item ${selectedUnitId === unit.id ? 'active' : ''}`}
                 onClick={() => setSelectedUnitId(unit.id)}
               >
-                #{unit.unitCode}
+                {messageUnitLabel(unit, messageUnits)}
               </div>
             ))}
           </div>
@@ -421,8 +423,8 @@ const TutorMessages = () => {
               <>
                 <div className="msg-chat-header" onClick={openProfile} style={{ cursor: chatMode === 'direct' ? 'pointer' : 'default' }}>
                   {chatMode === 'group'
-                    ? `#${selectedUnit?.unitCode} Group Chat`
-                    : `#${selectedUnit?.unitCode} - ${selectedContact?.name}`}
+                    ? `${messageUnitLabel(selectedUnit, messageUnits)} Group Chat`
+                    : `${messageUnitLabel(selectedUnit, messageUnits)} - ${selectedContact?.name}`}
                 </div>
                 <div className="msg-thread">
                   {thread.map(m => (

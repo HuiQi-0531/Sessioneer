@@ -33,24 +33,28 @@ const withTimeout = async (request, timeoutMessage = 'Request timed out. Please 
 const AVAILABILITY_CACHE_TTL_MS = 30000;
 const availabilityCache = new Map();
 
-const getAvailabilityCacheKey = (unitCode) => {
+// The same unit code can exist more than once (every semester, or two
+// coordinators both running "CAB201"), so the unit id is used when known.
+const getAvailabilityCacheKey = (unitCode, unitId) => {
   const savedUser = localStorage.getItem('currentUser');
   const currentUser = savedUser ? JSON.parse(savedUser) : null;
   const viewRole = localStorage.getItem('activeViewRole') || currentUser?.role || 'unknown';
   const userId = currentUser?.id || currentUser?.email || 'anonymous';
-  const unit = String(unitCode || '').trim().toUpperCase();
+  const unit = unitId ? `id:${unitId}` : String(unitCode || '').trim().toUpperCase();
 
   return `${unit}:${userId}:${viewRole}`;
 };
 
-const clearAvailabilityCache = (unitCode) => {
+const clearAvailabilityCache = () => {
   clearDashboardCache();
-  if (unitCode) {
-    availabilityCache.delete(getAvailabilityCacheKey(unitCode));
-    return;
-  }
   availabilityCache.clear();
 };
+
+const availabilityUrl = (unitCode, unitId) => (
+  unitId
+    ? `${API_URL}/availability?unitId=${encodeURIComponent(unitId)}`
+    : `${API_URL}/availability?unitCode=${encodeURIComponent(unitCode)}`
+);
 
 const REQUESTS_CACHE_TTL_MS = 30000;
 let requestsCache = null;
@@ -459,8 +463,9 @@ reviewRequest: async (
 
 };
 export const availabilityAPI = {
-  get: async (unitCode) => {
-    const cacheKey = getAvailabilityCacheKey(unitCode);
+  // unitId is preferred; unitCode alone can match the wrong semester's unit.
+  get: async (unitCode, unitId) => {
+    const cacheKey = getAvailabilityCacheKey(unitCode, unitId);
     const cached = availabilityCache.get(cacheKey);
     const now = Date.now();
 
@@ -472,7 +477,7 @@ export const availabilityAPI = {
       return cached.promise;
     }
 
-    const promise = fetch(`${API_URL}/availability?unitCode=${unitCode}`, {
+    const promise = fetch(availabilityUrl(unitCode, unitId), {
       headers: authHeader()
     })
       .then(async (response) => {
@@ -490,20 +495,20 @@ export const availabilityAPI = {
     return promise;
   },
 
-  getFresh: async (unitCode) => {
-    clearAvailabilityCache(unitCode);
-    const response = await fetch(`${API_URL}/availability?unitCode=${unitCode}`, {
+  getFresh: async (unitCode, unitId) => {
+    clearAvailabilityCache();
+    const response = await fetch(availabilityUrl(unitCode, unitId), {
       headers: authHeader()
     });
     if (!response.ok) throw new Error('Failed to fetch availability');
     const data = await response.json();
-    availabilityCache.set(getAvailabilityCacheKey(unitCode), { data, createdAt: Date.now() });
+    availabilityCache.set(getAvailabilityCacheKey(unitCode, unitId), { data, createdAt: Date.now() });
     return data;
   },
 
-  prefetch: async (unitCode) => {
-    if (!unitCode) return null;
-    return availabilityAPI.get(unitCode);
+  prefetch: async (unitCode, unitId) => {
+    if (!unitCode && !unitId) return null;
+    return availabilityAPI.get(unitCode, unitId);
   },
 
   // unitId is optional but preferred: the same unit code can exist in
@@ -523,7 +528,7 @@ export const availabilityAPI = {
       throw new Error('Failed to submit availability');
     }
 
-    clearAvailabilityCache(unitCode);
+    clearAvailabilityCache();
     return response.json();
   },
 
@@ -541,7 +546,7 @@ export const availabilityAPI = {
       error.status = response.status;
       throw error;
     }
-    if (unitCode) clearAvailabilityCache(unitCode);
+    clearAvailabilityCache();
     return data;
   }
 };
@@ -1831,11 +1836,11 @@ export const notificationsAPI = {
   }
 };
 export const botAPI = {
-  chat: async (message, history = []) => {
+  chat: async (message, history = [], activeUnitId = null) => {
     const response = await fetch(`${API_URL}/bot/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ message, history })
+      body: JSON.stringify({ message, history, activeUnitId: activeUnitId || undefined })
     });
     if (!response.ok) throw new Error('Failed to reach bot');
     return response.json();

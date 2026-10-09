@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { getCoordinatorUnitId } = require('../utils/unitAccess');
+const { getCoordinatorUnitId, isUnitCoordinatorSql } = require('../utils/unitAccess');
 
 // mergeParams lets this router read :unitId from the parent route in server.js
 const router = express.Router({ mergeParams: true });
@@ -57,7 +57,7 @@ const buildContact = async (currentUserId, otherUserId, name, email, avatarUrl =
 
 /**
  * GET /units/:unitId/messages/contacts
- * Coordinator: every tutor, as a potential 1-on-1 contact.
+ * Coordinator: every tutor plus the unit's other coordinators.
  * Tutor: the unit's coordinator, plus every other tutor linked to the
  * same unit (peer-to-peer messaging).
  */
@@ -65,23 +65,29 @@ router.get('/contacts', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
-        if (req.user.role === 'coordinator') {
-      const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
-      if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+    // Branch on the user's role in THIS unit: a coordinator account can be
+    // a tutor on someone else's unit.
+    const ownedUnitId = req.user.role === 'coordinator'
+      ? await getOwnedUnitId(unitId, req.user.id)
+      : null;
+
+    if (ownedUnitId) {
 
       const tutorsResult = await pool.query(
         `
         SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url
         FROM users u
-        WHERE u.role = 'tutor'
+        WHERE u.id != $2
           AND (
-            EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role IN ('tutor', 'super_tutor'))
+            -- the unit's other coordinators (co-UCs)
+            ${isUnitCoordinatorSql('u.id', '$1')}
+            OR EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $1 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $1)
             OR EXISTS (SELECT 1 FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = u.id AND s.unit_id = $1)
           )
         ORDER BY name
         `,
-        [unitId]
+        [unitId, req.user.id]
       );
 
       const contacts = await Promise.all(
@@ -90,9 +96,13 @@ router.get('/contacts', verifyToken, async (req, res) => {
       return res.json(contacts);
     }
 
-    if (req.user.role === 'tutor') {
+    if (req.user.role === 'tutor' || req.user.role === 'coordinator') {
       const linked = await isTutorLinkedToUnit(req.user.id, unitId);
-      if (!linked) return res.status(403).json({ error: 'You are not linked to this unit' });
+      if (!linked) {
+        return req.user.role === 'coordinator'
+          ? res.status(404).json({ error: 'Unit not found' })
+          : res.status(403).json({ error: 'You are not linked to this unit' });
+      }
 
       const coordinatorsResult = await pool.query(
         `
@@ -119,8 +129,8 @@ router.get('/contacts', verifyToken, async (req, res) => {
   `
         SELECT DISTINCT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name, u.email, u.avatar_url
         FROM users u
-        WHERE u.role = 'tutor'
-          AND u.id != $1
+        WHERE u.id != $1
+          AND NOT ${isUnitCoordinatorSql('u.id', '$2')}
           AND (
             EXISTS (SELECT 1 FROM unit_memberships um WHERE um.user_id = u.id AND um.unit_id = $2 AND um.role IN ('tutor', 'super_tutor'))
             OR EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.unit_id = $2)
@@ -158,9 +168,8 @@ router.get('/group-unread-count', verifyToken, async (req, res) => {
   try {
     const { unitId } = req.params;
 
-    const canSeeChat = req.user.role === 'coordinator'
-      ? !!(await getOwnedUnitId(unitId, req.user.id))
-      : req.user.role === 'tutor' && await isTutorLinkedToUnit(req.user.id, unitId);
+    const canSeeChat = (req.user.role === 'coordinator' && !!(await getOwnedUnitId(unitId, req.user.id)))
+      || ((req.user.role === 'tutor' || req.user.role === 'coordinator') && await isTutorLinkedToUnit(req.user.id, unitId));
     if (!canSeeChat) {
       return res.status(403).json({ error: 'You do not have access to this unit chat' });
     }

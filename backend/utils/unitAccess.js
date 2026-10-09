@@ -44,6 +44,18 @@ const LINKED_UNITS_SQL = `
   SELECT s.unit_id FROM session_tutors st JOIN sessions s ON s.id = st.session_id WHERE st.tutor_id = $1
 `;
 
+// SQL condition: the user in column `userCol` is a coordinator of the unit
+// in `unitParam` (the main UC or an added coordinator). UCs no longer submit
+// availability, so they are left out of the unit's tutor lists even if they
+// still have an old tutor membership on the same unit.
+const isUnitCoordinatorSql = (userCol, unitParam) => `(
+  EXISTS (SELECT 1 FROM units cu WHERE cu.id = ${unitParam} AND cu.unit_coordinator_id = ${userCol})
+  OR EXISTS (
+    SELECT 1 FROM unit_memberships cm
+    WHERE cm.unit_id = ${unitParam} AND cm.user_id = ${userCol} AND cm.role = 'coordinator'
+  )
+)`;
+
 // True when the user belongs to the unit in any role.
 const isUserLinkedToUnit = async (userId, unitId, clientOrPool = pool) => {
   if (!userId || !unitId) return false;
@@ -144,5 +156,6 @@ module.exports = {
   isUserLinkedToUnit,
   shareAnyUnit,
   superTutorDowngradeError,
+  isUnitCoordinatorSql,
   LINKED_UNITS_SQL
 };

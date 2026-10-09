@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { createNotification } = require('../utils/notify');
-const { ensureUnitMembership, getCoordinatorUnitId } = require('../utils/unitAccess');
+const { ensureUnitMembership, getCoordinatorUnitId, isUnitCoordinatorSql } = require('../utils/unitAccess');
 const { validateTeachingPeriod, resolveTeachingPeriodUpdate } = require('../utils/reminderRules');
 
 const router = express.Router();
@@ -805,12 +805,15 @@ router.post('/:id/duplicate', verifyToken, requireRole('coordinator'), async (re
       await client.query(
         `
         INSERT INTO unit_memberships (unit_id, user_id, role)
-        SELECT $1, user_id, role
-        FROM unit_memberships
-        WHERE unit_id = $2 AND role IN ('tutor', 'super_tutor')
+        SELECT $1, src.user_id, src.role
+        FROM unit_memberships src
+        WHERE src.unit_id = $2 AND src.role IN ('tutor', 'super_tutor')
+          -- leftover tutor rows of the unit's coordinators are not copied
+          AND NOT ${isUnitCoordinatorSql('src.user_id', '$2')}
+          AND src.user_id <> $3
         ON CONFLICT (unit_id, user_id, role) DO NOTHING
         `,
-        [newUnitId, id]
+        [newUnitId, id, req.user.id]
       );
 
       // Copy the timetable only. Assignments live in session_tutors and are

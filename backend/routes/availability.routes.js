@@ -5,6 +5,7 @@ const {
   getCoordinatorUnitId,
   isTutorLinkedToUnit,
   isUserLinkedToUnit,
+  isUnitCoordinatorSql,
   resolveUnitForUser
 } = require('../utils/unitAccess');
 const {
@@ -53,7 +54,10 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     const tutorParams = hasCoordinatorAccess ? [unit_id] : [req.user.id, unit_id];
-    const tutorWhere = hasCoordinatorAccess ? '' : 'AND u.id = $1';
+    // The unit's own coordinators are not shown as tutors here.
+    const tutorWhere = hasCoordinatorAccess
+      ? `AND NOT ${isUnitCoordinatorSql('u.id', '$1')}`
+      : 'AND u.id = $1';
     const membershipUnitParam = hasCoordinatorAccess ? '$1' : '$2';
     const availabilityScope = hasCoordinatorAccess
       ? `tutor_id IN (
@@ -180,6 +184,11 @@ router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (
       return res.status(403).json({ error: 'You are not part of this unit' });
     }
 
+    // UCs no longer submit availability for a unit they coordinate.
+    if (await getCoordinatorUnitId(unit_id, tutor_id, client)) {
+      return res.status(403).json({ error: 'Unit coordinators do not submit availability for their own unit.' });
+    }
+
     if (isAvailabilityLocked(unit)) {
       return res.status(409).json({ error: 'Availability submissions are closed for this unit.' });
     }
@@ -261,6 +270,7 @@ router.post('/reminders', verifyToken, requireRole('coordinator'), async (req, r
           SELECT 1 FROM unit_memberships um
           WHERE um.unit_id = $1 AND um.user_id = u.id AND um.role IN ('tutor', 'super_tutor')
         )
+        AND NOT ${isUnitCoordinatorSql('u.id', '$1')}
       `,
       [unitId, tutorId]
     );

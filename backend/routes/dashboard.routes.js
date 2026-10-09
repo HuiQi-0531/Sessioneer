@@ -1,4 +1,5 @@
 const express = require('express');
+const { isUnitCoordinatorSql } = require('../utils/unitAccess');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { isUnitActive } = require('../utils/normalise');
@@ -133,7 +134,9 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       );
   
       const submittedTutorsResult = await pool.query(
-        'SELECT COUNT(DISTINCT tutor_id) FROM availability WHERE unit_id = $1 AND is_submitted = TRUE',
+        `SELECT COUNT(DISTINCT a.tutor_id) FROM availability a
+         WHERE a.unit_id = $1 AND a.is_submitted = TRUE
+           AND NOT ${isUnitCoordinatorSql('a.tutor_id', '$1')}`,
         [unit.id]
       );
 

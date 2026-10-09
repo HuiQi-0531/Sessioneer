@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send } from 'lucide-react';
 import { botAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/BotWidget.css';
 
 const BotWidget = () => {
+  const { activeUnit } = useActiveUnit();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content }
   const [input, setInput] = useState('');
@@ -31,7 +33,7 @@ const BotWidget = () => {
 
     try {
       // history = everything except the message we're about to send (backend adds it)
-      const { reply } = await botAPI.chat(text, messages);
+      const { reply } = await botAPI.chat(text, messages, activeUnit?.id);
       setMessages([...nextMessages, { role: 'assistant', content: reply }]);
     } catch (err) {
       setMessages([...nextMessages, { role: 'assistant', content: "Couldn't reach the bot - try again in a bit." }]);
