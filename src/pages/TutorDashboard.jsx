@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock, ListChecks, RefreshCw, MessageSquare, UserCog } from 'lucide-react';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
+import { useActiveUnit } from '../context/ActiveUnitContext';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { formatTimeAgo } from '../utils/time';
@@ -18,6 +19,8 @@ const TutorDashboard = () => {
     return savedUser ? JSON.parse(savedUser) : null;
   }, []);
   const displayName = getDisplayName(currentUser);
+  const { activeUnit, isLoading: unitLoading } = useActiveUnit();
+  const activeUnitId = activeUnit?.id || null;
 
   const [summary, setSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -25,21 +28,21 @@ const TutorDashboard = () => {
   
 
   useEffect(() => {
-    loadSummary();
     loadNotifications();
   }, []);
 
-  const loadSummary = async () => {
+  // Cards are for the unit picked in the sidebar, so reload when it changes.
+  // `stale` stops a slow reply for the previous unit from overwriting the new one.
+  useEffect(() => {
+    if (unitLoading) return undefined;
+    let stale = false;
     setIsLoadingSummary(true);
-    try {
-      const data = await tutorDashboardAPI.getSummary();
-      setSummary(data);
-    } catch (err) {
-      console.error('Error loading dashboard summary:', err);
-    } finally {
-      setIsLoadingSummary(false);
-    }
-  };
+    tutorDashboardAPI.getSummary(activeUnitId)
+      .then(data => { if (!stale) setSummary(data); })
+      .catch(err => console.error('Error loading dashboard summary:', err))
+      .finally(() => { if (!stale) setIsLoadingSummary(false); });
+    return () => { stale = true; };
+  }, [unitLoading, activeUnitId]);
 
   const loadNotifications = async () => {
     try {

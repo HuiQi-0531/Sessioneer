@@ -4,6 +4,8 @@ const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { isUnitActive } = require('../utils/normalise');
 const { countDashboardUnits } = require('../utils/dashboardRules');
+const { isUuid } = require('../utils/adminRules');
+
 
 const router = express.Router();
 
@@ -19,6 +21,10 @@ const router = express.Router();
 router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const tutorId = req.user.id;
+    const unitId = req.query.unitId ? String(req.query.unitId).toLowerCase() : null;
+    if (unitId && !isUuid(unitId)) {
+      return res.status(400).json({ error: 'Invalid unit ID' });
+    }
 
     const unitsResult = await pool.query(
       `
@@ -67,18 +73,30 @@ router.get('/tutor/dashboard-summary', verifyToken, requireRole('tutor', 'coordi
       };
     }));
 
+    // The cards follow the Active Unit picked in the sidebar. Without a unitId
+    // they fall back to every unit, which mixes semesters together.
+    const unitFilter = unitId ? 'AND s.unit_id = $2' : '';
+    const params = unitId ? [tutorId, unitId] : [tutorId];
+
     const totalSessionsResult = await pool.query(
-      `SELECT COUNT(*) FROM session_tutors
-       WHERE tutor_id = $1 AND tutor_confirmed IS DISTINCT FROM FALSE`,
-      [tutorId]
+      `SELECT COUNT(*) FROM session_tutors st
+       JOIN sessions s ON s.id = st.session_id
+       WHERE st.tutor_id = $1 AND st.tutor_confirmed IS DISTINCT FROM FALSE ${unitFilter}`,
+      params
     );
     const confirmedSessionsResult = await pool.query(
-      'SELECT COUNT(*) FROM session_tutors WHERE tutor_id = $1 AND tutor_confirmed = TRUE',
-      [tutorId]
+      `SELECT COUNT(*) FROM session_tutors st
+       JOIN sessions s ON s.id = st.session_id
+       WHERE st.tutor_id = $1 AND st.tutor_confirmed = TRUE ${unitFilter}`,
+      params
     );
+    // Same set as the "Pending Status" tab on the Requests page: still waiting
+    // on the coordinator (Pending) or waiting on the tutor (Suggested).
     const pendingRequestsResult = await pool.query(
-      "SELECT COUNT(*) FROM change_requests WHERE tutor_id = $1 AND status = 'Pending'",
-      [tutorId]
+      `SELECT COUNT(*) FROM change_requests
+       WHERE tutor_id = $1 AND LOWER(status) IN ('pending', 'suggested')
+       ${unitId ? 'AND unit_id = $2' : ''}`,
+      params
     );
 
     res.json({

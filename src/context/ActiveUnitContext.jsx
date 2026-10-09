@@ -159,7 +159,7 @@ export const ActiveUnitProvider = ({ children }) => {
     sessionsAPI.getMyAssigned(activeUnit.id).catch(() => {
       // Tutor Schedule will show its own error/loading state if the real page load fails.
     });
-    tutorDashboardAPI.prefetch().catch(() => {
+    tutorDashboardAPI.prefetch(activeUnit.id).catch(() => {
       // Tutor Dashboard will show its own error/loading state if the real page load fails.
     });
     availabilityAPI.prefetch(activeUnit.unitCode, activeUnit.id).catch(() => {

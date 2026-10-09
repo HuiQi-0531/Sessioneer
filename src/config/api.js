@@ -1028,37 +1028,43 @@ export const ucDashboardAPI = {
 };
 
 export const tutorDashboardAPI = {
-  getSummary: async () => {
+  // The cards are for one unit (the Active Unit), so the cache is per unit too.
+  getSummary: async (unitId = null) => {
     const now = Date.now();
+    const key = String(unitId || '');
+    const cached = tutorDashboardCache?.key === key ? tutorDashboardCache : null;
 
-    if (tutorDashboardCache?.data && now - tutorDashboardCache.updatedAt < DASHBOARD_CACHE_TTL_MS) {
-      return tutorDashboardCache.data;
+    if (cached?.data && now - cached.updatedAt < DASHBOARD_CACHE_TTL_MS) {
+      return cached.data;
     }
 
-    if (tutorDashboardCache?.promise) {
-      return tutorDashboardCache.promise;
+    if (cached?.promise) {
+      return cached.promise;
     }
 
-    const promise = fetch(`${API_URL}/tutor/dashboard-summary`, {
+    const query = unitId ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    const promise = fetch(`${API_URL}/tutor/dashboard-summary${query}`, {
       headers: authHeader()
     })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to fetch dashboard summary');
-        tutorDashboardCache = { data, updatedAt: Date.now() };
+        if (tutorDashboardCache?.key === key) {
+          tutorDashboardCache = { key, data, updatedAt: Date.now() };
+        }
         return data;
       })
       .catch((error) => {
-        tutorDashboardCache = null;
+        if (tutorDashboardCache?.key === key) tutorDashboardCache = null;
         throw error;
       });
 
-    tutorDashboardCache = { promise, updatedAt: now };
+    tutorDashboardCache = { key, promise, updatedAt: now };
     return promise;
   },
 
-  prefetch: async () => {
-    return tutorDashboardAPI.getSummary();
+  prefetch: async (unitId = null) => {
+    return tutorDashboardAPI.getSummary(unitId);
   }
 };
 
