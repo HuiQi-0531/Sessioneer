@@ -156,3 +156,4 @@ GitHub > repository **Settings** > **Branches** (or **Rules** > **Rulesets**) > 
 - Optionally: require branches to be up to date before merging, and do not allow bypassing the rules.
 
 To demonstrate it: open a pull request that breaks one test (the check goes red and **Merge** is blocked), then push a fix (the check goes green and the PR can be merged after one approval).
+
