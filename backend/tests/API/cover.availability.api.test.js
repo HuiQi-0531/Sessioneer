@@ -10,9 +10,18 @@ const fromToday = (days) => { const d = new Date(); d.setDate(d.getDate() + days
 const START = fromToday(1);
 const END = fromToday(14);
 
-const broadcast = (ctx, sessionIds, extra = {}) => api('post', '/uc/cover-requests', ctx.tokens.uc, {
-  sessionIds, reason: 'away', startDate: START, endDate: END, ...extra
-});
+// Only a session the tutor has ACCEPTED can be put up for cover (bug 17),
+// so the away tutor accepts their session first.
+const acceptAll = (sessionIds) => query(
+  'UPDATE session_tutors SET tutor_confirmed = TRUE WHERE session_id = ANY($1::uuid[]) AND tutor_confirmed IS NULL',
+  [sessionIds]
+);
+const broadcast = async (ctx, sessionIds, extra = {}) => {
+  await acceptAll(sessionIds);
+  return api('post', '/uc/cover-requests', ctx.tokens.uc, {
+    sessionIds, reason: 'away', startDate: START, endDate: END, ...extra
+  });
+};
 const coverId = async (ctx, sessionId, extra) => (await broadcast(ctx, [sessionId], extra)).body.requests[0].id;
 const timetableRow = async (ctx, sessionId) =>
   (await api('get', `/units/${ctx.unitA.id}/sessions`, ctx.tokens.uc)).body.find(s => s.id === sessionId);
@@ -46,6 +55,19 @@ defineApiCases('API cover: broadcast', (add) => {
     expect(named.status).toBe(201);
     const row = (await query('SELECT original_tutor_id FROM cover_requests WHERE id = $1', [named.body.requests[0].id])).rows[0];
     expect(row.original_tutor_id).toBe(ctx.u.other.id);
+  });
+  add('BUG-17 a session the tutor has not accepted yet cannot be put up for cover', async (ctx) => {
+    // ctx.s.held: the tutor is assigned but has not answered (tutor_confirmed NULL).
+    const res = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
+      sessionIds: [ctx.s.held], reason: 'away', startDate: START, endDate: END
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/not accepted/);
+    const named = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
+      sessionIds: [ctx.s.held], reason: 'away', startDate: START, endDate: END, originalTutorId: ctx.u.tutor.id
+    });
+    expect(named.status).toBe(409);
+    expect((await query('SELECT COUNT(*)::int AS n FROM cover_requests')).rows[0].n).toBe(0);
   });
   add('API-C06 naming a tutor who does not hold the session is refused', async (ctx) => {
     expect((await broadcast(ctx, [ctx.s.held], { originalTutorId: ctx.u.super.id })).status).toBe(400);

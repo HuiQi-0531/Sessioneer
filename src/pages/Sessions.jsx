@@ -493,15 +493,20 @@ const Sessions = () => {
     </div>
   );
 
-  // Every tutor who currently has at least one session, for the "who's out" dropdown.
+  // Bug 17: only sessions a tutor has ACCEPTED can be put up for cover. A
+  // tutor who is still "awaiting response" may decline, so they are not listed.
+  const acceptedTutors = (s) => (Array.isArray(s.tutors) ? s.tutors : []).filter(t => t.confirmed === true);
   const tutorsWithSessions = Array.from(
     new Map(
-      sessions.flatMap(s => (Array.isArray(s.tutors) ? s.tutors : []).map(t => [t.tutorId, t.tutorName]))
+      sessions.flatMap(s => acceptedTutors(s).map(t => [t.tutorId, t.tutorName]))
     ).entries()
   ).map(([id, name]) => ({ id, name }));
+  const hasUnacceptedAssignments = sessions.some(s =>
+    (Array.isArray(s.tutors) ? s.tutors : []).some(t => t.confirmed !== true)
+  );
 
   const tutorSessions = sessions.filter(s =>
-    (Array.isArray(s.tutors) ? s.tutors : []).some(t => t.tutorId === coverTutorId)
+    acceptedTutors(s).some(t => t.tutorId === coverTutorId)
   );
   const coverSelectedSessions = tutorSessions.filter(s => coverSelectedIds.has(s.id));
   const enrolmentSize = Number(activeUnit?.enrolmentSize || 0);
@@ -900,6 +905,9 @@ const Sessions = () => {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
+              {hasUnacceptedAssignments && (
+                <p className="ss-cover-empty">Only sessions the tutor has accepted are listed. A session still awaiting their response can be reassigned instead.</p>
+              )}
             </div>
 
             {coverTutorId && (

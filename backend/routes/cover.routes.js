@@ -125,10 +125,17 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     const sessionsResult = await client.query(
       `
       SELECT s.id, s.unit_id, s.day, s.start_time, s.end_time, s.location, un.unit_code,
+             -- Bug 17: only a tutor who has ACCEPTED the session can be covered.
              COALESCE(
-               ARRAY_AGG(st.tutor_id) FILTER (WHERE st.tutor_confirmed IS DISTINCT FROM FALSE),
+               ARRAY_AGG(st.tutor_id) FILTER (WHERE st.tutor_confirmed = TRUE),
                '{}'
-             ) AS active_tutor_ids
+             ) AS active_tutor_ids,
+             COALESCE(
+               -- tutor_id IS NOT NULL: with no tutors at all, the LEFT JOIN row
+               -- also has tutor_confirmed NULL and must not count as "pending".
+               ARRAY_AGG(st.tutor_id) FILTER (WHERE st.tutor_id IS NOT NULL AND st.tutor_confirmed IS NULL),
+               '{}'
+             ) AS pending_tutor_ids
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
       LEFT JOIN session_tutors st ON st.session_id = s.id
@@ -153,6 +160,18 @@ router.post('/uc/cover-requests', verifyToken, requireRole('coordinator'), async
     }
 
     const unitCode = sessionsResult.rows[0].unit_code;
+
+    // Bug 17: a session whose tutor hasn't accepted it yet can't be put up
+    // for cover - the tutor may still decline it, and it isn't theirs yet.
+    const notAccepted = sessionsResult.rows.find(s =>
+      (originalTutorId && (s.pending_tutor_ids || []).includes(originalTutorId)) ||
+      (!originalTutorId && (s.active_tutor_ids || []).length === 0 && (s.pending_tutor_ids || []).length > 0)
+    );
+    if (notAccepted) {
+      return res.status(409).json({
+        error: 'This tutor has not accepted that session yet, so it cannot be put up for cover. Reassign it instead.'
+      });
+    }
 
     // Who is away is read from session_tutors (the one assignment table).
     const originals = resolveOriginalTutors(sessionsResult.rows, originalTutorId);

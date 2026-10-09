@@ -134,6 +134,13 @@ describe('Integration workflows', () => {
   test('INT-04 cover from start to finish: broadcast, claim, everyone sees the cover, then it expires', async () => {
     const start = fromToday(1);
     const end = fromToday(8);
+    // Only an accepted session can be put up for cover (bug 17), and an
+    // unanswered one is refused.
+    const early = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
+      sessionIds: [ctx.s.held], reason: 'conference', startDate: start, endDate: end, originalTutorId: ctx.u.tutor.id
+    });
+    expect(early.status).toBe(409);
+    expect((await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.held}/confirm`, ctx.tokens.tutor, { confirmed: true })).status).toBe(200);
     // The frontend payload (with dates and the away tutor).
     const sent = await api('post', '/uc/cover-requests', ctx.tokens.uc, {
       sessionIds: [ctx.s.held], reason: 'conference', startDate: start, endDate: end, originalTutorId: ctx.u.tutor.id
@@ -155,7 +162,8 @@ describe('Integration workflows', () => {
     const ucRow = (await timetable(ctx.unitA.id, ctx.tokens.uc)).find(s => s.id === ctx.s.held);
     expect(ucRow.activeCovers.map(c => c.claimedByName)).toEqual(['other Test']);
     expect(ucRow.tutors.map(t => t.tutorId)).toEqual([ctx.u.tutor.id]);
-    expect(await tutorsOn(ctx.s.held)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: null }]);
+    // A cover never changes the permanent assignment (still the away tutor, still accepted).
+    expect(await tutorsOn(ctx.s.held)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: true }]);
 
     // The claimer sees it in their schedule; the away tutor and UC are told.
     const covering = (await api('get', `/units/${ctx.unitA.id}/sessions/my-assigned`, ctx.tokens.other)).body.find(s => s.id === ctx.s.held);
@@ -173,6 +181,8 @@ describe('Integration workflows', () => {
     await query(`INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, 'tutor')`, [ctx.unitB.id, ctx.u.other.id]);
     await api('patch', `/units/${ctx.unitB.id}/sessions/${ctx.s.unitB}/assign`, ctx.tokens.uc2, { tutorId: ctx.u.other.id });
     await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/assign`, ctx.tokens.uc, { tutorId: ctx.u.super.id });
+    // The away tutor accepts first: only accepted sessions can be covered (bug 17).
+    await api('patch', `/units/${ctx.unitA.id}/sessions/${ctx.s.open}/confirm`, ctx.tokens.super, { confirmed: true });
     const sent = await api('post', '/uc/cover-requests', ctx.tokens.uc, { sessionIds: [ctx.s.open], startDate: fromToday(1), endDate: fromToday(3) });
     const id = sent.body.requests[0].id;
 
@@ -204,7 +214,9 @@ describe('Integration workflows', () => {
 
     // Pressing approve again must not move anything a second time.
     expect((await api('patch', `/uc/requests/${req.id}/review`, ctx.tokens.uc, { status: 'accepted' })).status).toBe(200);
-    expect(await tutorsOn(ctx.s.open2)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: null }]);
+    // The tutor accepted this session themselves, so it is already confirmed
+    // (bug 8ii: it used to go back to "Awaiting response").
+    expect(await tutorsOn(ctx.s.open2)).toEqual([{ tutor_id: ctx.u.tutor.id, tutor_confirmed: true }]);
   });
 
   test('INT-07 an admin approval really moves the tutor, and a blocked one leaves everything as it was', async () => {

@@ -10,9 +10,13 @@ const pad = (n) => String(n).padStart(2, '0');
 const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const fromToday = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return dayKey(d); };
 
-const broadcastCover = (ctx, sessionId = ctx.s.held) => api('post', '/uc/cover-requests', ctx.tokens.uc, {
-  sessionIds: [sessionId], reason: 'away', startDate: fromToday(1), endDate: fromToday(14)
-});
+// The away tutor has accepted the session (only accepted ones can be covered).
+const broadcastCover = async (ctx, sessionId = ctx.s.held) => {
+  await query('UPDATE session_tutors SET tutor_confirmed = TRUE WHERE session_id = $1 AND tutor_confirmed IS NULL', [sessionId]);
+  return api('post', '/uc/cover-requests', ctx.tokens.uc, {
+    sessionIds: [sessionId], reason: 'away', startDate: fromToday(1), endDate: fromToday(14)
+  });
+};
 
 const tutorRoles = async (unitId, userId) => (await query(
   `SELECT role FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor')`,

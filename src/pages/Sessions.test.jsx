@@ -82,3 +82,39 @@ test('FE-33 "Unassigned only" keeps a two-tutor session that still has a free se
   expect(screen.getByText('TUT01')).toBeInTheDocument();
   expect(screen.getByText('TUT02')).toBeInTheDocument();
 });
+
+test('BUG-5b changing the type in the edit form updates an automatic code (TUT01 -> WOR01)', async () => {
+  renderPage();
+  const row = (await screen.findByText('TUT01')).closest('tr');
+  fireEvent.click(within(row).getByRole('button', { name: 'Edit session' }));
+  const type = document.querySelector('select[name="sessionType"]');
+  const code = document.querySelector('input[name="sessionCode"]');
+  expect(code.value).toBe('TUT01');
+  fireEvent.change(type, { target: { value: 'Workshop' } });
+  expect(code.value).toBe('WOR01');
+});
+
+test('BUG-5b a code the UC typed themselves is not replaced', async () => {
+  renderPage();
+  const row = (await screen.findByText('TUT01')).closest('tr');
+  fireEvent.click(within(row).getByRole('button', { name: 'Edit session' }));
+  const code = document.querySelector('input[name="sessionCode"]');
+  fireEvent.change(code, { target: { value: 'MYWS1' } });
+  fireEvent.change(document.querySelector('select[name="sessionType"]'), { target: { value: 'Workshop' } });
+  expect(code.value).toBe('MYWS1');
+});
+
+test('BUG-17 Request Cover only lists tutors who have accepted their session', async () => {
+  sessionsAPI.getAll.mockResolvedValue([
+    ...sessions,
+    { ...base, id: 's3', sessionCode: 'TUT03', day: 'WED', requiredTutors: 1, activeCovers: [],
+      tutors: [{ tutorId: 'alice', tutorName: 'Alice Tan', confirmed: null }] }
+  ]);
+  renderPage();
+  await screen.findByText('TUT03');
+  fireEvent.click(screen.getByRole('button', { name: 'Request Cover' }));
+  const options = within(document.querySelector('.ss-cover-modal select')).getAllByRole('option').map(o => o.textContent);
+  expect(options).not.toContain('Alice Tan');
+  expect(options).toEqual(expect.arrayContaining(['Ann Lee', 'Ben Wu']));
+  expect(screen.getByText(/Only sessions the tutor has accepted are listed/)).toBeInTheDocument();
+});
