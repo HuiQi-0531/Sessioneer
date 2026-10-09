@@ -13,6 +13,11 @@ export const FIELD_TYPES = [
 // custom_answers JSON blob.
 export const LEGACY_FIELD_KEYS = ['phoneNumber', 'workExperience', 'maximumHours', 'contractType', 'resume'];
 
+// Always required and can't be deleted (it caps a tutor's hours when
+// scheduling). The label can still be renamed. Mirrors REQUIRED_FIELD_KEYS
+// in backend/utils/applicationFields.js.
+export const REQUIRED_FIELD_KEYS = ['maximumHours'];
+
 export const LOCKED_FIELDS = [
   { key: 'firstName', label: 'First name', type: 'text' },
   { key: 'lastName', label: 'Last name', type: 'text' },
@@ -22,8 +27,7 @@ export const LOCKED_FIELDS = [
 export const DEFAULT_APPLICATION_FIELDS = [
   { key: 'phoneNumber', label: 'Phone number', type: 'text', required: false },
   { key: 'workExperience', label: 'Relevant work experience', type: 'textarea', required: false },
-  { key: 'maximumHours', label: 'Maximum hours / week', type: 'number', required: false },
-  {
+  { key: 'maximumHours', label: 'Maximum hours / week', type: 'number', required: true },  {
     key: 'contractType',
     label: 'Preferred contract type',
     type: 'select',

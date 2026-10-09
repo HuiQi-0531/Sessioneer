@@ -13,7 +13,7 @@ describe('API tutor applications', () => {
     })).status).toBe(404);
 
     const created = await api('post', '/tutor-applications', null, {
-      unitId: ctx.unitA.id, firstName: 'Ann', lastName: 'Applicant', email: 'ann.apply@api.test',
+      unitId: ctx.unitA.id, firstName: 'Ann', lastName: 'Applicant', email: 'ann.apply@api.test', maximumHours: 10,
       resumeBase64: Buffer.from('%PDF-1.4').toString('base64'), resumeFilename: 'a.pdf',
       customAnswers: { portfolio: 'https://example.com', phoneNumber: 'ignore-me' }
     });
@@ -36,7 +36,7 @@ describe('API tutor applications', () => {
     expect(reset.body.fields.length).toBeGreaterThan(0);
 
     await api('post', '/tutor-applications', null, {
-      unitId: ctx.unitA.id, firstName: 'Ann', email: 'ann.resume@api.test',
+      unitId: ctx.unitA.id, firstName: 'Ann', email: 'ann.resume@api.test', maximumHours: 10,
       resumeBase64: Buffer.from('%PDF-1.4 resume').toString('base64'), resumeFilename: 'cv.pdf', resumeMimeType: 'application/pdf'
     });
     const list = await api('get', `/tutor-applications?unitId=${ctx.unitA.id}`, T('uc'));
@@ -101,7 +101,7 @@ describe('API tutor applications', () => {
 
   test('API-A05 an applicant who typed a capitalised email can log in after accepting', async () => {
     await api('post', '/tutor-applications', null, {
-      unitId: ctx.unitA.id, firstName: 'Mixed', lastName: 'Case', email: 'Mixed.Case@API.test'
+      unitId: ctx.unitA.id, firstName: 'Mixed', lastName: 'Case', email: 'Mixed.Case@API.test', maximumHours: 10
     });
     const list = await api('get', `/tutor-applications?unitId=${ctx.unitA.id}`, T('uc'));
     const app = list.body.find(a => a.email === 'mixed.case@api.test');

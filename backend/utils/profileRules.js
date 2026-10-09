@@ -42,4 +42,18 @@ const buildProfileUpdateParams = (body, role, userId) => {
   return [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, hours.error ? null : hours.value, contractType || null, userId];
 };
 
-module.exports = { formatProfile, parseMaximumHours, buildProfileUpdateParams };
+// A name can be changed but not cleared. Only checked when the form sends the
+// field, so a request that only updates, say, max hours still works.
+// Returns the error message or null.
+const validateProfileNames = (body) => {
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+  if ((has('firstName') || has('name')) && !String(body.firstName || body.name || '').trim()) {
+    return 'First name is required';
+  }
+  if (has('lastName') && !String(body.lastName || '').trim()) {
+    return 'Last name is required';
+  }
+  return null;
+};
+
+module.exports = { formatProfile, parseMaximumHours, buildProfileUpdateParams, validateProfileNames };

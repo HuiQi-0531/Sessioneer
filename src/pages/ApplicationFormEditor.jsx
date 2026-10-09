@@ -4,7 +4,7 @@ import { tutorApplicationsAPI } from '../config/api';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { useActiveUnit } from '../context/ActiveUnitContext';
-import { FIELD_TYPES, LOCKED_FIELDS, DEFAULT_APPLICATION_FIELDS, makeFieldKey } from '../utils/applicationForm';
+import { FIELD_TYPES, LOCKED_FIELDS, REQUIRED_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, makeFieldKey } from '../utils/applicationForm';
 import '../styles/UCRequests.css';
 import '../styles/TutorApplications.css';
 import '../styles/ApplicationFormEditor.css';
@@ -110,6 +110,7 @@ const ApplicationFormEditor = () => {
           <p className="afe-intro">
             This is the form tutors fill out when they apply for {activeUnit?.unitCode || 'this unit'}.
             First name, last name and email always stay on the form and can't be removed.
+            Maximum hours / week is always required because it limits how many hours a tutor can be given; you can rename it but not remove it.
             {isCustomised ? '' : ' You are currently using the default template.'}
           </p>
 
@@ -127,7 +128,9 @@ const ApplicationFormEditor = () => {
                   </div>
                 ))}
 
-                {fields.map((field, index) => (
+                {fields.map((field, index) => {
+                  const isFixed = REQUIRED_FIELD_KEYS.includes(field.key);
+                  return (
                   <div className="afe-field-row" key={`${field.key}-${index}`}>
                     <div className="afe-field-main">
                       <input
@@ -141,6 +144,7 @@ const ApplicationFormEditor = () => {
                         className="afe-type-select"
                         value={field.type}
                         onChange={(e) => updateField(index, { type: e.target.value })}
+                        disabled={isFixed}
                       >
                         {FIELD_TYPES.map(t => (
                           <option key={t.value} value={t.value}>{t.label}</option>
@@ -149,8 +153,9 @@ const ApplicationFormEditor = () => {
                       <label className="afe-required-toggle">
                         <input
                           type="checkbox"
-                          checked={!!field.required}
+                          checked={isFixed || !!field.required}
                           onChange={(e) => updateField(index, { required: e.target.checked })}
+                          disabled={isFixed}
                         />
                         Required
                       </label>
@@ -173,10 +178,13 @@ const ApplicationFormEditor = () => {
                     <div className="afe-field-controls">
                       <button type="button" onClick={() => moveField(index, -1)} disabled={index === 0} title="Move up">↑</button>
                       <button type="button" onClick={() => moveField(index, 1)} disabled={index === fields.length - 1} title="Move down">↓</button>
-                      <button type="button" className="afe-delete-btn" onClick={() => deleteField(index)} title="Delete question">Delete</button>
+                      {!isFixed && (
+                        <button type="button" className="afe-delete-btn" onClick={() => deleteField(index)} title="Delete question">Delete</button>
+                      )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <button className="afe-add-field-btn" onClick={addField} type="button">+ Add question</button>

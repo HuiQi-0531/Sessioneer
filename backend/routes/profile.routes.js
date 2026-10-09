@@ -5,7 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, signToken } = require('../middleware/auth');
-const { formatProfile, parseMaximumHours, buildProfileUpdateParams } = require('../utils/profileRules');
+const { formatProfile, parseMaximumHours, buildProfileUpdateParams, validateProfileNames } = require('../utils/profileRules');
 const { ALLOWED_AVATAR_TYPES, getSupabaseConfig, buildRequestBaseUrl } = require('../utils/uploadRules');
 
 const router = express.Router();
@@ -118,6 +118,10 @@ router.get('/', verifyToken, async (req, res) => {
 // PUT /profile - update editable fields (first/last name, phone, and tutor-only fields for tutors)
 router.put('/', verifyToken, async (req, res) => {
   try {
+    const nameError = validateProfileNames(req.body);
+    if (nameError) {
+      return res.status(400).json({ error: nameError });
+    }
     const hours = parseMaximumHours(req.body.maximumHours);
     if (hours.error) {
       return res.status(400).json({ error: hours.error });

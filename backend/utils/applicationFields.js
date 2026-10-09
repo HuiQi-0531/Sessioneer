@@ -17,7 +17,7 @@ const LEGACY_FIELD_KEYS = ['phoneNumber', 'workExperience', 'maximumHours', 'con
 const DEFAULT_APPLICATION_FIELDS = [
   { key: 'phoneNumber', label: 'Phone number', type: 'text', required: false },
   { key: 'workExperience', label: 'Relevant work experience', type: 'textarea', required: false },
-  { key: 'maximumHours', label: 'Maximum hours / week', type: 'number', required: false },
+  { key: 'maximumHours', label: 'Maximum hours / week', type: 'number', required: true },
   {
     key: 'contractType',
     label: 'Preferred contract type',
@@ -52,4 +52,24 @@ const sanitiseFields = (fields) => {
   return clean;
 };
 
-module.exports = { FIELD_TYPES, LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, sanitiseFields };
+// Max hours caps how much a tutor can be given when scheduling (no value means
+// no cap), so it can't be made optional or removed. The coordinator can still
+// rename it or move it. Forms saved before this rule get it put back here.
+const REQUIRED_FIELD_KEYS = ['maximumHours'];
+
+const withRequiredFields = (fields) => {
+  const list = Array.isArray(fields) ? fields : DEFAULT_APPLICATION_FIELDS;
+  const result = list.map(f => (REQUIRED_FIELD_KEYS.includes(f.key)
+    ? { ...f, type: DEFAULT_APPLICATION_FIELDS.find(d => d.key === f.key).type, required: true }
+    : f));
+  REQUIRED_FIELD_KEYS.forEach(key => {
+    if (!result.some(f => f.key === key)) {
+      result.push({ ...DEFAULT_APPLICATION_FIELDS.find(d => d.key === key) });
+    }
+  });
+  return result;
+};
+
+module.exports = {
+  FIELD_TYPES, LEGACY_FIELD_KEYS, DEFAULT_APPLICATION_FIELDS, REQUIRED_FIELD_KEYS, sanitiseFields, withRequiredFields
+};

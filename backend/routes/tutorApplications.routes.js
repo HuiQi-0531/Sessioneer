@@ -11,7 +11,8 @@ const {
 } = require('../utils/applicationRules');
 const { isValidEmail } = require('../utils/authRules');
 const { getCoordinatorUnitId, LINKED_UNITS_SQL, superTutorDowngradeError } = require('../utils/unitAccess');
-const { DEFAULT_APPLICATION_FIELDS, sanitiseFields } = require('../utils/applicationFields');
+const { DEFAULT_APPLICATION_FIELDS, sanitiseFields, withRequiredFields } = require('../utils/applicationFields');
+const { parseMaximumHours } = require('../utils/profileRules');
 
 const router = express.Router();
 
@@ -46,7 +47,7 @@ router.get('/unit/:unitId', async (req, res) => {
       unitName: unit.unit_name,
       semester: unit.semester,
       year: unit.year,
-      applicationForm: unit.application_form || DEFAULT_APPLICATION_FIELDS
+      applicationForm: withRequiredFields(unit.application_form || DEFAULT_APPLICATION_FIELDS)
     });
   } catch (error) {
     console.error('Error fetching application unit:', error);
@@ -76,6 +77,15 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ error: 'Unit not found' });
     }
 
+    // Max hours is the cap used when scheduling, so an application needs one.
+    const hours = parseMaximumHours(maximumHours);
+    if (hours.error) {
+      return res.status(400).json({ error: hours.error });
+    }
+    if (hours.value === null) {
+      return res.status(400).json({ error: 'Maximum hours / week is required' });
+    }
+
     const resumeBuffer = resumeBase64 ? Buffer.from(resumeBase64, 'base64') : null;
     // Only keep answers for keys that aren't one of the legacy dedicated
     // columns - those are handled separately above.
@@ -87,7 +97,7 @@ router.post('/', async (req, res) => {
         (unit_id, name, last_name, email, phone_number, work_experience, maximum_hours, contract_type, resume_filename, resume_mime_type, resume_data, custom_answers, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
       `,
-      [unitId, cleanFirstName, cleanLastName || null, String(email).trim().toLowerCase(), phoneNumber || null, workExperience || null, maximumHours ?? null, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
+      [unitId, cleanFirstName, cleanLastName || null, String(email).trim().toLowerCase(), phoneNumber || null, workExperience || null, hours.value, contractType || null, resumeFilename || null, resumeMimeType || null, resumeBuffer, JSON.stringify(cleanCustomAnswers)]
     );
 
     res.status(201).json({ success: true, message: 'Application submitted successfully' });
@@ -136,7 +146,7 @@ router.get('/form/:unitId', verifyToken, requireRole('coordinator'), async (req,
     const result = await pool.query('SELECT application_form FROM units WHERE id = $1', [ownedUnitId]);
     const stored = result.rows[0]?.application_form;
     res.json({
-      fields: stored || DEFAULT_APPLICATION_FIELDS,
+      fields: withRequiredFields(stored || DEFAULT_APPLICATION_FIELDS),
       isCustomised: !!stored
     });
   } catch (error) {
@@ -153,10 +163,12 @@ router.put('/form/:unitId', verifyToken, requireRole('coordinator'), async (req,
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const fields = sanitiseFields(req.body.fields);
-    if (!fields) {
+    const cleanFields = sanitiseFields(req.body.fields);
+    if (!cleanFields) {
       return res.status(400).json({ error: 'Invalid form fields' });
     }
+    const fields = withRequiredFields(cleanFields);
+
 
     await pool.query('UPDATE units SET application_form = $1 WHERE id = $2', [JSON.stringify(fields), ownedUnitId]);
     res.json({ fields });

@@ -249,7 +249,7 @@ defineApiCases('API coverage: admin sessions, resumes, covers', (add) => {
   });
   add('API-G41 admin can open an applicant resume; a missing one is 404', async (ctx) => {
     await api('post', '/tutor-applications', null, {
-      unitId: ctx.unitA.id, firstName: 'Ann', email: 'ann.admin@api.test',
+      unitId: ctx.unitA.id, firstName: 'Ann', email: 'ann.admin@api.test', maximumHours: 10,
       resumeBase64: PDF.toString('base64'), resumeFilename: 'cv.pdf', resumeMimeType: 'application/pdf'
     });
     const appId = (await query(`SELECT id FROM tutor_applications WHERE email = 'ann.admin@api.test'`)).rows[0].id;

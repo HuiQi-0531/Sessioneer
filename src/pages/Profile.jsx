@@ -148,8 +148,13 @@ const Profile = () => {
   };
 
   const handleProfileSave = async () => {
-    setIsSavingProfile(true);
     setProfileMessage(null);
+    // Names can be edited but not left blank (same rule as the application form).
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setProfileMessage({ type: 'error', text: 'First name and last name are required.' });
+      return;
+    }
+    setIsSavingProfile(true);
     try {
       const payload = {
         ...formData,
