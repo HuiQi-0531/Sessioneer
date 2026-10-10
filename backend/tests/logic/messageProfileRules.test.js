@@ -74,6 +74,10 @@ describe('buildProfileUpdateParams', () => {
     expect(p[1]).toBe(true);
     expect(p[2]).toBeNull();
   });
+  test('LG-387b: a coordinator account who tutors in another unit can save tutor fields', () => {
+    expect(buildProfileUpdateParams({ maximumHours: 60 }, 'coordinator', 'u1', { hasTutorMembership: true })[4]).toBe(true);
+    expect(buildProfileUpdateParams({ maximumHours: 60 }, 'coordinator', 'u1', { hasTutorMembership: false })[4]).toBe(false);
+  });
   test('LG-389: not sending a last name keeps the old one', () => {
     expect(buildProfileUpdateParams({ firstName: 'Alex' }, 'tutor', 'u1')[1]).toBe(false);
   });

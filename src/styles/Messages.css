@@ -477,3 +477,7 @@
   color: var(--color-text-muted);
   margin-top: 2px;
 }
+
+/* My message shown straight away while it is still being saved. */
+.msg-bubble-row.pending .msg-bubble { opacity: 0.6; }
+.msg-bubble-row.pending .msg-bubble-meta { font-style: italic; }

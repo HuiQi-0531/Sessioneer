@@ -132,3 +132,43 @@ test('FE-29 a clash with your own session shows the real reason and keeps the ca
   expect(screen.queryByText(/Too slow/)).toBeNull();
   expect(screen.getByRole('button', { name: 'Claim This Session' })).toBeInTheDocument();
 });
+
+const pendingSwap = { id: 'r1', unitId: 'unit1', unitCode: 'CAB201', status: 'Pending', requestType: 'Session swap', currentSession: 'CAB201::TUE 09:00-10:00|GP-P-102', reason: 'delete me', submittedDate: new Date().toISOString() };
+
+test('deleting a request asks in an in-app dialog, then removes the card and says so', async () => {
+  requestsAPI.getAll.mockResolvedValue([pendingSwap]);
+  requestsAPI.delete.mockResolvedValue({});
+  const confirmSpy = jest.spyOn(window, 'confirm');
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Pending Status/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete request' }));
+  expect(confirmSpy).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: 'Delete request' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  expect(await screen.findByText(/Request deleted/)).toBeInTheDocument();
+  expect(requestsAPI.delete).toHaveBeenCalledWith('r1');
+  expect(screen.queryByText('delete me')).toBeNull();
+  confirmSpy.mockRestore();
+});
+
+test('cancelling the delete dialog keeps the request', async () => {
+  requestsAPI.getAll.mockResolvedValue([pendingSwap]);
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Pending Status/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog', { name: 'Delete request' })).toBeNull();
+  expect(requestsAPI.delete).not.toHaveBeenCalled();
+  expect(screen.getByText('delete me')).toBeInTheDocument();
+});
+
+test('a failed delete shows the error inside the dialog and keeps the card', async () => {
+  requestsAPI.getAll.mockResolvedValue([pendingSwap]);
+  requestsAPI.delete.mockRejectedValue(new Error('Only pending requests can be deleted'));
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Pending Status/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  expect(await screen.findByText('Only pending requests can be deleted')).toBeInTheDocument();
+  expect(screen.getByText('delete me')).toBeInTheDocument();
+});

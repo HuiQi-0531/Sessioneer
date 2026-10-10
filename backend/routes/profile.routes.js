@@ -125,7 +125,18 @@ router.put('/', verifyToken, async (req, res) => {
     if (hours.error) {
       return res.status(400).json({ error: hours.error });
     }
-    const params = buildProfileUpdateParams(req.body, req.user.role, req.user.id);
+    // Account role alone is not enough: a coordinator account can still tutor in
+    // other units (tutor / super tutor membership), and those people need their
+    // max hours, contract type and experience saved too.
+    const membership = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM unit_memberships WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
+       ) AS has_tutor_membership`,
+      [req.user.id]
+    );
+    const params = buildProfileUpdateParams(req.body, req.user.role, req.user.id, {
+      hasTutorMembership: membership.rows[0]?.has_tutor_membership === true
+    });
 
     const result = await pool.query(
       `

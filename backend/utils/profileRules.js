@@ -28,15 +28,19 @@ const parseMaximumHours = (raw) => {
 };
 
 // Values for the profile UPDATE query in PUT /profile.
-const buildProfileUpdateParams = (body, role, userId) => {
+// hasTutorMembership: the user tutors in at least one unit (tutor or super tutor
+// membership). A UC who also tutors elsewhere (e.g. Alex: UC of CAB201, super
+// tutor in IFB105) must be able to set max hours etc.; those are used when
+// assigning them sessions.
+const buildProfileUpdateParams = (body, role, userId, { hasTutorMembership = false } = {}) => {
   const { name, firstName, lastName, phoneNumber, workExperience, maximumHours, contractType } = body;
   const cleanFirstName = String(firstName || name || '').trim();
   const cleanLastName = String(lastName || '').trim();
   const hasLastNameField = Object.prototype.hasOwnProperty.call(body, 'lastName');
 
-  // Tutor-only fields are only ever written if the logged-in user is a tutor,
-  // regardless of what a coordinator's request body might contain.
-  const isTutor = role === 'tutor';
+  // Tutor-only fields are only ever written if the logged-in user tutors somewhere,
+  // regardless of what a pure coordinator's request body might contain.
+  const isTutor = role === 'tutor' || hasTutorMembership === true;
   const hours = parseMaximumHours(maximumHours);
 
   return [cleanFirstName || null, hasLastNameField, cleanLastName || null, phoneNumber || null, isTutor, workExperience || null, hours.error ? null : hours.value, contractType || null, userId];

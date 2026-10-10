@@ -5,6 +5,7 @@ import UCSidebar from '../components/UCSidebar';
 import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { getAvatarLetter, getDisplayName } from '../utils/userName';
+import { isSuperTutorOnUnit } from '../utils/roles';
 import '../styles/UCRequests.css';
 import '../styles/Profile.css';
 
@@ -55,9 +56,13 @@ const Profile = () => {
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
   }, []);
-  const { activeViewRole } = useActiveUnit();
+  const { activeViewRole, activeUnit } = useActiveUnit();
   const effectiveRole = activeViewRole || currentUser?.role;
   const isTutor = effectiveRole === 'tutor';
+  // Same label the sidebar shows for the active unit (Super Tutor vs Tutor).
+  const roleLabel = isTutor
+    ? (isSuperTutorOnUnit(activeUnit) ? 'Super Tutor' : 'Tutor')
+    : 'Unit Coordinator';
   const Sidebar = isTutor ? TutorSidebar : UCSidebar;
 
   const [profile, setProfile] = useState(null);
@@ -163,6 +168,16 @@ const Profile = () => {
       const updated = await profileAPI.update(payload);
       setProfile(updated);
       syncCurrentUser(updated);
+      // Show what the server actually stored, so a field that was not saved
+      // can't keep looking saved until the next refresh.
+      setFormData({
+        firstName: updated.firstName || updated.name || '',
+        lastName: updated.lastName || '',
+        phoneNumber: updated.phoneNumber || '',
+        workExperience: updated.workExperience || '',
+        maximumHours: updated.maximumHours ?? '',
+        contractType: updated.contractType || ''
+      });
 
       setProfileMessage({ type: 'success', text: 'Profile updated successfully.' });
     } catch (err) {
@@ -244,7 +259,7 @@ const Profile = () => {
               </label>
               <div>
                 <div className="pf-avatar-name">{getDisplayName(profile)}</div>
-                <div className="pf-avatar-role">{isTutor ? 'Tutor' : 'Unit Coordinator'}</div>
+                <div className="pf-avatar-role">{roleLabel}</div>
                 <div className="pf-avatar-hint">Click the picture to upload a JPG, PNG, WEBP, or GIF.</div>
               </div>
             </div>
@@ -416,7 +431,7 @@ const Profile = () => {
 
           <ProfileLanyardErrorBoundary>
             <Suspense fallback={<ProfileLanyardFallback />}>
-              <ProfileLanyard profile={profile} roleLabel={isTutor ? 'Tutor' : 'Unit Coordinator'} />
+              <ProfileLanyard profile={profile} roleLabel={roleLabel} />
             </Suspense>
           </ProfileLanyardErrorBoundary>
         </div>

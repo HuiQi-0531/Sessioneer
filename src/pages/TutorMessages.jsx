@@ -49,9 +49,20 @@ const TutorMessages = () => {
     return saved ? JSON.parse(saved) : null;
   }, []);
 
+  // Adds a message from the server. If it is my own message that is already on
+  // screen as a "sending" placeholder, the placeholder is swapped for the real one
+  // (the socket echo and the POST reply can arrive in either order).
   const appendMessage = useCallback((message) => {
     setThread(prev => {
       if (prev.some(m => m.id === message.id)) return prev;
+      if (message.isMine) {
+        const i = prev.findIndex(m => m.pending && m.content === message.content);
+        if (i !== -1) {
+          const next = [...prev];
+          next[i] = message;
+          return next;
+        }
+      }
       return [...prev, message];
     });
   }, []);
@@ -103,7 +114,12 @@ const TutorMessages = () => {
     const socket = getSocket();
     if (!socket) return;
 
-    socket.emit('join-unit', selectedUnitId);
+    // Rooms are lost when the socket reconnects (wifi blip, laptop sleep,
+    // backend restart), so join again on every (re)connect, not just once.
+    const joinUnit = () => socket.emit('join-unit', selectedUnitId);
+    joinUnit();
+    socket.on('connect', joinUnit);
+    return () => socket.off('connect', joinUnit);
   }, [selectedUnitId]);
 
   const loadDirectThread = useCallback(async (otherUserId) => {
@@ -295,23 +311,47 @@ const TutorMessages = () => {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() && !selectedAttachment) return;
-    setIsSending(true);
+    const text = newMessage.trim();
+    const attachment = selectedAttachment;
+    if ((!text && !attachment) || isSending) return;
+    if (chatMode === 'direct' && !selectedContact) return;
+    if (chatMode !== 'direct' && chatMode !== 'group') return;
+
+    // Text messages show up immediately as "Sending..." instead of waiting for
+    // the server and a full thread reload. Attachments still wait (upload).
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (!attachment) {
+      appendMessage({
+        id: tempId,
+        senderId: currentUser?.id,
+        content: text,
+        sentAt: new Date().toISOString(),
+        isMine: true,
+        pending: true
+      });
+      setNewMessage('');
+    } else {
+      setIsSending(true);
+    }
+
     try {
-      if (chatMode === 'group') {
-        await messagesAPI.sendGroup(selectedUnitId, newMessage.trim(), selectedAttachment);
-        setNewMessage('');
-        clearAttachment();
-        await loadGroupThread(selectedUnitId);
-      } else if (chatMode === 'direct' && selectedContact) {
-        await messagesAPI.send(selectedContact.userId, newMessage.trim(), selectedAttachment);
-        setNewMessage('');
-        clearAttachment();
-        await loadDirectThread(selectedContact.userId);
-        await loadContacts(selectedUnitId);
+      const saved = chatMode === 'group'
+        ? await messagesAPI.sendGroup(selectedUnitId, text, attachment)
+        : await messagesAPI.send(selectedContact.userId, text, attachment);
+      if (saved && saved.id) {
+        setThread(prev => prev.filter(m => m.id !== tempId));
+        appendMessage({ ...saved, isMine: true });
       }
+      if (attachment) {
+        setNewMessage('');
+        clearAttachment();
+      }
+      // Refresh the contact order in the background; nothing waits for it.
+      if (chatMode === 'direct' && selectedUnitId) loadContacts(selectedUnitId);
     } catch (err) {
       console.error('Error sending message:', err);
+      setThread(prev => prev.filter(m => m.id !== tempId));
+      if (!attachment) setNewMessage(text);
       alert(err.message || 'Failed to send message. Please try again.');
     } finally {
       setIsSending(false);
@@ -428,14 +468,14 @@ const TutorMessages = () => {
                 </div>
                 <div className="msg-thread">
                   {thread.map(m => (
-                    <div key={m.id} className={`msg-bubble-row ${m.isMine ? 'mine' : 'theirs'}`}>
+                    <div key={m.id} className={`msg-bubble-row ${m.isMine ? 'mine' : 'theirs'} ${m.pending ? 'pending' : ''}`}>
                       {renderAvatar(
                         m.isMine ? getDisplayName(currentUser, 'You') : getMessageDisplayName(m),
                         getMessageAvatarUrl(m)
                       )}
                       <div className="msg-bubble-stack">
                         <div className="msg-bubble-meta">
-                          {getMessageDisplayName(m)} - {formatTime(m.sentAt)}
+                          {getMessageDisplayName(m)} - {m.pending ? 'Sending...' : formatTime(m.sentAt)}
                         </div>
                         <div className="msg-bubble">
                           {m.content && <div className="msg-bubble-text">{m.content}</div>}

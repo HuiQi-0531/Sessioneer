@@ -194,27 +194,40 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
 
     // Direct messages are only between people who share a unit (the same
     // people the contacts list shows). Admin accounts are exempt for support.
-    const recipientResult = await pool.query('SELECT role FROM users WHERE id = $1', [recipientId]);
+    // Both checks at once: every round trip to the database adds delay before
+    // the message reaches the other person.
+    const [recipientResult, sharesUnit] = await Promise.all([
+      pool.query('SELECT role FROM users WHERE id = $1', [recipientId]),
+      shareAnyUnit(req.user.id, recipientId)
+    ]);
     const recipient = recipientResult.rows[0];
     if (!recipient) {
       return res.status(404).json({ error: 'Recipient not found' });
     }
     const involvesAdmin = req.user.role === 'admin' || recipient.role === 'admin';
-    if (!involvesAdmin && !(await shareAnyUnit(req.user.id, recipientId))) {
+    if (!involvesAdmin && !sharesUnit) {
       return res.status(403).json({ error: 'You can only message people in your units' });
     }
 
     const attachment = await uploadAttachment(req.file, req.user.id, req);
 
+    // Insert and read the sender's name/avatar in the same round trip.
     const result = await pool.query(
       `
-      INSERT INTO messages (
-        sender_id, recipient_id, content, sent_at,
-        attachment_url, attachment_name, attachment_type, attachment_size
+      WITH inserted AS (
+        INSERT INTO messages (
+          sender_id, recipient_id, content, sent_at,
+          attachment_url, attachment_name, attachment_type, attachment_size
+        )
+        VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
+        RETURNING id, sender_id, recipient_id, content, is_read, sent_at,
+                  attachment_url, attachment_name, attachment_type, attachment_size
       )
-      VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
-      RETURNING id, sender_id, recipient_id, content, is_read, sent_at,
-                attachment_url, attachment_name, attachment_type, attachment_size
+      SELECT inserted.*,
+             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS sender_name,
+             u.avatar_url AS sender_avatar_url
+      FROM inserted
+      JOIN users u ON u.id = inserted.sender_id
       `,
       [
         req.user.id,
@@ -227,20 +240,7 @@ router.post('/', verifyToken, upload.single('attachment'), async (req, res) => {
       ]
     );
 
-    const senderResult = await pool.query(
-      `
-      SELECT TRIM(CONCAT(name, ' ', COALESCE(last_name, ''))) as sender_name,
-             avatar_url as sender_avatar_url
-      FROM users
-      WHERE id = $1
-      `,
-      [req.user.id]
-    );
-
-    const message = formatMessage(
-      { ...result.rows[0], ...senderResult.rows[0] },
-      req.user.id
-    );
+    const message = formatMessage(result.rows[0], req.user.id);
 
     emitDirectMessage(req, message);
 
@@ -397,13 +397,20 @@ router.post('/group/:unitId', verifyToken, upload.single('attachment'), async (r
 
     const result = await pool.query(
       `
-      INSERT INTO messages (
-        sender_id, unit_id, content, sent_at,
-        attachment_url, attachment_name, attachment_type, attachment_size
+      WITH inserted AS (
+        INSERT INTO messages (
+          sender_id, unit_id, content, sent_at,
+          attachment_url, attachment_name, attachment_type, attachment_size
+        )
+        VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
+        RETURNING id, sender_id, content, sent_at,
+                  attachment_url, attachment_name, attachment_type, attachment_size
       )
-      VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
-      RETURNING id, sender_id, content, sent_at,
-                attachment_url, attachment_name, attachment_type, attachment_size
+      SELECT inserted.*,
+             TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS sender_name,
+             u.avatar_url AS sender_avatar_url
+      FROM inserted
+      JOIN users u ON u.id = inserted.sender_id
       `,
       [
         req.user.id,
@@ -416,20 +423,7 @@ router.post('/group/:unitId', verifyToken, upload.single('attachment'), async (r
       ]
     );
 
-    const senderResult = await pool.query(
-      `
-      SELECT TRIM(CONCAT(name, ' ', COALESCE(last_name, ''))) as sender_name,
-             avatar_url as sender_avatar_url
-      FROM users
-      WHERE id = $1
-      `,
-      [req.user.id]
-    );
-
-    const message = formatMessage(
-      { ...result.rows[0], ...senderResult.rows[0] },
-      req.user.id
-    );
+    const message = formatMessage(result.rows[0], req.user.id);
 
     emitGroupMessage(req, unitId, message);
 
