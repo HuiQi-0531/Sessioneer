@@ -238,12 +238,28 @@
   height: 12px;
   border-radius: 3px;
   display: inline-block;
+  box-sizing: border-box;
 }
 
-.ts-legend-dot.confirmed { background-color: #22c55e; }
-.ts-legend-dot.pending { background-color: #f59e0b; }
-.ts-legend-dot.declined { background-color: var(--color-danger); }
-.ts-legend-dot.covering { background-color: #a855f7; }
+.ts-legend-dot.confirmed {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+}
+
+.ts-legend-dot.pending {
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-hover);
+}
+
+.ts-legend-dot.declined {
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-text);
+}
+
+.ts-legend-dot.covering {
+  background-color: #f3e8ff;
+  border: 1px solid #7e22ce;
+}
 
 .ts-grid-wrapper {
   background-color: var(--color-surface);

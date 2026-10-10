@@ -10,6 +10,20 @@
   margin: 0 auto 16px;
 }
 
+.us-toolbar-empty {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: calc(100vh - 220px);
+}
+
+.us-toolbar-empty p {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
 .us-create-btn {
   flex-shrink: 0;
   height: 42px;
