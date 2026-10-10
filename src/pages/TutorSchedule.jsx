@@ -222,90 +222,93 @@ const handleExportPng = async () => {
   );
   const hiddenFromGridCount = sessions.length - gridSessions.length;
 
-  const renderGrid = () => (
-    <div className="ts-grid-wrapper" ref={gridRef}>
-      <div className="ts-grid" style={{ gridTemplateRows: `auto repeat(${HOUR_LABELS.length}, 44px)` }}>
-        <div className="ts-grid-corner" />
-        {DAYS.map(day => (
-          <div key={day} className="ts-grid-day-header">{DAY_LABELS[day]}</div>
-        ))}
+ const renderGrid = () => (
+  <div className="ts-grid-wrapper" ref={gridRef}>
+    <div className="ts-grid" style={{ gridTemplateRows: `auto repeat(${HOUR_LABELS.length}, 44px)` }}>
+      <div className="ts-grid-corner" />
+      {DAYS.map(day => (
+        <div key={day} className="ts-grid-day-header">{DAY_LABELS[day]}</div>
+      ))}
 
-        {HOUR_LABELS.map((label, i) => (
-          <div key={label} className="ts-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
-        ))}
+      {HOUR_LABELS.map((label, i) => (
+        <div key={label} className="ts-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
+      ))}
 
-        {DAYS.map(day => {
-          const dayIndex = DAYS.indexOf(day);
-          const dayGroups = [];
-          const daySessions = gridSessions
-            .filter(s => s.day === day)
-            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      {DAYS.map(day => {
+        const dayIndex = DAYS.indexOf(day);
+        const dayGroups = [];
+        const daySessions = gridSessions
+          .filter(s => s.day === day)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-          daySessions.forEach(session => {
-            const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
-            const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
-            let placed = false;
-            for (const group of dayGroups) {
-              if (group.some(s => {
-                const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
-                const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
-                return startMin < sEnd && endMin > sStart;
-              })) {
-                group.push(session);
-                placed = true;
-                break;
-              }
+        daySessions.forEach(session => {
+          const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
+          const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
+          let placed = false;
+          for (const group of dayGroups) {
+            if (group.some(s => {
+              const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
+              const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
+              return startMin < sEnd && endMin > sStart;
+            })) {
+              group.push(session);
+              placed = true;
+              break;
             }
-            if (!placed) dayGroups.push([session]);
-          });
+          }
+          if (!placed) dayGroups.push([session]);
+        });
 
-          return dayGroups.flatMap(group =>
-            group.map((session, colIdx) => {
-              const startHour = hourFromTime(session.startTime);
-              const endHour = hourFromTime(session.endTime);
-              const rowStart = (startHour - GRID_START_HOUR) + 2;
-              const rowEnd = (endHour - GRID_START_HOUR) + 2;
-              const status = getMyStatus(session, myId);
-              const colCount = group.length;
-              const widthPct = 100 / colCount;
+        return dayGroups.flatMap(group =>
+          group.map((session, colIdx) => {
+            const startHour = hourFromTime(session.startTime);
+            const endHour = hourFromTime(session.endTime);
+            const startMin = startHour * 60 + parseInt(session.startTime.split(':')[1], 10);
+            const endMin = endHour * 60 + parseInt(session.endTime.split(':')[1], 10);
+            const isShort = (endMin - startMin) <= 60;
+            const rowStart = (startHour - GRID_START_HOUR) + 2;
+            const rowEnd = (endHour - GRID_START_HOUR) + 2;
+            const status = getMyStatus(session, myId);
+            const colCount = group.length;
+            const widthPct = 100 / colCount;
 
-              return (
-                <div
-                  key={session.id}
-                  className={`ts-grid-block ${status}`}
-                  style={{
-                    gridColumn: dayIndex + 2,
-                    gridRow: `${rowStart} / ${rowEnd}`,
-                    justifySelf: 'start',
-                    width: `${widthPct}%`,
-                    marginLeft: `${widthPct * colIdx}%`
-                  }}
-                >
-                  <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                  <div className="ts-grid-block-type">
-                    {session.sessionCode ? `${session.sessionCode} · ` : ''}{session.unitCode}
-                  </div>
-                  <div className="ts-grid-block-status">
-                    {status === 'pending'
-                      ? 'Awaiting your response'
-                      : status === 'covering' && session.coverStartDate && session.coverEndDate
-                        ? `Covering · ${new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
-                        : status}
-                  </div>
+            return (
+              <div
+                key={session.id}
+                className={`ts-grid-block ${status}${isShort ? ' is-short' : ''}`}
+                style={{
+                  gridColumn: dayIndex + 2,
+                  gridRow: `${rowStart} / ${rowEnd}`,
+                  justifySelf: 'start',
+                  width: `${widthPct}%`,
+                  marginLeft: `${widthPct * colIdx}%`
+                }}
+              >
+                <div className="ts-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                <div className="ts-grid-block-type">
+                  {session.sessionCode ? `${session.sessionCode} · ` : ''}{session.unitCode}
                 </div>
-              );
-            })
-          );
-        })}
-      </div>
-      {hiddenFromGridCount > 0 && (
-        <p className="ts-grid-note">
-          {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
-          Use List View to see everything.
-        </p>
-      )}
+                <div className="ts-grid-block-status">
+                  {status === 'pending'
+                    ? 'Awaiting your response'
+                    : status === 'covering' && session.coverStartDate && session.coverEndDate
+                      ? `Covering · ${new Date(session.coverStartDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${new Date(session.coverEndDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
+                      : status}
+                </div>
+              </div>
+            );
+          })
+        );
+      })}
     </div>
-  );
+    {hiddenFromGridCount > 0 && (
+      <p className="ts-grid-note">
+        {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
+        Use List View to see everything.
+      </p>
+    )}
+  </div>
+);
 
   if (unitLoading) {
     return (

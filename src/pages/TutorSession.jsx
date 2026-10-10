@@ -256,6 +256,9 @@ const TutorSession = () => {
                     const dayIndex = DAYS.indexOf(session.day);
                     const startHour = hourFromTime(session.startTime);
                     const endHour = hourFromTime(session.endTime);
+                    const startMin = timeToMinutes(session.startTime);
+                    const endMin = timeToMinutes(session.endTime);
+                    const isShort = (endMin - startMin) <= 60;
                     const rowStart = (startHour - GRID_START_HOUR) + 2;
                     const rowEnd = (endHour - GRID_START_HOUR) + 2;
                     const state = getBlockState(session);
@@ -267,7 +270,7 @@ const TutorSession = () => {
                     return (
                       <div
                         key={session.id}
-                        className={`sb-grid-block ts-block-${state}`}
+                        className={`sb-grid-block ts-block-${state}${isShort ? ' is-short' : ''}`}
                         title={`${session.sessionCode || session.sessionType || 'Session'} · ${formatTimeRange(session.startTime, session.endTime)}${session.location ? ` · ${session.location}` : ''} · ${BLOCK_STATE_LABEL[state]}`}
                         style={{
                           gridColumn: dayIndex + 2,

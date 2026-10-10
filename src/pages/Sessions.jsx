@@ -409,89 +409,92 @@ const Sessions = () => {
   );
   const hiddenFromGridCount = displayedSessions.length - gridSessions.length;
 
-  const renderSessionsGrid = () => (
-    <div className="ss-grid-wrapper">
-      <div className="ss-grid" style={{ gridTemplateRows: `auto repeat(${GRID_HOUR_LABELS.length}, 44px)` }}>
-        <div className="ss-grid-corner" />
-        {GRID_DAYS.map(day => (
-          <div key={day} className="ss-grid-day-header">{GRID_DAY_LABELS[day]}</div>
-        ))}
+const renderSessionsGrid = () => (
+  <div className="ss-grid-wrapper">
+    <div className="ss-grid" style={{ gridTemplateRows: `auto repeat(${GRID_HOUR_LABELS.length}, 44px)` }}>
+      <div className="ss-grid-corner" />
+      {GRID_DAYS.map(day => (
+        <div key={day} className="ss-grid-day-header">{GRID_DAY_LABELS[day]}</div>
+      ))}
 
-        {GRID_HOUR_LABELS.map((label, i) => (
-         <div key={label} className="ss-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
-        ))}
+      {GRID_HOUR_LABELS.map((label, i) => (
+       <div key={label} className="ss-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
+      ))}
 
-        {GRID_DAYS.map(day => {
-          const dayIndex = GRID_DAYS.indexOf(day);
-          const dayGroups = [];
-          const daySessions = gridSessions
-            .filter(s => normaliseDayToAbbrev(s.day) === day)
-            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      {GRID_DAYS.map(day => {
+        const dayIndex = GRID_DAYS.indexOf(day);
+        const dayGroups = [];
+        const daySessions = gridSessions
+          .filter(s => normaliseDayToAbbrev(s.day) === day)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-          daySessions.forEach(session => {
-            const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
-            const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
-            let placed = false;
-            for (const group of dayGroups) {
-              if (group.some(s => {
-                const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
-                const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
-                return startMin < sEnd && endMin > sStart;
-              })) {
-                group.push(session);
-                placed = true;
-                break;
-              }
+        daySessions.forEach(session => {
+          const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
+          const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
+          let placed = false;
+          for (const group of dayGroups) {
+            if (group.some(s => {
+              const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
+              const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
+              return startMin < sEnd && endMin > sStart;
+            })) {
+              group.push(session);
+              placed = true;
+              break;
             }
-            if (!placed) dayGroups.push([session]);
-          });
+          }
+          if (!placed) dayGroups.push([session]);
+        });
 
-          return dayGroups.flatMap(group =>
-            group.map((session, colIdx) => {
-              const startHour = hourFromTime(session.startTime);
-              const endHour = hourFromTime(session.endTime);
-              const rowStart = (startHour - GRID_START_HOUR) + 2;
-              const rowEnd = (endHour - GRID_START_HOUR) + 2;
-              const colCount = group.length;
-              const widthPct = 100 / colCount;
+        return dayGroups.flatMap(group =>
+          group.map((session, colIdx) => {
+            const startHour = hourFromTime(session.startTime);
+            const endHour = hourFromTime(session.endTime);
+            const startMin = startHour * 60 + parseInt(session.startTime.split(':')[1], 10);
+            const endMin = endHour * 60 + parseInt(session.endTime.split(':')[1], 10);
+            const isShort = (endMin - startMin) <= 60;
+            const rowStart = (startHour - GRID_START_HOUR) + 2;
+            const rowEnd = (endHour - GRID_START_HOUR) + 2;
+            const colCount = group.length;
+            const widthPct = 100 / colCount;
 
-              return (
-                <button
-                  key={session.id}
-                  className={`ss-grid-block ${statusToGridClass(session.status)}`}
-                  style={{
-                    gridColumn: dayIndex + 2,
-                    gridRow: `${rowStart} / ${rowEnd}`,
-                    justifySelf: 'start',
-                    width: `${widthPct}%`,
-                    marginLeft: `${widthPct * colIdx}%`
-                  }}
-                  onClick={() => openEditForm(session)}
-                >
-                  <div className="ss-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                  <div className="ss-grid-block-type">
-                    {session.sessionCode ? session.sessionCode : (session.sessionType || 'Session')}
-                    {session.location ? ` · ${session.location}` : ''}
-                  </div>
-                  <div className="ss-grid-block-tutor">
-                    {getTutorLabel(session) || 'Unassigned'}
-                  </div>
-                  {formatCoverNote(session) && (
-                    <div className="ss-grid-block-tutor">{formatCoverNote(session)}</div>
-                  )}
-                </button>
-              );
-            })
-          );
-        })}
-      </div>
-      {hiddenFromGridCount > 0 && (
-        <p className="ss-grid-note">
-          {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
-        </p>
-      )}
+            return (
+              <button
+                key={session.id}
+                className={`ss-grid-block ${statusToGridClass(session.status)}${isShort ? ' is-short' : ''}`}
+                style={{
+                  gridColumn: dayIndex + 2,
+                  gridRow: `${rowStart} / ${rowEnd}`,
+                  justifySelf: 'start',
+                  width: `${widthPct}%`,
+                  marginLeft: `${widthPct * colIdx}%`
+                }}
+                onClick={() => openEditForm(session)}
+              >
+                <div className="ss-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                <div className="ss-grid-block-type">
+                  {session.sessionCode ? session.sessionCode : (session.sessionType || 'Session')}
+                  {session.location ? ` · ${session.location}` : ''}
+                </div>
+                <div className="ss-grid-block-tutor">
+                  {getTutorLabel(session) || 'Unassigned'}
+                </div>
+                {formatCoverNote(session) && (
+                  <div className="ss-grid-block-tutor">{formatCoverNote(session)}</div>
+                )}
+              </button>
+            );
+          })
+        );
+      })}
     </div>
-  );
+    {hiddenFromGridCount > 0 && (
+      <p className="ss-grid-note">
+        {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
+      </p>
+    )}
+  </div>
+);
 
   // Bug 17: only sessions a tutor has ACCEPTED can be put up for cover. A
   // tutor who is still "awaiting response" may decline, so they are not listed.

@@ -306,6 +306,7 @@
 }
 
 .ts-grid-block {
+  position: relative;
   margin: 2px;
   border-radius: 8px;
   border: none;
@@ -336,6 +337,19 @@
 .ts-grid-block.covering {
   background-color: #f3e8ff;
   border: 1px solid #d8b4fe;
+}
+
+.ts-grid-block:hover {
+  filter: brightness(0.97);
+  z-index: 5;
+}
+
+.ts-grid-block.is-short:hover {
+  overflow: visible;
+  z-index: 10;
+  align-self: start;
+  height: auto;
+  min-height: calc(100% - 4px);
 }
 
 .ts-grid-block-time {
