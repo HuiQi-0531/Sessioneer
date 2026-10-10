@@ -45,6 +45,11 @@ test('E2E-04 a coordinator broadcasts a cover, another tutor claims it, everyone
 
   // AC3
   await page.reload();
-  await expect(page.locator('tr', { hasText: 'TUT01' })).toContainText('Cover: Cal Cover');
+  // The list view shows the cover as a pill: a "Cover" tag, then who is covering
+  // (the full "Cover: Cal Cover (...)" text is the pill's tooltip).
+  const coverPill = page.locator('tr', { hasText: 'TUT01' }).locator('.ss-cover-pill');
+  await expect(coverPill).toContainText('Cover');
+  await expect(coverPill).toContainText('Cal Cover');
+  await expect(coverPill).toHaveAttribute('title', /^Cover: Cal Cover \(/);
   await expect(page.locator('tr', { hasText: 'TUT01' })).toContainText('Tia Tutor');
 });
