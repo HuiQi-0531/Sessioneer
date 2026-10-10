@@ -44,8 +44,8 @@ export const ActiveUnitProvider = ({ children }) => {
   // can force the freshly created unit to become active, instead of always
   // falling back to whatever was previously active.
   const refreshUnits = useCallback(async (options = {}) => {
-    const { preferUnitId = null } = options;
-    const latestFallbackRole = getCurrentUser()?.role;
+    const { preferUnitId = null, resetRole = false } = options;
+    const latestFallbackRole = normaliseViewRole(getCurrentUser()?.role);
 
     if (latestFallbackRole !== 'coordinator' && latestFallbackRole !== 'tutor') {
       setAllUnits([]);
@@ -61,17 +61,20 @@ export const ActiveUnitProvider = ({ children }) => {
       setAllUnits(units);
 
       setActiveUnitIdState(prevId => {
-        const preferredRole = activeViewRole || latestFallbackRole;
+       // Right after login, ignore the previous person's view.
+        const preferredRole = (resetRole ? null : activeViewRole) || latestFallbackRole;
         const preferredUnit = preferUnitId ? units.find(u => u.id === preferUnitId) : null;
         const previousUnit = units.find(u => u.id === prevId);
+        // A Super Tutor membership counts as the 'tutor' view.
+        const hasViewRole = (u, role) => (u.roles || []).map(normaliseViewRole).includes(role);
         const previousUnitForRole = preferredRole
-          ? units.find(u => u.id === prevId && u.roles?.includes(preferredRole))
+          ? units.find(u => u.id === prevId && hasViewRole(u, preferredRole))
           : null;
         const firstActiveUnitForRole = preferredRole
-          ? units.find(u => u.roles?.includes(preferredRole) && u.isActive)
+          ? units.find(u => hasViewRole(u, preferredRole) && u.isActive)
           : null;
         const firstUnitForRole = preferredRole
-          ? units.find(u => u.roles?.includes(preferredRole))
+          ? units.find(u => hasViewRole(u, preferredRole))
           : null;
         const nextUnit = preferredUnit || previousUnitForRole || firstActiveUnitForRole || firstUnitForRole || previousUnit || units[0] || null;
 
@@ -109,7 +112,7 @@ export const ActiveUnitProvider = ({ children }) => {
 
   const setActiveUnitId = (id) => {
     const nextUnit = allUnits.find(u => u.id === id);
-    setActiveViewRoleState(prevRole => getDefaultRole(nextUnit, prevRole, getCurrentUser()?.role));
+    setActiveViewRoleState(prevRole => getDefaultRole(nextUnit, prevRole, normaliseViewRole(getCurrentUser()?.role)));
     setActiveUnitIdState(id);
   };
 

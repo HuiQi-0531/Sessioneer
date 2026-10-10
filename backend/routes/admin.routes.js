@@ -370,6 +370,36 @@ router.put('/users/:id', async (req, res) => {
       return res.status(400).json({ error: selfEditError });
     }
 
+        // Leaving the coordinator role: not allowed while she is the MAIN
+    // coordinator of a unit (that unit would have no owner).
+    if (role === 'tutor' || role === 'super_tutor') {
+      const mainUnits = await pool.query(
+        'SELECT unit_code FROM units WHERE unit_coordinator_id = $1',
+        [req.params.id]
+      );
+      if (mainUnits.rows.length > 0) {
+        const codes = mainUnits.rows.map(row => row.unit_code).join(', ');
+        return res.status(409).json({
+          error: `This user is the main coordinator of ${codes}. Change the main coordinator first.`
+        });
+      }
+    }
+
+    // Going back to Tutor: stop if she still teaches a Lecture/Consultation
+    // in any unit where she is a Super Tutor (same rule as the Units page).
+    if (role === 'tutor') {
+      const superTutorUnits = await pool.query(
+        `SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'super_tutor'`,
+        [req.params.id]
+      );
+      for (const row of superTutorUnits.rows) {
+        const downgradeError = await superTutorDowngradeError(req.params.id, row.unit_id);
+        if (downgradeError) {
+          return res.status(409).json({ error: downgradeError });
+        }
+      }
+    }
+
     const result = await pool.query(
       `
       UPDATE users
@@ -388,6 +418,28 @@ router.put('/users/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Keep unit access in step with the account role: in every unit she
+    // belongs to, her access becomes the new role (Tutor, Super Tutor or UC).
+    const SYNC_ROLES = ['tutor', 'super_tutor', 'coordinator'];
+    if (SYNC_ROLES.includes(role)) {
+      const fromRoles = SYNC_ROLES.filter(r => r !== role);
+
+      await pool.query(
+        `
+        INSERT INTO unit_memberships (unit_id, user_id, role)
+        SELECT DISTINCT unit_id, user_id, $2
+        FROM unit_memberships
+        WHERE user_id = $1 AND role = ANY($3::text[])
+        ON CONFLICT (unit_id, user_id, role) DO NOTHING
+        `,
+        [req.params.id, role, fromRoles]
+      );
+
+      await pool.query(
+        `DELETE FROM unit_memberships WHERE user_id = $1 AND role = ANY($2::text[])`,
+        [req.params.id, fromRoles]
+      );
+    }
     const counts = await pool.query(
       `
       SELECT

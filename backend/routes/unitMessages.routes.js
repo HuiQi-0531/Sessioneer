@@ -96,7 +96,7 @@ router.get('/contacts', verifyToken, async (req, res) => {
       return res.json(contacts);
     }
 
-    if (req.user.role === 'tutor' || req.user.role === 'coordinator') {
+    if (['tutor', 'super_tutor', 'coordinator'].includes(req.user.role)) {
       const linked = await isTutorLinkedToUnit(req.user.id, unitId);
       if (!linked) {
         return req.user.role === 'coordinator'
@@ -169,7 +169,7 @@ router.get('/group-unread-count', verifyToken, async (req, res) => {
     const { unitId } = req.params;
 
     const canSeeChat = (req.user.role === 'coordinator' && !!(await getOwnedUnitId(unitId, req.user.id)))
-      || ((req.user.role === 'tutor' || req.user.role === 'coordinator') && await isTutorLinkedToUnit(req.user.id, unitId));
+       || (['tutor', 'super_tutor', 'coordinator'].includes(req.user.role) && await isTutorLinkedToUnit(req.user.id, unitId));
     if (!canSeeChat) {
       return res.status(403).json({ error: 'You do not have access to this unit chat' });
     }

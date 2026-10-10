@@ -48,7 +48,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/tutor-dashboard" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorDashboard /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorDashboard /></ProtectedRoute>
           } />
           <Route path="/availability" element={
             <ProtectedRoute><TutorAvailability /></ProtectedRoute>
@@ -99,22 +99,22 @@ function App() {
             <ProtectedRoute allowedRoles={['coordinator']}><Messages /></ProtectedRoute>
           } />
           <Route path="/tutor-schedule" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorSchedule /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorSchedule /></ProtectedRoute>
           } />
           <Route path="/tutor-schedule/:unitId" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorSchedule /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorSchedule /></ProtectedRoute>
           } />
           <Route path="/tutor-sessions" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorSession /></ProtectedRoute>
           } />
           <Route path="/tutor-sessions/:unitId" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorSession /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorSession /></ProtectedRoute>
           } />
           <Route path="/tutor-messages" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorMessages /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorMessages /></ProtectedRoute>
           } />
           <Route path="/tutor-units" element={
-            <ProtectedRoute allowedRoles={['tutor']}><TutorUnits /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'super_tutor']}><TutorUnits /></ProtectedRoute>
           } />
           <Route path="/uc-dashboard" element={
             <ProtectedRoute allowedRoles={['coordinator']}><UCDashboard /></ProtectedRoute>

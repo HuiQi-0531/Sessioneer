@@ -2,11 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminShell from './AdminShell';
 import { adminAPI } from '../config/api';
 
+// Roles an admin can choose in the Add/Modify User form
 const ROLE_OPTIONS = [
   { value: 'tutor', label: 'Tutor' },
-  { value: 'coordinator', label: 'Unit Coordinator' },
-  { value: 'admin', label: 'Administrator' }
+  { value: 'super_tutor', label: 'Super Tutor' },
+  { value: 'coordinator', label: 'Unit Coordinator' }
 ];
+
+// Labels for every role that can exist, including admin accounts already in the system
+const ROLE_LABELS = {
+  tutor: 'Tutor',
+  super_tutor: 'Super Tutor',
+  coordinator: 'Unit Coordinator',
+  admin: 'Administrator'
+};
 
 const ACCOUNT_STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -32,9 +41,7 @@ const emptyForm = {
   sendSetupLink: true
 };
 
-const getRoleLabel = (role) => {
-  return ROLE_OPTIONS.find(option => option.value === role)?.label || role;
-};
+const getRoleLabel = (role) => ROLE_LABELS[role] || role;
 
 const getStatusLabel = (status) => {
   return ACCOUNT_STATUS_OPTIONS.find(option => option.value === status)?.label || status || 'Active';
@@ -507,11 +514,17 @@ const AdminUsers = () => {
             <div className="admin-form-grid">
               <label>
                 Role
-                <select name="role" value={formData.role} onChange={updateForm}>
-                  {ROLE_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                {formData.role === 'admin' ? (
+                  <select name="role" value="admin" disabled>
+                    <option value="admin">Administrator</option>
+                  </select>
+                ) : (
+                  <select name="role" value={formData.role} onChange={updateForm}>
+                    {ROLE_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                )}
               </label>
               <label>
                 Account status

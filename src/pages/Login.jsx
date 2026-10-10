@@ -43,10 +43,13 @@ const Login = () => {
 
             const data = await authAPI.login(formData);
 
+            console.log('Logged in user from server:', data.user); // temporary, for checking
+
             localStorage.setItem('currentUser', JSON.stringify(data.user));
             localStorage.setItem('token', data.token);
+            localStorage.removeItem('activeViewRole'); // clear the previous person's view role
 
-            await refreshUnits();
+            await refreshUnits({ resetRole: true });
             navigate(getHomePath(data.user.role));
 
         } catch (err) {

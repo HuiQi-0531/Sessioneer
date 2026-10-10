@@ -96,7 +96,12 @@ const verifyToken = async (req, res, next) => {
 
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const role = req.user?.role;
+    // A Super Tutor can do everything a Tutor can.
+    const allowed = allowedRoles.includes(role) ||
+      (role === 'super_tutor' && allowedRoles.includes('tutor'));
+
+    if (!req.user || !allowed) {
       return res.status(403).json({ error: 'You do not have permission to do this' });
     }
     next();

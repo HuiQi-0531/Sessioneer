@@ -136,7 +136,7 @@ const canAccessUnit = async (user, unitId) => {
   }
 
   // A coordinator account can also be a tutor on another unit.
-  if (user.role === 'tutor' || user.role === 'coordinator') {
+  if (['tutor', 'super_tutor', 'coordinator'].includes(user.role)) {
     const result = await pool.query(
       `
       SELECT 1 WHERE EXISTS (
