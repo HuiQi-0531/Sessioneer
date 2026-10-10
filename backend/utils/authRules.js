@@ -1,6 +1,6 @@
 // Registration rules used by auth.routes.js.
 const { splitDisplayName } = require('./userNames');
-const { isValidPassword } = require('./passwords');
+const { passwordRuleError } = require('./passwords');
 
 // Only "coordinator" (any capitalisation) registers a coordinator. Anything
 // else, including "admin", registers a tutor: admins are never self-made.
@@ -30,9 +30,8 @@ const validateRegistration = ({ firstName, lastName, email, role, password, conf
   if (password !== confirmPassword) {
     return 'Passwords do not match';
   }
-  if (!isValidPassword(password)) {
-    return 'Password must be at least 6 characters';
-  }
+  const passwordError = passwordRuleError(password);
+  if (passwordError) return passwordError;
   return null;
 };
 

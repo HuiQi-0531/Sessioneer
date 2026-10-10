@@ -24,8 +24,24 @@ const hashResetToken = (token) => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
-// At least 6 characters. Anything that is not text (a number, null, an
-// object) is rejected instead of crashing the route.
-const isValidPassword = (password) => typeof password === 'string' && password.length >= 6;
+// First failing rule only, so the message says which rule failed.
+// Order: length, uppercase, lowercase, number.
+const passwordRuleError = (password) => {
+  if (typeof password !== 'string' || password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must include at least one number';
+  }
+  return null;
+};
 
-module.exports = { hashPassword, verifyPassword, hashResetToken, isValidPassword };
+const isValidPassword = (password) => passwordRuleError(password) === null;
+
+module.exports = { hashPassword, verifyPassword, hashResetToken, passwordRuleError, isValidPassword };

@@ -8,7 +8,7 @@ const { normaliseRegisterRole, resolveRegisterName, validateRegistration } = req
 
 const router = express.Router();
 
-const { hashPassword, verifyPassword, hashResetToken, isValidPassword } = require('../utils/passwords');
+const { hashPassword, verifyPassword, hashResetToken, passwordRuleError } = require('../utils/passwords');
 
 const formatUser = (user) => ({
   id: user.id,
