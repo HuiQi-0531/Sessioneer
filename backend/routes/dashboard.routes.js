@@ -170,7 +170,10 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
       };
     }));
 
-    const unitIds = unitsResult.rows.map(u => u.id);
+    // The dashboard covers this semester only. A unit duplicated into a
+    // future semester (or left over from a past one) must not add to the counts.
+    const currentUnits = unitStatuses.filter(u => u.isActive);
+    const unitIds = currentUnits.map(u => u.unitId);
 
     let pendingRequestsCount = 0;
     let totalSessions = 0;
@@ -219,7 +222,7 @@ router.get('/uc/dashboard-summary', verifyToken, requireRole('coordinator'), asy
 
     res.json({
       unitStatuses,
-      totalUnits: unitsResult.rows.length,
+      totalUnits: currentUnits.length,
       activeUnitCount: countDashboardUnits(unitStatuses).activeUnitCount,
       pendingRequestsCount,
       totalSessions,
