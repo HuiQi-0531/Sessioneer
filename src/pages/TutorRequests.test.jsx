@@ -172,3 +172,11 @@ test('a failed delete shows the error inside the dialog and keeps the card', asy
   expect(await screen.findByText('Only pending requests can be deleted')).toBeInTheDocument();
   expect(screen.getByText('delete me')).toBeInTheDocument();
 });
+
+test('an approved request has no delete button (only waiting requests can be withdrawn)', async () => {
+  requestsAPI.getAll.mockResolvedValue([{ ...pendingSwap, id: 'r9', status: 'accepted', reason: 'done deal' }]);
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Confirmation Status/ }));
+  expect(await screen.findByText('done deal')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Delete request' })).toBeNull();
+});

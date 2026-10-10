@@ -523,6 +523,8 @@ const TutorRequests = () => {
                 {req.status}
               </span>
             </div>
+            {/* Only a request still waiting can be withdrawn; approved/rejected ones stay on record. */}
+            {['pending', 'suggested'].includes(String(req.status || '').toLowerCase()) && (
             <button className="delete-btn" aria-label="Delete request" onClick={() => handleDelete(req)}>
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -530,6 +532,7 @@ const TutorRequests = () => {
                 <path d="M10 11v6" /><path d="M14 11v6" />
               </svg>
             </button>
+            )}
           </div>
         </div>
         <div className="request-card-body">

@@ -56,3 +56,23 @@ export const installAuthExpiryHandler = (target = window, onExpired = handleExpi
   target.fetch = wrapped;
   return wrapped;
 };
+
+// Another tab of this browser logged in as someone else (or logged out).
+// localStorage is shared, so this tab's next save would quietly go out with
+// the other account's token - e.g. a Profile form still showing Alex being
+// saved onto Tom's account. Reload so the page matches the account in use,
+// or go to the login page if nobody is logged in any more.
+export const installAccountSwitchGuard = (target = window, reload = () => target.location.reload()) => {
+  if (!target.addEventListener || target.__accountSwitchGuard) return;
+  target.__accountSwitchGuard = true;
+  target.addEventListener('storage', (event) => {
+    if (event.key !== 'token' || event.oldValue === event.newValue) return;
+    if (!event.newValue) {
+      handleExpiredLogin();
+      return;
+    }
+    if (isPublicPath(target.location.pathname)) return;
+    disconnectSocket();
+    reload();
+  });
+};

@@ -40,7 +40,13 @@ defineApiCases('API requests: submitting and editing', (add) => {
     const { sendEmail } = require('../../utils/email');
     sendEmail.mockClear();
     await submit(ctx, ctx.tokens.tutor);
-    await submit(ctx, ctx.tokens.tutor, { priority: 'urgent' });
+    // A second open request must be about a different session (one per session),
+    // so give the tutor a second session for the urgent one.
+    await putTutorOn(ctx.s.long, ctx.u.tutor.id);
+    const urgent = await submit(ctx, ctx.tokens.tutor, {
+      priority: 'urgent', currentSessionId: ctx.s.long, currentSession: 'MON 13:00-15:00|GP-P-101'
+    });
+    expect(urgent.status).toBe(201);
     expect(sendEmail).toHaveBeenCalled();
     const mine = (await api('get', '/requests', ctx.tokens.tutor)).body;
     expect(mine[0].priority).toBe('Urgent');

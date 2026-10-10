@@ -243,6 +243,19 @@ router.post('/requests', verifyToken, requireRole('tutor', 'coordinator'), async
       }
     }
 
+    // One open request per session: a second one could be approved after the
+    // first already moved the tutor off that session.
+    if (resolvedCurrentId) {
+      const open = await pool.query(
+        `SELECT 1 FROM change_requests
+         WHERE tutor_id = $1 AND current_session_id = $2 AND LOWER(status) IN ('pending', 'suggested')`,
+        [tutor_id, resolvedCurrentId]
+      );
+      if (open.rows.length > 0) {
+        return res.status(409).json({ error: 'You already have an open request for this session. Delete it first or wait for a reply.' });
+      }
+    }
+
     if (resolvedPreferredId) {
       if (!resolvedCurrentId) {
         return res.status(400).json({ error: 'Please select a current session' });
@@ -415,6 +428,15 @@ router.patch('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), 
 router.delete('/requests/:id', verifyToken, requireRole('tutor', 'coordinator'), async (req, res) => {
   try {
     const { id } = req.params;
+    // Only a request still waiting (Pending, or a UC suggestion not yet answered)
+    // can be withdrawn. An approved/rejected one stays as the UC's record.
+    const existing = await pool.query('SELECT status FROM change_requests WHERE id = $1 AND tutor_id = $2', [id, req.user.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    if (!['pending', 'suggested'].includes(String(existing.rows[0].status || '').toLowerCase())) {
+      return res.status(409).json({ error: 'Only pending requests can be deleted' });
+    }
     const result = await pool.query('DELETE FROM change_requests WHERE id = $1 AND tutor_id = $2 RETURNING id', [id, req.user.id]);
 
     if (result.rows.length === 0) {
@@ -442,14 +464,19 @@ router.get('/sessions', verifyToken, async (req, res) => {
           JOIN users u ON u.id = st.tutor_id
           WHERE st.session_id = s.id AND st.tutor_confirmed IS DISTINCT FROM FALSE
             -- a tutor only ever sees their own name here (bug 5a)
-            AND ($2::boolean OR st.tutor_id = $1)
+            -- other names only for a coordinator of THIS session's unit (or admin),
+            -- not for every coordinator account
+            AND ($2::boolean OR st.tutor_id = $1 OR s.unit_id IN (
+              SELECT id FROM units WHERE unit_coordinator_id = $1
+              UNION SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'coordinator'
+            ))
         ) AS assigned_tutor_name
       FROM sessions s
       LEFT JOIN units un ON s.unit_id = un.id
       -- Only units the caller belongs to (this used to return every unit's sessions).
       WHERE s.unit_id IN (${LINKED_UNITS_SQL})
       ORDER BY s.day, s.start_time
-    `, [req.user.id, req.user.role === 'coordinator' || req.user.role === 'admin']);
+    `, [req.user.id, req.user.role === 'admin']);
 
     res.json(result.rows);
   } catch (error) {

@@ -206,15 +206,28 @@ router.post('/submit', verifyToken, requireRole('tutor', 'coordinator'), async (
       [tutor_id, unit_id]
     );
 
-    for (const [key, preference] of Object.entries(slots)) {
-      // Slots that cannot be read are skipped, the rest are still saved.
-      const slot = parseAvailabilitySlot(key, preference);
-      if (!slot) continue;
-
-      await client.query(`
+    // Slots that cannot be read are skipped, the rest are still saved.
+    // One INSERT for all slots: a full week is ~100 slots, and one round trip
+    // each made Submit take several seconds against the hosted database.
+    const parsed = Object.entries(slots)
+      .map(([key, preference]) => parseAvailabilitySlot(key, preference))
+      .filter(Boolean);
+    if (parsed.length > 0) {
+      await client.query(
+        `
         INSERT INTO availability (tutor_id, unit_id, day, start_time, end_time, preference, is_submitted, submitted_at)
-        VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
-      `, [tutor_id, unit_id, slot.day, slot.startTime, slot.endTime, slot.preference]);
+        SELECT $1, $2, slot.day, slot.start_time::time, slot.end_time::time, slot.preference, TRUE, NOW()
+        FROM UNNEST($3::text[], $4::text[], $5::text[], $6::text[]) AS slot(day, start_time, end_time, preference)
+        `,
+        [
+          tutor_id,
+          unit_id,
+          parsed.map(slot => slot.day),
+          parsed.map(slot => slot.startTime),
+          parsed.map(slot => slot.endTime),
+          parsed.map(slot => slot.preference)
+        ]
+      );
     }
 
     await client.query('COMMIT');

@@ -245,7 +245,11 @@ router.get('/my-assigned', verifyToken, requireRole('tutor', 'coordinator'), asy
     );
 
     const formatted = result.rows.map(formatSessionRow);
-    if (req.user.role !== 'coordinator') {
+    // Only a coordinator OF THIS UNIT sees co-tutors. A coordinator account
+    // that is just a tutor here (e.g. UC of CAB201, super tutor in IFB105)
+    // gets the same cut-down view as any other tutor.
+    const coordinatesThisUnit = !!(await getCoordinatorUnitId(unitId, req.user.id));
+    if (!coordinatesThisUnit) {
       // Bug 5a: on a session with two tutors, keep only the caller's own
       // entry, so their co-tutor's accept status / decline reason stays private.
       const ownOnly = formatted.map(row => {

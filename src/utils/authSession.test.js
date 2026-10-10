@@ -40,3 +40,34 @@ describe('auth expiry handler', () => {
     expect(localStorage.getItem('currentUser')).toBeNull();
   });
 });
+
+describe('installAccountSwitchGuard', () => {
+  const makeTarget = (pathname = '/profile') => {
+    const listeners = {};
+    return {
+      location: { pathname, replace: jest.fn() },
+      addEventListener: (type, fn) => { listeners[type] = fn; },
+      fire: (event) => listeners.storage(event)
+    };
+  };
+
+  test('another tab logging in as someone else reloads this tab', () => {
+    const { installAccountSwitchGuard } = require('./authSession');
+    const target = makeTarget('/profile');
+    const reload = jest.fn();
+    installAccountSwitchGuard(target, reload);
+    target.fire({ key: 'token', oldValue: 'alex-token', newValue: 'tom-token' });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test('unrelated keys and unchanged tokens are ignored; login pages are left alone', () => {
+    const { installAccountSwitchGuard } = require('./authSession');
+    const target = makeTarget('/login');
+    const reload = jest.fn();
+    installAccountSwitchGuard(target, reload);
+    target.fire({ key: 'activeUnitId', oldValue: 'a', newValue: 'b' });
+    target.fire({ key: 'token', oldValue: 'same', newValue: 'same' });
+    target.fire({ key: 'token', oldValue: 'a', newValue: 'b' });
+    expect(reload).not.toHaveBeenCalled();
+  });
+});
