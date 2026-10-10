@@ -21,12 +21,12 @@ const fillRegister = async (page, password, confirm = password) => {
 
 test('E2E-07 register: a short password is refused, a good one works and the user can log in', async ({ page }) => {
   await fillRegister(page, '123');
-  await expect(page.locator('.error-message')).toHaveText('Password must be at least 6 characters');
-  await fillRegister(page, 'abcdef', 'abcdeg');
+  await expect(page.locator('.error-message')).toHaveText('Password must be at least 8 characters');
+  await fillRegister(page, 'Abcdef12', 'Abcdef13');
   await expect(page.locator('.error-message')).toHaveText('Passwords do not match');
-  await fillRegister(page, 'abcdef');
+  await fillRegister(page, 'Abcdef12');
   await expect(page).toHaveURL(/\/login/);
-  await loginAs(page, 'nia.new@e2e.test', 'abcdef');
+  await loginAs(page, 'nia.new@e2e.test', 'Abcdef12');
   await expect(page).toHaveURL(/\/tutor-dashboard/);
 });
 

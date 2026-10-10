@@ -104,30 +104,30 @@ defineApiCases('API auth', (add) => {
     expect((await api('post', '/auth/reset-password', null, { token: 'x', newPassword: '123' })).status).toBe(400);
   });
   add('reset-password rejects an unknown token', async () => {
-    expect((await api('post', '/auth/reset-password', null, { token: 'missing', newPassword: 'abcdef' })).status).toBe(400);
+    expect((await api('post', '/auth/reset-password', null, { token: 'missing', newPassword: 'Abcdef12' })).status).toBe(400);
   });
   add('reset-password rejects an expired token', async (ctx) => {
     const raw = 'expired-token';
     await query(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() - INTERVAL '1 minute')`, [ctx.u.tutor.id, crypto.createHash('sha256').update(raw).digest('hex')]);
-    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'abcdef' })).status).toBe(400);
+    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'Abcdef12' })).status).toBe(400);
   });
   add('reset-password lets the user log in with the new password', async (ctx) => {
     const raw = 'valid-reset-token';
     await query(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`, [ctx.u.tutor.id, crypto.createHash('sha256').update(raw).digest('hex')]);
-    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'newpass' })).status).toBe(200);
-    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'newpass' })).status).toBe(200);
+    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'Newpass12' })).status).toBe(200);
+    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'Newpass12' })).status).toBe(200);
   });
   add('reset-password rejects the old password after a reset', async (ctx) => {
     const raw = 'valid-reset-token-2';
     await query(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`, [ctx.u.tutor.id, crypto.createHash('sha256').update(raw).digest('hex')]);
-    await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'newpass' });
+    await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'Newpass12' });
     expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: PASSWORD })).status).toBe(401);
   });
   add('reset-password cannot use the same token twice', async (ctx) => {
     const raw = 'valid-reset-token-3';
     await query(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`, [ctx.u.tutor.id, crypto.createHash('sha256').update(raw).digest('hex')]);
-    await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'newpass' });
-    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'abcdef' })).status).toBe(400);
+    await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'Newpass12' });
+    expect((await api('post', '/auth/reset-password', null, { token: raw, newPassword: 'Abcdef12' })).status).toBe(400);
   });
   add('health is public', async () => {
     expect((await api('get', '/health')).status).toBe(200);

@@ -17,9 +17,9 @@ describe('API profile, messages, notifications, dashboards', () => {
     expect(tutorUpdate.status).toBe(200);
     expect(Number((await query('SELECT maximum_hours FROM users WHERE id = $1', [ctx.u.tutor.id])).rows[0].maximum_hours)).toBe(6);
 
-    expect((await api('put', '/profile/password', T('tutor'), { newPassword: 'abcdef' })).status).toBe(400);
-    expect((await api('put', '/profile/password', T('tutor'), { currentPassword: 'wrong', newPassword: 'abcdef' })).status).toBe(401);
-    const changed = await api('put', '/profile/password', T('tutor'), { currentPassword: ctx.password, newPassword: 'abcdef' });
+    expect((await api('put', '/profile/password', T('tutor'), { newPassword: 'Abcdef12' })).status).toBe(400);
+    expect((await api('put', '/profile/password', T('tutor'), { currentPassword: 'wrong', newPassword: 'Abcdef12' })).status).toBe(401);
+    const changed = await api('put', '/profile/password', T('tutor'), { currentPassword: ctx.password, newPassword: 'Abcdef12' });
     expect(changed.status).toBe(200);
     // Changing the password ends every older login; the response carries a new token.
     expect((await api('get', '/profile', T('tutor'))).status).toBe(401);

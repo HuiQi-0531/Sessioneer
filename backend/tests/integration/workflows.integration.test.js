@@ -47,9 +47,9 @@ describe('Integration workflows', () => {
     // Invites a brand-new tutor, who accepts and logs in.
     const invite = await api('post', '/tutor-applications/direct-invite', uc, { unitId: unit.id, email: 'Fresh.Tutor@api.test' });
     expect((await api('post', '/tutor-applications/accept-invite', null, {
-      token: invite.body.inviteToken, password: 'abcdef', firstName: 'Fresh', lastName: 'Tutor'
+      token: invite.body.inviteToken, password: 'Abcdef12', firstName: 'Fresh', lastName: 'Tutor'
     })).status).toBe(201);
-    const tutor = await login('fresh.tutor@api.test', 'abcdef');
+    const tutor = await login('fresh.tutor@api.test', 'Abcdef12');
     const tutorId = (await api('get', '/profile', tutor)).body.id;
     expect((await api('get', '/units/my-units', tutor)).body.map(u => u.unitCode)).toContain('FLOW101');
 
@@ -303,24 +303,24 @@ describe('Integration workflows', () => {
     });
     expect(created.status).toBe(201);
     const token = tokenFromLastEmail();
-    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'chosen1' })).status).toBe(200);
-    const userToken = await login('setup.user@api.test', 'chosen1');
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'Chosen12' })).status).toBe(200);
+    const userToken = await login('setup.user@api.test', 'Chosen12');
     expect((await api('get', '/profile', userToken)).body.email).toBe('setup.user@api.test');
 
     await api('put', `/admin/users/${created.body.id}`, ctx.tokens.admin, {
       firstName: 'Setup', lastName: 'User', email: 'setup.user@api.test', role: 'tutor', accountStatus: 'disabled'
     });
-    expect((await api('post', '/auth/login', null, { email: 'setup.user@api.test', password: 'chosen1' })).status).toBe(403);
+    expect((await api('post', '/auth/login', null, { email: 'setup.user@api.test', password: 'Chosen12' })).status).toBe(403);
     expect((await api('get', '/profile', userToken)).status).toBe(403); // the old token stops working too
   });
 
   test('INT-13 forgot password: email link works once, old password stops working', async () => {
     await api('post', '/auth/forgot-password', null, { email: 'TUTOR@api.test' });
     const token = tokenFromLastEmail();
-    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'brandnew' })).status).toBe(200);
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'Brandnew12' })).status).toBe(200);
     expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: PASSWORD })).status).toBe(401);
-    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'brandnew' })).status).toBe(200);
-    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'again12' })).status).toBe(400);
+    expect((await api('post', '/auth/login', null, { email: 'tutor@api.test', password: 'Brandnew12' })).status).toBe(200);
+    expect((await api('post', '/auth/reset-password', null, { token, newPassword: 'Again1234' })).status).toBe(400);
   });
 
   test('INT-14 reminders: a 3-day-old unanswered offer is emailed once, an answered one never', async () => {

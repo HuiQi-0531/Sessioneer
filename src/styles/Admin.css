@@ -1894,4 +1894,9 @@
 .admin-modal select:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+/* Bug 11: hint above the staff picker for Lecture / Consultation sessions. */
+.admin-session-assignment-note {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--color-text-muted, #6b7280);
 }

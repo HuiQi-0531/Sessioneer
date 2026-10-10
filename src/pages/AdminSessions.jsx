@@ -509,9 +509,18 @@ const AdminSessions = () => {
                     <div className="admin-session-assignment-heading">
                       <h3>Assign staff</h3>
                     </div>
+                    {assignmentData.superTutorOnly && (
+                      <p className="admin-session-assignment-note">
+                        Only Super Tutors and Unit Coordinators can take {assignmentData.sessionType || 'this'} sessions.
+                      </p>
+                    )}
                     <div className="admin-session-assignment-form">
                       <select value={selectedStaffId} onChange={event => setSelectedStaffId(event.target.value)} aria-label="Staff to assign" disabled={assignmentData.scheduleLocked || isAssignmentSubmitting || activeAssignmentCount >= assignmentData.requiredTutors}>
-                        <option value="">Select staff</option>
+                        <option value="">
+                          {availableStaff.length === 0 && assignmentData.superTutorOnly
+                            ? 'No Super Tutor or Unit Coordinator available'
+                            : 'Select staff'}
+                        </option>
                         {availableStaff.map(staff => (
                           <option key={staff.id} value={staff.id}>{staff.name} · {staffRoleLabel[staff.role]}</option>
                         ))}

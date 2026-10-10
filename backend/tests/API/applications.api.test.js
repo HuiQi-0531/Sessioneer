@@ -80,12 +80,12 @@ describe('API tutor applications', () => {
 
   expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: '123' })).status).toBe(400);
   const accepted = await api('post', '/tutor-applications/accept-invite', null, {
-    token, password: 'abcdef', firstName: 'Brand', lastName: 'New'
+    token, password: 'Abcdef12', firstName: 'Brand', lastName: 'New'
   });
   expect(accepted.status).toBe(201);
-  expect((await api('post', '/auth/login', null, { email: 'brand.new@api.test', password: 'abcdef' })).status).toBe(200);
+  expect((await api('post', '/auth/login', null, { email: 'brand.new@api.test', password: 'Abcdef12' })).status).toBe(200);
   expect((await api('get', `/tutor-applications/verify-invite/${token}`)).status).toBe(409);
-  expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: 'abcdef', firstName: 'Brand', lastName: 'New' })).status).toBe(409);
+  expect((await api('post', '/tutor-applications/accept-invite', null, { token, password: 'Abcdef12', firstName: 'Brand', lastName: 'New' })).status).toBe(409);
 
   const expiredInvite = await api('post', '/tutor-applications/direct-invite', T('uc'), {
     unitId: ctx.unitA.id, email: 'expired.invite@api.test', role: 'tutor'
@@ -107,14 +107,14 @@ describe('API tutor applications', () => {
     const app = list.body.find(a => a.email === 'mixed.case@api.test');
     expect(app).toBeDefined();
     const invite = await api('patch', `/tutor-applications/${app.id}/invite`, T('uc'), { unitId: ctx.unitA.id });
-    expect((await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'abcdef' })).status).toBe(201);
-    expect((await api('post', '/auth/login', null, { email: 'Mixed.Case@api.test', password: 'abcdef' })).status).toBe(200);
+    expect((await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'Abcdef12' })).status).toBe(201);
+    expect((await api('post', '/auth/login', null, { email: 'Mixed.Case@api.test', password: 'Abcdef12' })).status).toBe(200);
   });
 
   test('API-A06 an old application with the whole name in one field is split on accept', async () => {
     const invite = await api('post', '/tutor-applications/direct-invite', T('uc'), { unitId: ctx.unitA.id, email: 'legacy.name@api.test' });
     await query(`UPDATE tutor_applications SET name = 'Alex Lee', last_name = NULL WHERE invite_token = $1`, [invite.body.inviteToken]);
-    await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'abcdef' });
+    await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'Abcdef12' });
     const user = (await query(`SELECT name, last_name FROM users WHERE email = 'legacy.name@api.test'`)).rows[0];
     expect(user).toEqual({ name: 'Alex', last_name: 'Lee' });
   });
@@ -125,7 +125,7 @@ describe('API tutor applications', () => {
 
   test('API-A08 accepting an invite makes the person a member with the invited role', async () => {
     const invite = await api('post', '/tutor-applications/direct-invite', T('uc'), { unitId: ctx.unitA.id, email: 'super.new@api.test', role: 'super_tutor' });
-    await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'abcdef', firstName: 'Sue', lastName: 'Per' });
+    await api('post', '/tutor-applications/accept-invite', null, { token: invite.body.inviteToken, password: 'Abcdef12', firstName: 'Sue', lastName: 'Per' });
     const roles = await query(
       `SELECT um.role FROM unit_memberships um JOIN users u ON u.id = um.user_id WHERE u.email = 'super.new@api.test' AND um.unit_id = $1`,
       [ctx.unitA.id]

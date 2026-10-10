@@ -5,12 +5,15 @@ import { coverAPI, requestsAPI, sessionsAPI } from '../config/api';
 
 jest.mock('../config/api', () => ({
   requestsAPI: { getAll: jest.fn(), create: jest.fn(), delete: jest.fn(), update: jest.fn() },
-  sessionsAPI: { getMyAssigned: jest.fn().mockResolvedValue([]), getAll: jest.fn().mockResolvedValue([]) },
+  sessionsAPI: { getMyAssigned: jest.fn().mockResolvedValue([]), getAll: jest.fn().mockResolvedValue([]), getSwapTargets: jest.fn().mockResolvedValue([]) },
   coverAPI: { getOpen: jest.fn(), claim: jest.fn() }
 }));
 const mockUnitContext = {
-    allUnits: [{ id: 'unit1', unitCode: 'CAB201', roles: ['tutor'] }],
-    activeUnit: { id: 'unit1', unitCode: 'CAB201', roles: ['tutor'] },
+    allUnits: [
+      { id: 'unit2027', unitCode: 'CAB201', semester: 'Semester 2', year: 2027, roles: ['tutor'] },
+      { id: 'unit1', unitCode: 'CAB201', semester: 'Semester 2', year: 2026, roles: ['tutor'] }
+    ],
+    activeUnit: { id: 'unit1', unitCode: 'CAB201', semester: 'Semester 2', year: 2026, roles: ['tutor'] },
     isLoading: false
   };
 jest.mock('../context/ActiveUnitContext', () => ({ useActiveUnit: () => mockUnitContext }));
@@ -18,7 +21,7 @@ jest.mock('../components/TutorSidebar', () => () => null);
 jest.mock('../components/UCPageHeader', () => ({ title }) => <h1>{title}</h1>);
 
 const openCover = {
-  id: 'c1', unitCode: 'CAB201', unitName: 'Software', sessionCode: 'TUT01', day: 'MON',
+  id: 'c1', unitId: 'unit1', unitCode: 'CAB201', unitName: 'Software', sessionCode: 'TUT01', day: 'MON',
   startTime: '09:00:00', endTime: '10:00:00', startDate: '2026-10-05', endDate: '2026-10-05',
   location: 'P-1', sessionType: 'Tutorial', originalTutorName: 'Tia Tutor', reason: 'conference', occurrenceCount: 1
 };
@@ -30,26 +33,73 @@ beforeEach(() => {
   coverAPI.getOpen.mockResolvedValue([openCover]);
   sessionsAPI.getMyAssigned.mockResolvedValue([]);
   sessionsAPI.getAll.mockResolvedValue([]);
+  sessionsAPI.getSwapTargets.mockResolvedValue([]);
 });
 
-test('M-2 preferred swaps only list the current session type and reset when current session changes', async () => {
+test('M-2 preferred swaps come from the backend for the chosen session and reset when it changes', async () => {
   const session = (id, sessionType, day) => ({ id, sessionType, day, startTime: '09:00', endTime: '10:00', location: 'P-1' });
   const mine = [session('tutorial', 'Tutorial', 'MON'), session('practical', 'Practical', 'TUE')];
   sessionsAPI.getMyAssigned.mockResolvedValue(mine);
-  sessionsAPI.getAll.mockResolvedValue([...mine, session('other-tutorial', 'Tutorial', 'WED'), session('lecture', 'Lecture', 'THU')]);
+  sessionsAPI.getSwapTargets.mockImplementation(async (_unitId, currentId) => (
+    currentId === 'tutorial' ? [session('other-tutorial', 'Tutorial', 'WED')] : []
+  ));
   const { container } = render(<TutorRequests />);
   fireEvent.click(screen.getByRole('button', { name: '+ Request' }));
-  fireEvent.change(container.querySelector('select[name="selectedUnit"]'), { target: { value: 'unit1' } });
   await waitFor(() => expect(container.querySelector('select[name="currentSession"]').options.length).toBe(3));
   const current = container.querySelector('select[name="currentSession"]');
   const preferred = container.querySelector('select[name="preferredSwapTo"]');
   fireEvent.change(current, { target: { value: current.options[1].value } });
-  expect([...preferred.options].map(option => option.text)).not.toEqual(expect.arrayContaining([expect.stringMatching(/Lecture|Practical/)]));
-  expect(preferred.options.length).toBe(2);
+  await waitFor(() => expect(preferred.options.length).toBe(2));
+  expect(sessionsAPI.getSwapTargets).toHaveBeenCalledWith('unit1', 'tutorial');
   fireEvent.change(preferred, { target: { value: preferred.options[1].value } });
   fireEvent.change(current, { target: { value: current.options[2].value } });
   expect(preferred.value).toBe('');
-  expect(preferred.options.length).toBe(1);
+  await waitFor(() => expect(preferred.options.length).toBe(1));
+  expect(preferred.options[0].text).toMatch(/No other Practical with space/);
+});
+
+test('BUG-1ii the unit is locked to the Active Unit and shows its semester (no CAB201 dropdown)', async () => {
+  const { container } = render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: '+ Request' }));
+  expect(container.querySelector('select[name="selectedUnit"]')).toBeNull();
+  expect(screen.getByDisplayValue('CAB201 · Semester 2, 2026')).toBeDisabled();
+  await waitFor(() => expect(sessionsAPI.getMyAssigned).toHaveBeenCalledWith('unit1'));
+  expect(sessionsAPI.getMyAssigned).not.toHaveBeenCalledWith('unit2027');
+});
+
+test('BUG-1ii a request from another semester of the same unit code is not listed', async () => {
+  requestsAPI.getAll.mockResolvedValue([
+    { id: 'r26', unitId: 'unit1', unitCode: 'CAB201', status: 'Pending', requestType: 'Session swap', currentSession: 'CAB201::TUE 09:00-10:00|GP-P-102', reason: 'from 2026', submittedDate: new Date().toISOString() },
+    { id: 'r27', unitId: 'unit2027', unitCode: 'CAB201', status: 'Pending', requestType: 'Session swap', currentSession: 'CAB201::MON 09:00-10:00|GP-P-101', reason: 'from 2027', submittedDate: new Date().toISOString() }
+  ]);
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Pending Status/ }));
+  expect(await screen.findByText('from 2026')).toBeInTheDocument();
+  expect(screen.queryByText('from 2027')).toBeNull();
+});
+
+test('BUG-1ii a cover request from another semester is not listed', async () => {
+  coverAPI.getOpen.mockResolvedValue([{ ...openCover, id: 'c27', unitId: 'unit2027', reason: 'other semester' }]);
+  render(<TutorRequests />);
+  expect(await screen.findByText(/Nothing needs cover right now/)).toBeInTheDocument();
+});
+
+test('double-clicking Accept on a suggestion only sends it once', async () => {
+  requestsAPI.getAll.mockResolvedValue([
+    { id: 'r1', unitId: 'unit1', unitCode: 'CAB201', status: 'Suggested', reviewNotes: 'TUT03 · Tutorial - WED 11:00 - 12:00 | GP-P-103', requestType: 'Session swap', currentSession: 'CAB201::TUE 09:00-10:00|GP-P-102', reason: 'x', submittedDate: new Date().toISOString() }
+  ]);
+  let finish;
+  requestsAPI.update.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  render(<TutorRequests />);
+  fireEvent.click(screen.getByRole('button', { name: /Pending Status/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept Suggestion' }));
+  const accept = screen.getByRole('button', { name: 'Accept' });
+  fireEvent.click(accept);
+  fireEvent.click(accept);
+  expect(requestsAPI.update).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+  finish({});
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving...' })).toBeNull());
 });
 
 test('FE-26 an open cover is listed with who is away and why', async () => {

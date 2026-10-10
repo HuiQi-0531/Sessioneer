@@ -43,12 +43,21 @@ describe('hashResetToken', () => {
   });
 });
 
-describe('isValidPassword (minimum 6 characters)', () => {
-  test('LG-142: 5 characters is too short', () => {
-    expect(isValidPassword('abcde')).toBe(false);
+// Bug 9: at least 8 characters, with an uppercase letter, a lowercase letter and a number.
+describe('isValidPassword (8+ characters, upper, lower, number)', () => {
+  test('LG-142: 7 characters is too short', () => {
+    expect(isValidPassword('Abcde12')).toBe(false);
   });
-  test('LG-143: exactly 6 characters is accepted', () => {
-    expect(isValidPassword('abcdef')).toBe(true);
+  test('LG-143: 8 characters with upper, lower and a number is accepted', () => {
+    expect(isValidPassword('Abcdef12')).toBe(true);
+  });
+  test('LG-143b: the old 6-character rule no longer passes', () => {
+    expect(isValidPassword('abcdef')).toBe(false);
+  });
+  test('LG-143c: each missing kind of character is refused', () => {
+    expect(isValidPassword('abcdef12')).toBe(false); // no uppercase
+    expect(isValidPassword('ABCDEF12')).toBe(false); // no lowercase
+    expect(isValidPassword('Abcdefgh')).toBe(false); // no number
   });
   test('LG-144: empty password is too short', () => {
     expect(isValidPassword('')).toBe(false);

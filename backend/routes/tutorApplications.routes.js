@@ -16,7 +16,7 @@ const { parseMaximumHours } = require('../utils/profileRules');
 
 const router = express.Router();
 
-const { hashPassword, isValidPassword } = require('../utils/passwords');
+const { hashPassword, isValidPassword, passwordRuleError } = require('../utils/passwords');
 
 const getOwnedUnitId = async (unitId, coordinatorId, clientOrPool = pool) => {
   return getCoordinatorUnitId(unitId, coordinatorId, clientOrPool);

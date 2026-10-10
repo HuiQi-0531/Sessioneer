@@ -1954,13 +1954,14 @@ router.get('/sessions/:id/assignments', async (req, res) => {
     if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid session ID' });
 
     const sessionResult = await pool.query(`
-      SELECT s.id, s.unit_id, s.required_tutors, un.schedule_locked
+      SELECT s.id, s.unit_id, s.required_tutors, s.session_type, un.schedule_locked
       FROM sessions s
       JOIN units un ON un.id = s.unit_id
       WHERE s.id = $1
     `, [req.params.id]);
     const session = sessionResult.rows[0];
     if (!session) return res.status(404).json({ error: 'Session not found' });
+    const needsSuperTutor = requiresSuperTutor(session.session_type);
 
     const [staff, assignedResult] = await Promise.all([
       getAdminSessionStaff(pool.query.bind(pool), session.unit_id),
@@ -1977,7 +1978,14 @@ router.get('/sessions/:id/assignments', async (req, res) => {
     res.json({
       scheduleLocked: !!session.schedule_locked,
       requiredTutors: Number(session.required_tutors || 1),
-      candidates: staff,
+      sessionType: session.session_type,
+      // Bug 11: a Lecture / Consultation can only go to a Super Tutor or the
+      // unit's coordinator, so plain Tutors are not offered at all (picking
+      // one used to fail only after pressing Assign).
+      superTutorOnly: needsSuperTutor,
+      candidates: needsSuperTutor
+        ? staff.filter(member => member.role === 'super_tutor' || member.role === 'coordinator')
+        : staff,
       assigned: assignedResult.rows.map(user => ({
         id: user.id,
         name: joinUserName(user.name, user.last_name) || user.email,

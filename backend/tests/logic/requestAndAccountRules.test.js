@@ -49,12 +49,12 @@ describe('checkTutorStatusChange: what a tutor may do to their own request', () 
 });
 
 describe('validateRegistration', () => {
-  const ok = { firstName: 'Ann', lastName: 'Lee', email: 'ann@uni.edu', role: 'Tutor', password: 'secret1', confirmPassword: 'secret1' };
+  const ok = { firstName: 'Ann', lastName: 'Lee', email: 'ann@uni.edu', role: 'Tutor', password: 'Secret12', confirmPassword: 'Secret12' };
   test('LG-536: a complete form is valid', () => {
     expect(validateRegistration(ok)).toBeNull();
   });
   test('LG-537: a 3-character password is refused (regression: it used to be accepted)', () => {
-    expect(validateRegistration({ ...ok, password: '123', confirmPassword: '123' })).toBe('Password must be at least 6 characters');
+    expect(validateRegistration({ ...ok, password: '123', confirmPassword: '123' })).toBe('Password must be at least 8 characters');
   });
   test('LG-538: mismatched passwords are refused first', () => {
     expect(validateRegistration({ ...ok, confirmPassword: 'other12' })).toBe('Passwords do not match');
