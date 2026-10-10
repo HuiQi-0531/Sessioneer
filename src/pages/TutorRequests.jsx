@@ -79,6 +79,11 @@ const TutorRequests = () => {
   const [isLoadingTargets, setIsLoadingTargets] = useState(false);
   const [targetsError, setTargetsError] = useState('');
   const [isResponding, setIsResponding] = useState(false);
+  // Request waiting for the in-app "Delete this request?" confirm (replaces window.confirm).
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [successText, setSuccessText] = useState('Request submitted successfully!');
   // Each load gets a number; a reply that arrives after a newer load started
   // is ignored, so a slow answer can't overwrite the current list.
   const sessionsLoadRef = useRef(0);
@@ -270,6 +275,7 @@ const TutorRequests = () => {
       reason: formData.reason,
     });
     await fetchRequests();
+    setSuccessText('Request submitted successfully!');
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
     setShowModal(false);
@@ -279,12 +285,32 @@ const TutorRequests = () => {
 
   const handleCancel = () => { setShowModal(false); setErrors({}); setFormData(INITIAL_FORM); };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this request?')) return;
+  const handleDelete = (req) => {
+    setDeleteError('');
+    setDeleteTarget(req);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await requestsAPI.delete(id);
-      setRequests(prev => prev.filter(r => r.id !== id));
-    } catch (err) { alert('Failed to delete request.'); }
+      await requestsAPI.delete(deleteTarget.id);
+      setRequests(prev => prev.filter(r => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setSuccessText('Request deleted.');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete request. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const confirmSuggestionResponse = async () => {
@@ -295,6 +321,7 @@ const TutorRequests = () => {
     try {
       await requestsAPI.update(selectedSuggestion.id, { status: suggestionAction === 'accept' ? 'accepted' : 'rejected' });
       await fetchRequests();
+      setSuccessText('Request submitted successfully!');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
       setShowSuggestedModal(false);
@@ -335,6 +362,7 @@ const TutorRequests = () => {
         reason: combinedReason,
       });
       await fetchRequests();
+      setSuccessText('Request submitted successfully!');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
       handleCancelAppeal();
@@ -495,7 +523,7 @@ const TutorRequests = () => {
                 {req.status}
               </span>
             </div>
-            <button className="delete-btn" onClick={() => handleDelete(req.id)}>
+            <button className="delete-btn" aria-label="Delete request" onClick={() => handleDelete(req)}>
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" />
@@ -842,7 +870,49 @@ const TutorRequests = () => {
         </div>
       )}
 
-      {showSuccess && <div className="success-toast">✓ Request submitted successfully!</div>}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={closeDeleteModal}>
+          <div className="modal-content modal-sm" role="dialog" aria-label="Delete request" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ textAlign: 'left' }}>
+                <h2>Delete this request?</h2>
+                {/* Inline style so no other page's CSS can indent it away from the title. */}
+                <p className="modal-subtitle" style={{ margin: 0, padding: 0, textIndent: 0, textAlign: 'left' }}>
+                  This cannot be undone.
+                </p>
+              </div>
+              <button className="modal-close-btn" onClick={closeDeleteModal}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="suggestion-detail">
+                <div className="suggestion-detail-row">
+                  <span className="suggestion-detail-label">Unit</span>
+                  <span className="suggestion-detail-value">{deleteTarget.unitCode || unitCodeFromSession(deleteTarget.currentSession)}</span>
+                </div>
+                <div className="suggestion-detail-row">
+                  <span className="suggestion-detail-label">Type</span>
+                  <span className="suggestion-detail-value">
+                    {(deleteTarget.requestType || '').toLowerCase().includes('swap') ? 'Swap request' : 'Change request'} ({deleteTarget.status})
+                  </span>
+                </div>
+                <div className="suggestion-detail-row">
+                  <span className="suggestion-detail-label">Current Session</span>
+                  <span className="suggestion-detail-value">{labelFromValue(deleteTarget.currentSession) || deleteTarget.currentSession}</span>
+                </div>
+              </div>
+              {deleteError && <p className="error-message">{deleteError}</p>}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={closeDeleteModal} disabled={isDeleting}>Cancel</button>
+              <button className="btn-submit reject-btn" onClick={confirmDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSuccess && <div className="success-toast">✓ {successText}</div>}
     </div>
   );
 };
