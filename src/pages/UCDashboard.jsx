@@ -110,7 +110,7 @@ const UCDashboard = () => {
                   <div className="ucd-stat-sublabel">of {summary.totalSessions} total</div>
                 </Link>
 
-                <Link to="/sessions" className={`ucd-stat-card ${summary.pendingConfirmations > 0 ? 'warn' : ''}`}>
+                <Link to="/schedule-builder" className={`ucd-stat-card ${summary.pendingConfirmations > 0 ? 'warn' : ''}`}>
                   <div className="ucd-stat-number">{summary.pendingConfirmations}</div>
                   <div className="ucd-stat-label">Awaiting Tutor Confirmation</div>
                   <div className="ucd-stat-sublabel">Sessions assigned, not yet confirmed</div>
