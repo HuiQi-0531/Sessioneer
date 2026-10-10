@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { notificationsAPI } from '../config/api';
 import { formatTimeAgo } from '../utils/time';
+import { useOpenNotification } from '../utils/notificationTarget';
 import '../styles/NotificationBell.css';
 
 const POLL_INTERVAL_MS = 15000;
@@ -53,7 +53,7 @@ const getCachedNotifications = async ({ force = false } = {}) => {
 };
 
 const NotificationBell = () => {
-  const navigate = useNavigate();
+  const openNotification = useOpenNotification();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -106,9 +106,9 @@ const NotificationBell = () => {
       }
     }
     setShowDropdown(false);
-    if (n.actionUrl) {
-      navigate(n.actionUrl);
-    }
+    // Switches to the notification's unit/role first, so a link for another unit
+    // (e.g. IFB105 while CAB201 is open) doesn't bounce back to the dashboard.
+    openNotification(n);
   };
 
   return (

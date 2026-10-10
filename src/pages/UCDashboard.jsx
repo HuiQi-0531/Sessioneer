@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { LayoutGrid, CalendarDays, Users, FileText, Clock, ListChecks, RefreshCw, MessageSquare } from 'lucide-react';
 import { notificationsAPI, ucDashboardAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -7,13 +7,14 @@ import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { formatTimeAgo } from '../utils/time';
 import { getDisplayName } from '../utils/userName';
+import { useOpenNotification } from '../utils/notificationTarget';
 import '../styles/UCRequests.css';
 import '../styles/UCDashboard.css';
 
 
 
 const UCDashboard = () => {
-  const navigate = useNavigate();
+  const openNotification = useOpenNotification();
   const { isLoading: unitsLoading } = useActiveUnit();
 
   const currentUser = useMemo(() => {
@@ -70,7 +71,7 @@ const UCDashboard = () => {
       }
     }
 
-    navigate(notification.actionUrl);
+    openNotification(notification);
   };
 
   return (

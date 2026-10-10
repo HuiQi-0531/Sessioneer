@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { CalendarDays, Clock, ListChecks, RefreshCw, MessageSquare, UserCog } from 'lucide-react';
 import { tutorDashboardAPI, notificationsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -7,13 +7,14 @@ import TutorSidebar from '../components/TutorSidebar';
 import UCPageHeader from '../components/UCPageHeader';
 import { formatTimeAgo } from '../utils/time';
 import { getDisplayName } from '../utils/userName';
+import { useOpenNotification } from '../utils/notificationTarget';
 import '../styles/UCRequests.css';
 import '../styles/TutorDashboard.css';
 
 
 
 const TutorDashboard = () => {
-  const navigate = useNavigate();
+  const openNotification = useOpenNotification();
   const currentUser = useMemo(() => {
     const savedUser = localStorage.getItem('currentUser');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -71,7 +72,7 @@ const TutorDashboard = () => {
       }
     }
 
-    navigate(notification.actionUrl);
+    openNotification(notification);
   };
 
 
