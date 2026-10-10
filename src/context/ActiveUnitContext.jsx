@@ -123,7 +123,7 @@ export const ActiveUnitProvider = ({ children }) => {
     availabilityAPI.prefetch(activeUnit.unitCode, activeUnit.id).catch(() => {
       // Prefetch is only a speed improvement. The page itself will show errors if loading fails.
     });
-  }, [activeUnit?.unitCode]);
+   }, [activeUnit?.unitCode, activeUnit?.id]);
 
   useEffect(() => {
     if (!activeUnit?.id || activeViewRole !== 'coordinator' || !activeUnitRoles.includes('coordinator')) return;

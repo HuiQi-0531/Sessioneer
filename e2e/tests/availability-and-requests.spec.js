@@ -34,13 +34,18 @@ test('E2E-06 a tutor asks to swap, the coordinator approves, the schedule moves'
   await loginAs(page, USERS.tutor.email);
   await page.goto('/requests');
   await page.getByRole('button', { name: '+ Request' }).click();
-  const selects = page.locator('select');
-  await selects.nth(2).selectOption({ label: 'E2E101' });
-  // Current session: the Tuesday one (TUT02). Preferred: the free Wednesday one (TUT03).
-  const tueOption = await selects.nth(3).locator('option', { hasText: 'TUE' }).first().textContent();
-  await selects.nth(3).selectOption({ label: tueOption });
-  const wedOption = await selects.nth(4).locator('option', { hasText: 'WED' }).first().textContent();
-  await selects.nth(4).selectOption({ label: wedOption });
+  // The unit is the Active Unit (locked in the form since bug 1), so only the
+  // sessions are picked. Current: the Tuesday one (TUT02). Preferred: the free
+  // Wednesday one (TUT03), which loads once the current session is chosen.
+  await expect(page.locator('.modal-content input[readonly]')).toHaveValue(/E2E101/);
+  const current = page.locator('select[name="currentSession"]');
+  const preferred = page.locator('select[name="preferredSwapTo"]');
+  await expect(current.locator('option', { hasText: 'TUE' })).toHaveCount(1);
+  const tueOption = await current.locator('option', { hasText: 'TUE' }).first().textContent();
+  await current.selectOption({ label: tueOption });
+  await expect(preferred.locator('option', { hasText: 'WED' })).toHaveCount(1);
+  const wedOption = await preferred.locator('option', { hasText: 'WED' }).first().textContent();
+  await preferred.selectOption({ label: wedOption });
   await page.getByPlaceholder(/detailed reason/).fill('Clashes with my lab');
   await page.getByRole('button', { name: 'Submit Request' }).click();
   // The new request is listed under "Pending Status" (the page opens on the

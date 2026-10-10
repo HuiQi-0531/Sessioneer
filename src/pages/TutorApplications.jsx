@@ -6,7 +6,6 @@ import UCPageHeader from '../components/UCPageHeader';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import '../styles/UCRequests.css';
 import '../styles/TutorApplications.css';
-import { passwordRuleError, PASSWORD_HINT } from '../utils/passwordRules'
 
 const TutorApplications = () => {
   const navigate = useNavigate();
