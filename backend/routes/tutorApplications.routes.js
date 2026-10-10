@@ -405,8 +405,9 @@ router.post('/accept-invite', async (req, res) => {
     if (!token || !password) {
       return res.status(400).json({ error: 'Token and password are required' });
     }
-    if (!isValidPassword(password)) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordError = passwordRuleError(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const appResult = await client.query('SELECT * FROM tutor_applications WHERE invite_token = $1', [token]);

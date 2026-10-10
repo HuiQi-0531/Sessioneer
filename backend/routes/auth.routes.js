@@ -189,8 +189,9 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Reset token and new password are required' });
     }
 
-    if (!isValidPassword(newPassword)) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordError = passwordRuleError(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const tokenHash = hashResetToken(token);

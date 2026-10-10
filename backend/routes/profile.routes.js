@@ -24,8 +24,7 @@ const upload = multer({
   }
 });
 
-const { hashPassword, verifyPassword, isValidPassword } = require('../utils/passwords');
-
+const { hashPassword, verifyPassword, passwordRuleError } = require('../utils/passwords');
 const ensureAvatarBucket = async () => {
   const { supabaseUrl, serviceKey } = getSupabaseConfig();
   const response = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
@@ -185,8 +184,9 @@ router.put('/password', verifyToken, async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current and new password are required' });
     }
-    if (!isValidPassword(newPassword)) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    const passwordError = passwordRuleError(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);

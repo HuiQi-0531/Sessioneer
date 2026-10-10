@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../config/api';
+import { passwordRuleError, PASSWORD_HINT } from '../utils/passwordRules';
 import '../styles/Register.css';
 
 const Register = () => {
@@ -41,6 +42,12 @@ const Register = () => {
 
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
+            return;
+        }
+
+        const passwordError = passwordRuleError(formData.password);
+        if (passwordError) {
+            setError(passwordError);
             return;
         }
 
@@ -125,6 +132,7 @@ const Register = () => {
                             value={formData.password}
                             onChange={handleChange}
                         />
+                        <p className="field-hint">{PASSWORD_HINT}</p>
                     </div>
 
                     <div className="form-group">

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../config/api';
+import { passwordRuleError, PASSWORD_HINT } from '../utils/passwordRules';
 import '../styles/ResetPassword.css';
 
 const ResetPasswordPage = () => {
@@ -58,13 +59,14 @@ const ResetPasswordPage = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
+    const passwordError = passwordRuleError(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -165,6 +167,7 @@ const ResetPasswordPage = () => {
                     )}
                   </button>
                 </div>
+                <p className="field-hint">{PASSWORD_HINT}</p>
               </div>
 
               <div className="form-group">
