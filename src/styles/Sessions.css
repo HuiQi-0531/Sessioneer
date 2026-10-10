@@ -93,20 +93,6 @@
   font-size: 14px;
 }
 
-.ss-field select,
-.ss-cover-field select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-color: var(--color-surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 15px center; /* was 10px — now lines up with the clock icon */
-  background-size: 14px;
-  padding-right: 40px;
-  cursor: pointer;
-}
-
 .ss-field input:focus,
 .ss-field select:focus {
   outline: none;
@@ -130,41 +116,109 @@
   color: var(--color-text-muted);
 }
 
+.ss-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
 .ss-table {
   width: 100%;
+  min-width: 720px; /* below this the wrapper scrolls sideways instead of cutting text */
   border-collapse: collapse;
   background-color: var(--color-surface);
   table-layout: fixed;
 }
 
 .ss-table th {
-  text-align: center;
-  font-size: 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  padding: 10px 14px;
+  background-color: var(--color-bg);
+  padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ss-table td {
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--color-bg-subtle);
   font-size: 14px;
   color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: left;
+  vertical-align: middle;
   white-space: nowrap;
-  text-align: center;
 }
 
-.ss-status-badge {
+.ss-table td.ss-td-tutor { white-space: normal; overflow-wrap: break-word; }
+
+.ss-table tbody tr:last-child td { border-bottom: none; }
+.ss-table tbody tr:hover td { background-color: var(--color-bg); }
+
+.ss-table .ss-th-num,
+.ss-table .ss-td-num { text-align: center; }
+.ss-table .ss-th-actions { text-align: center; }
+
+.ss-cell-main { font-weight: 500; color: var(--color-text); line-height: 1.3; }
+.ss-cell-sub  { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; white-space: nowrap; }
+.ss-code      { font-weight: 600; letter-spacing: 0.02em; }
+
+.ss-type-chip {
+  display: inline-block;
+  white-space: nowrap;
+  margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+}
+.ss-type-chip.tutorial  { background-color: #e0e7ff; color: #4338ca; }
+.ss-type-chip.practical { background-color: #e0f2fe; color: #0369a1; }
+.ss-type-chip.lecture   { background-color: #fef3c7; color: #b45309; }
+.ss-type-chip.workshop  { background-color: #fce7f3; color: #be185d; }
+
+.ss-tutor-list { list-style: none; margin: 0; padding: 0; }
+.ss-tutor-list li { line-height: 1.45; }
+
+.ss-cover-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 3px 8px 3px 3px;
+  border-radius: 10px;
+  background-color: var(--color-primary-light);
+  font-size: 12px;
+  color: var(--color-primary-hover);
+}
+.ss-cover-pill-label {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ss-cover-pill-text { white-space: normal; line-height: 1.3; }
+
+.ss-status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .ss-status-badge.confirmed {
@@ -190,7 +244,7 @@
 .ss-row-actions {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .ss-icon-btn {
@@ -783,7 +837,6 @@
 }
 
 .ss-grid-block {
-  position: relative;
   margin: 2px;
   border-radius: 8px;
   border: none;
@@ -818,15 +871,6 @@
 
 .ss-grid-block:hover {
   filter: brightness(0.97);
-  z-index: 5;
-}
-
-.ss-grid-block.is-short:hover {
-  overflow: visible;
-  z-index: 10;
-  align-self: start;
-  height: auto;
-  min-height: calc(100% - 4px);
 }
 
 .ss-grid-block-time {
@@ -856,3 +900,15 @@
   color: #6b5fd0;
   margin-top: 2px;
 }
+
+/* On narrow windows the table scrolls sideways; keep Edit/Delete pinned on the right. */
+.ss-table th:last-child,
+.ss-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+}
+.ss-table td:last-child { background-color: var(--color-surface); }
+.ss-table tbody tr:hover td:last-child { background-color: var(--color-bg); }
+.ss-table th:last-child,
+.ss-table td:last-child { box-shadow: inset 1px 0 0 var(--color-bg-subtle); }

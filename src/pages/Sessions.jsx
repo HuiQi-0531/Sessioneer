@@ -409,92 +409,89 @@ const Sessions = () => {
   );
   const hiddenFromGridCount = displayedSessions.length - gridSessions.length;
 
-const renderSessionsGrid = () => (
-  <div className="ss-grid-wrapper">
-    <div className="ss-grid" style={{ gridTemplateRows: `auto repeat(${GRID_HOUR_LABELS.length}, 44px)` }}>
-      <div className="ss-grid-corner" />
-      {GRID_DAYS.map(day => (
-        <div key={day} className="ss-grid-day-header">{GRID_DAY_LABELS[day]}</div>
-      ))}
+  const renderSessionsGrid = () => (
+    <div className="ss-grid-wrapper">
+      <div className="ss-grid" style={{ gridTemplateRows: `auto repeat(${GRID_HOUR_LABELS.length}, 44px)` }}>
+        <div className="ss-grid-corner" />
+        {GRID_DAYS.map(day => (
+          <div key={day} className="ss-grid-day-header">{GRID_DAY_LABELS[day]}</div>
+        ))}
 
-      {GRID_HOUR_LABELS.map((label, i) => (
-       <div key={label} className="ss-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
-      ))}
+        {GRID_HOUR_LABELS.map((label, i) => (
+         <div key={label} className="ss-grid-time-label" style={{ gridRow: i + 2 }}>{label}</div>
+        ))}
 
-      {GRID_DAYS.map(day => {
-        const dayIndex = GRID_DAYS.indexOf(day);
-        const dayGroups = [];
-        const daySessions = gridSessions
-          .filter(s => normaliseDayToAbbrev(s.day) === day)
-          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        {GRID_DAYS.map(day => {
+          const dayIndex = GRID_DAYS.indexOf(day);
+          const dayGroups = [];
+          const daySessions = gridSessions
+            .filter(s => normaliseDayToAbbrev(s.day) === day)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-        daySessions.forEach(session => {
-          const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
-          const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
-          let placed = false;
-          for (const group of dayGroups) {
-            if (group.some(s => {
-              const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
-              const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
-              return startMin < sEnd && endMin > sStart;
-            })) {
-              group.push(session);
-              placed = true;
-              break;
+          daySessions.forEach(session => {
+            const startMin = hourFromTime(session.startTime) * 60 + parseInt(session.startTime.split(':')[1], 10);
+            const endMin = hourFromTime(session.endTime) * 60 + parseInt(session.endTime.split(':')[1], 10);
+            let placed = false;
+            for (const group of dayGroups) {
+              if (group.some(s => {
+                const sStart = hourFromTime(s.startTime) * 60 + parseInt(s.startTime.split(':')[1], 10);
+                const sEnd = hourFromTime(s.endTime) * 60 + parseInt(s.endTime.split(':')[1], 10);
+                return startMin < sEnd && endMin > sStart;
+              })) {
+                group.push(session);
+                placed = true;
+                break;
+              }
             }
-          }
-          if (!placed) dayGroups.push([session]);
-        });
+            if (!placed) dayGroups.push([session]);
+          });
 
-        return dayGroups.flatMap(group =>
-          group.map((session, colIdx) => {
-            const startHour = hourFromTime(session.startTime);
-            const endHour = hourFromTime(session.endTime);
-            const startMin = startHour * 60 + parseInt(session.startTime.split(':')[1], 10);
-            const endMin = endHour * 60 + parseInt(session.endTime.split(':')[1], 10);
-            const isShort = (endMin - startMin) <= 60;
-            const rowStart = (startHour - GRID_START_HOUR) + 2;
-            const rowEnd = (endHour - GRID_START_HOUR) + 2;
-            const colCount = group.length;
-            const widthPct = 100 / colCount;
+          return dayGroups.flatMap(group =>
+            group.map((session, colIdx) => {
+              const startHour = hourFromTime(session.startTime);
+              const endHour = hourFromTime(session.endTime);
+              const rowStart = (startHour - GRID_START_HOUR) + 2;
+              const rowEnd = (endHour - GRID_START_HOUR) + 2;
+              const colCount = group.length;
+              const widthPct = 100 / colCount;
 
-            return (
-              <button
-                key={session.id}
-                className={`ss-grid-block ${statusToGridClass(session.status)}${isShort ? ' is-short' : ''}`}
-                style={{
-                  gridColumn: dayIndex + 2,
-                  gridRow: `${rowStart} / ${rowEnd}`,
-                  justifySelf: 'start',
-                  width: `${widthPct}%`,
-                  marginLeft: `${widthPct * colIdx}%`
-                }}
-                onClick={() => openEditForm(session)}
-              >
-                <div className="ss-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
-                <div className="ss-grid-block-type">
-                  {session.sessionCode ? session.sessionCode : (session.sessionType || 'Session')}
-                  {session.location ? ` · ${session.location}` : ''}
-                </div>
-                <div className="ss-grid-block-tutor">
-                  {getTutorLabel(session) || 'Unassigned'}
-                </div>
-                {formatCoverNote(session) && (
-                  <div className="ss-grid-block-tutor">{formatCoverNote(session)}</div>
-                )}
-              </button>
-            );
-          })
-        );
-      })}
+              return (
+                <button
+                  key={session.id}
+                  className={`ss-grid-block ${statusToGridClass(session.status)}`}
+                  style={{
+                    gridColumn: dayIndex + 2,
+                    gridRow: `${rowStart} / ${rowEnd}`,
+                    justifySelf: 'start',
+                    width: `${widthPct}%`,
+                    marginLeft: `${widthPct * colIdx}%`
+                  }}
+                  onClick={() => openEditForm(session)}
+                >
+                  <div className="ss-grid-block-time">{formatTimeRange(session.startTime, session.endTime)}</div>
+                  <div className="ss-grid-block-type">
+                    {session.sessionCode ? session.sessionCode : (session.sessionType || 'Session')}
+                    {session.location ? ` · ${session.location}` : ''}
+                  </div>
+                  <div className="ss-grid-block-tutor">
+                    {getTutorLabel(session) || 'Unassigned'}
+                  </div>
+                  {formatCoverNote(session) && (
+                    <div className="ss-grid-block-tutor">{formatCoverNote(session)}</div>
+                  )}
+                </button>
+              );
+            })
+          );
+        })}
+      </div>
+      {hiddenFromGridCount > 0 && (
+        <p className="ss-grid-note">
+          {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
+        </p>
+      )}
     </div>
-    {hiddenFromGridCount > 0 && (
-      <p className="ss-grid-note">
-        {hiddenFromGridCount} session{hiddenFromGridCount > 1 ? 's' : ''} not shown here (outside Mon-Fri 8am-9pm).
-      </p>
-    )}
-  </div>
-);
+  );
 
   // Bug 17: only sessions a tutor has ACCEPTED can be put up for cover. A
   // tutor who is still "awaiting response" may decline, so they are not listed.
@@ -819,46 +816,65 @@ const renderSessionsGrid = () => (
           ) : sessions.length === 0 ? (
             <div className="ss-empty-state"><p>No session available.</p></div>
           ) : (
+            <div className="ss-table-wrap">
             <table className="ss-table">
               <colgroup>
-                <col style={{ width: '7%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '14%' }} />
                 <col style={{ width: '8%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '14%' }} />
-                <col style={{ width: '9%' }} />
+                <col style={{ width: '25%' }} />
                 <col style={{ width: '12%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '11%' }} />
-                <col style={{ width: '14%' }} />
+                <col style={{ width: '12%' }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th>No.</th>
-                  <th>Day</th>
-                  <th>Time</th>
+                  <th>Session</th>
+                  <th>When</th>
                   <th>Location</th>
-                  <th>Campus</th>
-                  <th>Type</th>
-                  <th>Capacity</th>
+                  <th className="ss-th-num">Cap.</th>
                   <th>Tutor</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th className="ss-th-actions">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {displayedSessions.map(session => (
+                {displayedSessions.map(session => {
+                  const tutorNames = getTutorNames(session);
+                  const covers = Array.isArray(session.activeCovers) ? session.activeCovers : [];
+                  const typeKey = (session.sessionType || 'other').toLowerCase();
+                  return (
                   <tr key={session.id}>
-                    <td>{session.sessionCode || '-'}</td>
-                    <td>{session.day}</td>
-                    <td>{formatTimeRange(session.startTime, session.endTime)}</td>
-                    <td>{session.location || '-'}</td>
-                    <td>{session.campus || '-'}</td>
-                    <td>{session.sessionType || '-'}</td>
-                    <td>{session.capacity || '-'}</td>
                     <td>
-                      {getTutorLabel(session) || <span className="ss-unassigned">Unassigned</span>}
-                      {formatCoverNote(session) && <div className="ss-cover-note">{formatCoverNote(session)}</div>}
+                      <div className="ss-cell-main ss-code">{session.sessionCode || '-'}</div>
+                      <span className={`ss-type-chip ${typeKey}`}>{session.sessionType || 'Other'}</span>
+                    </td>
+                    <td>
+                      <div className="ss-cell-main">{session.day}</div>
+                      <div className="ss-cell-sub">{formatTimeRange(session.startTime, session.endTime)}</div>
+                    </td>
+                    <td>
+                      <div className="ss-cell-main">{session.location || '-'}</div>
+                      {session.campus && <div className="ss-cell-sub">{session.campus} campus</div>}
+                    </td>
+                    <td className="ss-td-num">{session.capacity || '-'}</td>
+                    <td className="ss-td-tutor">
+                      {tutorNames.length === 0 ? (
+                        <span className="ss-unassigned">Unassigned</span>
+                      ) : (
+                        <ul className="ss-tutor-list">
+                          {tutorNames.map(name => <li key={name}>{name}</li>)}
+                        </ul>
+                      )}
+                      {covers.map((c, i) => (
+                        <div key={c.id || i} className="ss-cover-pill" title={formatCoverNote({ activeCovers: [c] })}>
+                          <span className="ss-cover-pill-label">Cover</span>
+                          <span className="ss-cover-pill-text">
+                            {c.claimedByName || 'Claimed'} · {new Date(c.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                            {' - '}{new Date(c.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      ))}
                     </td>
                     <td>
                       <span className={`ss-status-badge ${(session.status || '').toLowerCase()}`}>
@@ -885,9 +901,11 @@ const renderSessionsGrid = () => (
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+            </div>
           )}
           </>
           )}

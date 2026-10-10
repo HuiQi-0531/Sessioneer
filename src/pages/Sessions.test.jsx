@@ -40,8 +40,13 @@ const renderPage = () => render(<MemoryRouter><Sessions /></MemoryRouter>);
 test('FE-30 both tutors of a two-tutor session and the running cover are shown', async () => {
   renderPage();
   const row = (await screen.findByText('TUT01')).closest('tr');
-  expect(within(row).getByText('Ann Lee, Ben Wu')).toBeInTheDocument();
-  expect(within(row).getByText('Cover: Cam Ng (5 Oct - 9 Oct)')).toBeInTheDocument();
+  // Each tutor gets its own line, so a long second name is never cut off.
+  expect(within(row).getByText('Ann Lee')).toBeInTheDocument();
+  expect(within(row).getByText('Ben Wu')).toBeInTheDocument();
+  // The cover shows as a full pill (who + dates), with the long form as a tooltip.
+  const cover = within(row).getByText('Cover').closest('.ss-cover-pill');
+  expect(cover).toHaveTextContent('Cam Ng · 5 Oct - 9 Oct');
+  expect(cover).toHaveAttribute('title', 'Cover: Cam Ng (5 Oct - 9 Oct)');
   expect(within((await screen.findByText('TUT02')).closest('tr')).getByText('Unassigned')).toBeInTheDocument();
 });
 
