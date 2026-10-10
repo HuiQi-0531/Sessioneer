@@ -282,17 +282,17 @@ router.get('/users', async (req, res) => {
           WHERE user_id = u.id AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
-          SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
-          FROM (
-            SELECT un.unit_code
-            FROM unit_memberships um
-            JOIN units un ON un.id = um.unit_id
-            WHERE um.user_id = u.id
-            UNION
-            SELECT unit_code
-            FROM units
-            WHERE unit_coordinator_id = u.id
-          ) unit_labels
+        SELECT STRING_AGG(DISTINCT unit_labels.label, ', ' ORDER BY unit_labels.label)
+        FROM (
+          SELECT un.unit_code || ' · ' || un.semester || ' ' || un.year::text AS label
+          FROM unit_memberships um
+          JOIN units un ON un.id = um.unit_id
+          WHERE um.user_id = u.id
+          UNION
+          SELECT unit_code || ' · ' || semester || ' ' || year::text
+          FROM units
+          WHERE unit_coordinator_id = u.id
+        ) unit_labels
         ) AS unit_summary
       FROM users u
       ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
@@ -413,17 +413,17 @@ router.put('/users/:id', async (req, res) => {
           WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
-          SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
-          FROM (
-            SELECT un.unit_code
-            FROM unit_memberships um
-            JOIN units un ON un.id = um.unit_id
-            WHERE um.user_id = $1
-            UNION
-            SELECT unit_code
-            FROM units
-            WHERE unit_coordinator_id = $1
-          ) unit_labels
+        SELECT STRING_AGG(DISTINCT unit_labels.label, ', ' ORDER BY unit_labels.label)
+        FROM (
+          SELECT un.unit_code || ' · ' || un.semester || ' ' || un.year::text AS label
+          FROM unit_memberships um
+          JOIN units un ON un.id = um.unit_id
+          WHERE um.user_id = $1
+          UNION
+          SELECT unit_code || ' · ' || semester || ' ' || year::text
+          FROM units
+          WHERE unit_coordinator_id = $1
+        ) unit_labels
         ) AS unit_summary
       `,
       [req.params.id]
@@ -1363,7 +1363,9 @@ router.get('/requests', async (req, res) => {
           NULL::varchar AS claimed_by_name,
           NULL::varchar AS claimed_by_last_name,
           NULL::varchar AS claimed_by_email,
-          NULL::timestamp AS claimed_at
+          NULL::timestamp AS claimed_at,
+          un.semester,
+          un.year
         FROM change_requests cr
         LEFT JOIN units un ON un.id = cr.unit_id
         LEFT JOIN users tutor ON tutor.id = cr.tutor_id
@@ -1397,7 +1399,9 @@ router.get('/requests', async (req, res) => {
           claimer.name AS claimed_by_name,
           claimer.last_name AS claimed_by_last_name,
           claimer.email AS claimed_by_email,
-          cover.claimed_at
+          cover.claimed_at,
+          un.semester,
+          un.year
         FROM cover_requests cover
         JOIN units un ON un.id = cover.unit_id
         JOIN sessions s ON s.id = cover.session_id

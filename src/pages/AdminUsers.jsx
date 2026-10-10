@@ -21,6 +21,7 @@ const MEMBERSHIP_ROLE_OPTIONS = [
 ];
 
 const TUTOR_ACCESS_ROLES = new Set(['tutor', 'super_tutor']);
+const semesterRank = { Summer: 3, 'Semester 2': 2, 'Semester 1': 1 };
 
 const emptyForm = {
   firstName: '',
@@ -48,6 +49,9 @@ const formatDate = (value) => {
   });
 };
 
+const formatTerm = (unit) => [unit?.semester, unit?.year].filter(Boolean).join(', ');
+const unitAccessLabel = (unit) => `${unit.unitCode} · ${unit.semester} ${unit.year}`;
+
 const getUnitAccessPreview = (unitSummary) => {
   if (!unitSummary) {
     return 'No access yet';
@@ -71,6 +75,7 @@ const AdminUsers = () => {
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [semesterFilter, setSemesterFilter] = useState('all');
   const [unitFilter, setUnitFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,20 +118,39 @@ const AdminUsers = () => {
   const filteredUsers = useMemo(() => {
     const search = query.trim().toLowerCase();
     const selectedUnit = units.find(unit => unit.id === unitFilter);
+    const semesterText = semesterFilter.replace(', ', ' ');
 
     return users.filter(user => {
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
       const matchesStatus = statusFilter === 'all' || (user.accountStatus || 'active') === statusFilter;
-      const matchesUnit = unitFilter === 'all' || user.unitSummary?.split(', ').includes(selectedUnit?.unitCode);
+      const matchesUnit = unitFilter === 'all' || (
+        selectedUnit && user.unitSummary?.split(', ').includes(unitAccessLabel(selectedUnit))
+      );
+      const matchesSemester = semesterFilter === 'all' || user.unitSummary?.includes(semesterText);
       const matchesSearch = !search ||
         user.displayName?.toLowerCase().includes(search) ||
         user.email?.toLowerCase().includes(search) ||
         user.unitSummary?.toLowerCase().includes(search) ||
         getRoleLabel(user.role).toLowerCase().includes(search);
 
-      return matchesRole && matchesStatus && matchesUnit && matchesSearch;
+      return matchesRole && matchesStatus && matchesUnit && matchesSemester && matchesSearch;
     });
-  }, [query, roleFilter, statusFilter, unitFilter, units, users]);
+  }, [query, roleFilter, semesterFilter, statusFilter, unitFilter, units, users]);
+
+  const semesterOptions = useMemo(() => {
+    const terms = units.filter(unit => unit.semester && unit.year);
+    const uniqueTerms = Array.from(new Map(terms.map(unit => [formatTerm(unit), unit])).values());
+    return uniqueTerms.sort((a, b) => Number(b.year) - Number(a.year)
+      || (semesterRank[b.semester] || 0) - (semesterRank[a.semester] || 0));
+  }, [units]);
+
+  const visibleUnits = useMemo(() => {
+    return units
+      .filter(unit => semesterFilter === 'all' || formatTerm(unit) === semesterFilter)
+      .slice()
+      .sort((a, b) => String(a.unitCode).localeCompare(String(b.unitCode))
+        || Number(b.year) - Number(a.year));
+  }, [units, semesterFilter]);
 
   const refreshUser = async (userId) => {
     const data = await adminAPI.getUsers();
@@ -375,10 +399,16 @@ const AdminUsers = () => {
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <select aria-label="Semester filter" value={semesterFilter} onChange={event => { setSemesterFilter(event.target.value); setUnitFilter('all'); }}>
+          <option value="all">All semesters</option>
+          {semesterOptions.map(unit => (
+            <option key={formatTerm(unit)} value={formatTerm(unit)}>{formatTerm(unit)}</option>
+          ))}
+        </select>
         <select aria-label="Unit filter" value={unitFilter} onChange={event => setUnitFilter(event.target.value)}>
           <option value="all">All units</option>
-          {units.map(unit => (
-            <option key={unit.id} value={unit.id}>{unit.unitCode}</option>
+          {visibleUnits.map(unit => (
+            <option key={unit.id} value={unit.id}>{unitAccessLabel(unit)}</option>
           ))}
         </select>
       </div>

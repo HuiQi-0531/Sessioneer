@@ -119,11 +119,8 @@ const formatAdminSession = (session) => ({
   scheduleLocked: !!session.schedule_locked
 });
 
-// ---- Admin session staff assignment (added by the team on 29 Sep 2026) ----
-
 const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
 
-// One staff row from getAdminSessionStaff's query.
 const formatAdminStaff = (staff) => ({
   id: staff.id,
   name: joinUserName(staff.name, staff.last_name) || staff.email,
@@ -132,7 +129,6 @@ const formatAdminStaff = (staff) => ({
   maximumHours: staff.maximum_hours == null ? null : Number(staff.maximum_hours)
 });
 
-// Checks when an admin edits a session that already has staff (was inline in PUT /admin/sessions/:id).
 const checkAdminSessionEdit = (current, unitId, requiredTutors) => {
   if (current.assigned_count > 0 && unitId !== current.unit_id) {
     return 'Unassign staff before moving this session to another unit';
@@ -143,13 +139,11 @@ const checkAdminSessionEdit = (current, unitId, requiredTutors) => {
   return null;
 };
 
-// True if any assigned person is a normal Tutor (so the session cannot become a Lecture/Consultation).
 const hasIneligibleForSuperTutorType = (assignedRows, staff) => {
   const eligibleIds = new Set(staff.filter(member => member.role !== 'tutor').map(member => member.id));
   return assignedRows.some(item => !eligibleIds.has(item.tutor_id));
 };
 
-// Room check before an admin assigns staff (was inline in POST /admin/sessions/:id/assignments).
 const checkAdminAssignSlot = (existingRows, tutorId, requiredTutors) => {
   const activeAssignments = existingRows.filter(item => item.tutor_confirmed !== false);
   if (activeAssignments.some(item => item.tutor_id === tutorId)) {
@@ -194,6 +188,8 @@ const formatAdminRequest = (request) => ({
   unitId: request.unit_id,
   unitCode: request.unit_code || '',
   unitName: request.unit_name || '',
+  semester: request.semester || '',
+  year: request.year || null,
   tutorName: [request.tutor_name, request.tutor_last_name].filter(Boolean).join(' ') || request.tutor_email || 'Unknown tutor',
   tutorEmail: request.tutor_email || '',
   coordinatorName: [request.coordinator_name, request.coordinator_last_name].filter(Boolean).join(' '),
@@ -213,11 +209,8 @@ const formatAdminRequest = (request) => ({
   claimedAt: request.claimed_at
 });
 
-// Same email check the admin user forms used inline.
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-// An admin cannot remove their own admin role or disable themselves
-// (was inline in PUT /admin/users/:id).
 const getSelfEditError = (targetUserId, currentUserId, role, accountStatus) => {
   if (targetUserId === currentUserId && role !== 'admin') {
     return 'You cannot remove admin access from your own account';

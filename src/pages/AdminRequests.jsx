@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminShell from './AdminShell';
 import { adminAPI } from '../config/api';
 
+const semesterRank = { Summer: 3, 'Semester 2': 2, 'Semester 1': 1 };
+const formatTerm = (item) => [item?.semester, item?.year].filter(Boolean).join(', ');
+
 const getStatusClass = (status) =>
   String(status || '').toLowerCase().replace(/[\s/]+/g, '-');
 
@@ -29,6 +32,7 @@ const AdminRequests = () => {
   const [requests, setRequests] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [unitFilter, setUnitFilter] = useState('all');
+  const [semesterFilter, setSemesterFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -84,6 +88,16 @@ const AdminRequests = () => {
     return Array.from(unitMap.values()).sort((a, b) => a.unitCode.localeCompare(b.unitCode));
   }, [requests]);
 
+  const semesterOptions = useMemo(() => {
+    const termMap = new Map();
+    requests.forEach(request => {
+      const term = formatTerm(request);
+      if (term) termMap.set(term, request);
+    });
+    return Array.from(termMap.values()).sort((a, b) => Number(b.year) - Number(a.year)
+      || (semesterRank[b.semester] || 0) - (semesterRank[a.semester] || 0));
+  }, [requests]);
+
   const filteredRequests = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
@@ -93,6 +107,8 @@ const AdminRequests = () => {
         request.requestType,
         request.unitCode,
         request.unitName,
+        request.semester,
+        request.year,
         request.tutorName,
         request.tutorEmail,
         request.coordinatorName,
@@ -104,12 +120,13 @@ const AdminRequests = () => {
       ].some(value => String(value || '').toLowerCase().includes(term));
 
       const matchesUnit = unitFilter === 'all' || request.unitCode === unitFilter;
+      const matchesSemester = semesterFilter === 'all' || formatTerm(request) === semesterFilter;
       const matchesType = typeFilter === 'all' || request.requestGroup === typeFilter;
       const matchesStatus = statusFilter === 'all' || getStatusClass(request.status) === statusFilter;
 
-      return matchesSearch && matchesUnit && matchesType && matchesStatus;
+      return matchesSearch && matchesUnit && matchesSemester && matchesType && matchesStatus;
     });
-  }, [requests, searchTerm, unitFilter, typeFilter, statusFilter]);
+  }, [requests, searchTerm, unitFilter, semesterFilter, typeFilter, statusFilter]);
 
   const getPrimarySessionLabel = (request) => {
     if (request.requestGroup === 'Cover') {
@@ -261,6 +278,12 @@ const AdminRequests = () => {
             </option>
           ))}
         </select>
+        <select value={semesterFilter} onChange={(event) => setSemesterFilter(event.target.value)} aria-label="Semester filter">
+          <option value="all">All semesters</option>
+          {semesterOptions.map(request => (
+            <option key={formatTerm(request)} value={formatTerm(request)}>{formatTerm(request)}</option>
+          ))}
+        </select>
         <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Request type filter">
           <option value="all">All request types</option>
           <option value="Swap/Change">Swap/change</option>
@@ -311,6 +334,7 @@ const AdminRequests = () => {
                       <strong>{request.requestType || request.requestGroup}</strong>
                       <span>
                         {request.unitCode || 'No unit'}
+                        {formatTerm(request) ? ` · ${formatTerm(request)}` : ''}
                         {request.unitName ? ` - ${request.unitName}` : ''}
                       </span>
                     </div>
