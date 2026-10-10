@@ -81,6 +81,8 @@ const Sessions = () => {
   const [requiredTutorsTouched, setRequiredTutorsTouched] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -317,17 +319,25 @@ const Sessions = () => {
     }
   };
 
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError('');
     try {
       await sessionsAPI.delete(activeUnit.id, deleteTarget.id);
       setDeleteTarget(null);
       await loadSessions(activeUnit.id);
     } catch (err) {
       console.error('Error deleting session:', err);
-      // Show the backend's reason (e.g. assigned tutors, locked schedule)
-      // instead of a generic retry message.
-      alert(err.message || 'Failed to delete session. Please try again.');    
+      setDeleteError(err.message || 'Failed to delete session. Please try again.');
+    } finally {
+      setIsDeleting(false);  
     }
   };
 
@@ -1005,18 +1015,43 @@ const Sessions = () => {
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="ss-modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="ss-modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Delete this session?</h3>
-            <p>{deleteTarget.day}, {formatTimeRange(deleteTarget.startTime, deleteTarget.endTime)} at {deleteTarget.location || 'no location set'}. This cannot be undone.</p>
-            <div className="ss-modal-buttons">
-              <button className="cancel" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="confirm" onClick={confirmDelete}>Delete</button>
+      {deleteTarget && (() => {
+        // A session with tutors can't be deleted, so say so up front.
+        // Same rule as the backend: a tutor who declined doesn't block deletion.
+        const assignedNames = (deleteTarget.tutors || [])
+          .filter(t => t.tutorName && t.confirmed !== false)
+          .map(t => t.tutorName);
+         const timeRange = formatTimeRange(deleteTarget.startTime, deleteTarget.endTime).replace(' - ', '\u00A0–\u00A0');
+        const sessionLabel = `${deleteTarget.sessionCode || 'This session'} (${deleteTarget.day}, ${timeRange})`;
+          return (
+          <div className="ss-modal-overlay" onClick={closeDeleteModal}>
+            <div className="ss-modal-content" role="dialog" aria-label="Delete session" onClick={e => e.stopPropagation()}>
+              {assignedNames.length > 0 ? (
+                <>
+                  <h3>Unassign the tutor first</h3>
+                  <p>{assignedNames.join(', ')} {assignedNames.length > 1 ? 'are' : 'is'} assigned to {sessionLabel}. Remove them in Schedule Builder, then delete this session.</p>
+                  <div className="ss-modal-buttons">
+                    <button className="cancel" onClick={closeDeleteModal}>Close</button>
+                    <button className="confirm ss-confirm-neutral" onClick={() => navigate('/schedule-builder')}>Schedule Builder</button>                  
+                </div>
+                </>
+              ) : (
+                <>
+                  <h3>Delete this session?</h3>
+                  <p>{sessionLabel} at {deleteTarget.location || 'no location set'}. This cannot be undone.</p>
+                  {deleteError && <p className="ss-error">{deleteError}</p>}
+                  <div className="ss-modal-buttons">
+                    <button className="cancel" onClick={closeDeleteModal} disabled={isDeleting}>Cancel</button>
+                    <button className="confirm" onClick={confirmDelete} disabled={isDeleting}>
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {showForm && (
         <div className="ss-modal-overlay" onClick={closeForm}>

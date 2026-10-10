@@ -319,6 +319,14 @@
   color: var(--color-surface);
 }
 
+.ss-modal-buttons .confirm.ss-confirm-neutral {
+  background-color: var(--color-primary);
+}
+.ss-modal-buttons button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .ss-modal-buttons .cancel {
   background-color: var(--color-bg-subtle);
   color: var(--color-text-secondary);
