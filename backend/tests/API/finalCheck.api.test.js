@@ -159,3 +159,14 @@ defineApiCases('API final sweep: admin session code field', (add) => {
     expect((await sessionRow(ctx.s.held)).session_code).toBe('WOR01');
   });
 });
+
+defineApiCases('API final sweep: admin password', (add) => {
+  add('FC-15 an admin can change their own password and log in with the new one', async (ctx) => {
+    const res = await api('put', '/profile/password', ctx.tokens.admin, { currentPassword: ctx.password, newPassword: 'AdminNew2026' });
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeTruthy();
+    const email = (await query('SELECT email FROM users WHERE id = $1', [ctx.u.admin.id])).rows[0].email;
+    expect((await api('post', '/auth/login', null, { email, password: 'AdminNew2026' })).status).toBe(200);
+    expect((await api('post', '/auth/login', null, { email, password: ctx.password })).status).toBe(401);
+  });
+});
