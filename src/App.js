@@ -141,7 +141,7 @@ function App() {
             <ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>
           } />
           <Route path="/profile" element={
-            <ProtectedRoute><Profile /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={['tutor', 'coordinator']}><Profile /></ProtectedRoute>
           } />
           <Route path="/logout" element={
             <ProtectedRoute><LogoutConfirm /></ProtectedRoute>
