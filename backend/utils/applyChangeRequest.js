@@ -227,8 +227,7 @@ const applyApprovedChangeRequest = async (client, request) => {
     throw new AllocationError('This tutor is no longer assigned to the current session', 409);
   }
 
-  // Session change: drop this tutor from the current session only.
-  if (isChange) {
+  if (isChange && !targetSessionId) {
     await unassignTutor(client, currentSessionId, tutorId);
     return { action: 'unassigned', fromSessionId: currentSessionId };
   }
