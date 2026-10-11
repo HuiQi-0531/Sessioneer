@@ -54,7 +54,7 @@ Then build the schema:
 ```bash
 npm run db:migrate
 ```
-This runs `setup-db.sql` and every numbered file in `backend/db/migrations/` that has not been applied yet. Run it again after every pull that adds a migration (for example `002_reminders_teaching_period_token_version.sql`). It only adds tables and columns; existing data is kept. Check which database `DATABASE_URL` points at before running it.
+This runs `setup-db.sql` and every numbered file in `backend/db/migrations/` that has not been applied yet. Run it again after every pull that adds a migration (for example `003_backfill_session_codes.sql`). Migrations only add tables and columns, apart from `003`, which fills in a session code (TUT01, LEC01, ...) for sessions that had none; nothing is deleted. Check which database `DATABASE_URL` points at before running it.
 
 Also set `JWT_SECRET` to any long random string. The `BREVO_API_KEY`, `SUPABASE_*`, and `CRON_SECRET` variables are optional — they're only needed for password-reset emails, file attachment storage, and scheduled reminder jobs. The app runs fine locally with placeholder values for those.
 
@@ -100,6 +100,19 @@ A new database has no users. Use the **Sign Up** page to create a Unit Coordinat
 
 **Suddenly sent back to the login page?**
 - Expected after logging out on another device, changing or resetting your password, or after 8 hours: log in again.
+- Logging in as a different account in another tab of the same browser reloads this tab (both tabs share one login). To test two accounts side by side, use separate browser profiles or an incognito window.
+
+**Forgot a password and no email (Brevo) set up?**
+- Logged-in users change their own password in Profile (admins: Admin > Settings).
+- If you are locked out, make a new hash from `backend/` and store it directly:
+  ```bash
+  node -e "console.log(require('./utils/passwords').hashPassword('NewPass2026'))"
+  ```
+  ```sql
+  UPDATE users SET password_hash = '<printed hash>', token_version = COALESCE(token_version, 0) + 1
+  WHERE email = '<their email>';
+  ```
+  Passwords need at least 8 characters with an uppercase letter, a lowercase letter and a number.
 
 ## Reminder emails and scheduled jobs
 
@@ -122,17 +135,17 @@ Other notices:
 
 ## Logging out
 
-`POST /auth/logout` ends the login on the server: every token the user holds (on any device) stops working at once and returns `401` with `code: "AUTH_INVALID"`. Changing the password (Profile) or resetting it by email link does the same; the Profile page receives a fresh token so that browser stays logged in. The frontend sends the user back to the login page whenever it receives that 401.
+`POST /auth/logout` ends the login on the server: every token the user holds (on any device) stops working at once and returns `401` with `code: "AUTH_INVALID"`. Changing the password (Profile for tutors and coordinators, Admin > Settings for admins) or resetting it by email link does the same; the browser that changed it receives a fresh token so it stays logged in. The frontend sends the user back to the login page whenever it receives that 401.
 
 ## Tests
 
 | Suite | Command (from `backend/` unless stated) | Tests |
 |-------|------------------------------------------|-------|
-| Logic (unit) | `npm run test:logic` | 702 |
-| API | `npm run test:api` | 427 |
+| Logic (unit) | `npm run test:logic` | 711 |
+| API | `npm run test:api` | 468 |
 | Integration | `npm run test:integration` | 16 |
 | RBAC | `npm run test:rbac` | 99 |
-| Frontend components | `CI=true npm test -- --watchAll=false` (project root) | 53 |
+| Frontend components | `CI=true npm test -- --watchAll=false` (project root) | 89 |
 | E2E (Playwright) | `npm test` in `e2e/` (see `e2e/README.md`) | 13 |
 
 The API, integration, RBAC and E2E suites need a throwaway PostgreSQL database whose name contains `test` (see `backend/tests/rbac/README.md`).
@@ -156,4 +169,3 @@ GitHub > repository **Settings** > **Branches** (or **Rules** > **Rulesets**) > 
 - Optionally: require branches to be up to date before merging, and do not allow bypassing the rules.
 
 To demonstrate it: open a pull request that breaks one test (the check goes red and **Merge** is blocked), then push a fix (the check goes green and the PR can be merged after one approval).
-
