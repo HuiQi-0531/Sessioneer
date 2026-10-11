@@ -12,12 +12,37 @@ const emptyForm = {
   sessionType: '',
   capacity: '',
   requiredTutors: 1,
-  status: 'Confirmed'
+  status: 'Confirmed',
+  sessionCode: ''
 };
 
 const dayOptions = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const campusOptions = ['GP', 'KG', 'ONL'];
-const sessionTypeOptions = ['Lecture', 'Tutorial', 'Practical', 'Workshop', 'Consultation', 'FRI'];
+const sessionTypeOptions = ['Lecture', 'Tutorial', 'Practical', 'Workshop', 'Consultation'];
+
+// Same prefixes as backend/utils/sessionRules.js (CODE_PREFIXES).
+const CODE_PREFIXES = { tutorial: 'TUT', consultation: 'CON', practical: 'PRC', lecture: 'LEC', workshop: 'WOR' };
+const codePrefixForType = (type) => CODE_PREFIXES[String(type || '').trim().toLowerCase()] || 'SES';
+
+// Next free code for this type in this unit, e.g. TUT01..TUT03 taken -> TUT04.
+export const nextCodeInUnit = (sessions, unitId, sessionType, excludeId = null) => {
+  const prefix = codePrefixForType(sessionType);
+  const pattern = new RegExp(`^${prefix}(\\d+)$`);
+  const used = (sessions || [])
+    .filter(s => s.unitId === unitId && s.id !== excludeId)
+    .map(s => String(s.sessionCode || '').trim().toUpperCase().match(pattern))
+    .filter(Boolean)
+    .map(match => Number(match[1]));
+  const next = (used.length ? Math.max(...used) : 0) + 1;
+  return `${prefix}${String(next).padStart(2, '0')}`;
+};
+
+// A code that was filled in automatically (blank, or the type's prefix + number)
+// follows the type; one the admin typed by hand is left alone.
+const isAutoCode = (code, sessionType) => {
+  const value = String(code || '').trim().toUpperCase();
+  return !value || new RegExp(`^${codePrefixForType(sessionType)}\\d+$`).test(value);
+};
 const statusOptions = ['Draft', 'Tentative', 'Confirmed', 'Cancelled'];
 
 const toTimeInput = (time) => time ? String(time).slice(0, 5) : '';
@@ -74,6 +99,7 @@ const AdminSessions = () => {
 
     return sessions.filter((session) => {
       const matchesSearch = !term || [
+        session.sessionCode,
         session.unitCode,
         session.unitName,
         session.semester,
@@ -161,7 +187,8 @@ const AdminSessions = () => {
       sessionType: session.sessionType || '',
       capacity: session.capacity || '',
       requiredTutors: session.requiredTutors || 1,
-      status: session.status || 'Confirmed'
+      status: session.status || 'Confirmed',
+      sessionCode: session.sessionCode || ''
     });
     setIsModalOpen(true);
     setModalTab(initialTab);
@@ -223,8 +250,23 @@ const AdminSessions = () => {
   };
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name } = event.target;
+    const value = name === 'sessionCode' ? event.target.value.toUpperCase() : event.target.value;
+    setFormData(prev => {
+      const next = { ...prev, [name]: value };
+      // The code follows the type (and the unit, when adding): TUT03 -> PRC01.
+      if ((name === 'sessionType' || name === 'unitId') && next.unitId && next.sessionType
+        && isAutoCode(prev.sessionCode, prev.sessionType)) {
+        const backToOriginal = modalSession
+          && next.unitId === modalSession.unitId
+          && next.sessionType === modalSession.sessionType
+          && modalSession.sessionCode;
+        next.sessionCode = backToOriginal
+          ? modalSession.sessionCode
+          : nextCodeInUnit(sessions, next.unitId, next.sessionType, modalSession?.id || null);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -234,6 +276,7 @@ const AdminSessions = () => {
 
     const payload = {
       ...formData,
+      sessionCode: String(formData.sessionCode || '').trim().toUpperCase(),
       startTime: toApiTime(formData.startTime),
       endTime: toApiTime(formData.endTime),
       capacity: Number(formData.capacity),
@@ -348,6 +391,7 @@ const AdminSessions = () => {
                 <td>
                   <div className="admin-strong-cell">
                     <strong>
+                      {session.sessionCode && <span className="admin-session-code">{session.sessionCode}</span>}
                       {session.unitCode}
                       {session.unitName ? ` · ${session.unitName}` : ''}
                     </strong>
@@ -424,6 +468,24 @@ const AdminSessions = () => {
 
             <div className="admin-form-grid">
               <label>
+                Type
+                <select name="sessionType" value={formData.sessionType} onChange={handleChange} required>
+                  <option value="">Select type</option>
+                  {sessionTypeOptions.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </label>
+              <label>
+                Session code
+                <input
+                  name="sessionCode"
+                  value={formData.sessionCode}
+                  onChange={handleChange}
+                  placeholder={formData.sessionType ? `${codePrefixForType(formData.sessionType)}01` : 'Pick a unit and type'}
+                  maxLength={30}
+                />
+                <small className="admin-field-hint">Follows the type automatically. You can type your own.</small>
+              </label>
+              <label>
                 Day
                 <select name="day" value={formData.day} onChange={handleChange} required>
                   <option value="">Select day</option>
@@ -431,10 +493,9 @@ const AdminSessions = () => {
                 </select>
               </label>
               <label>
-                Type
-                <select name="sessionType" value={formData.sessionType} onChange={handleChange} required>
-                  <option value="">Select type</option>
-                  {sessionTypeOptions.map(type => <option key={type} value={type}>{type}</option>)}
+                Status
+                <select name="status" value={formData.status} onChange={handleChange} required>
+                  {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
                 </select>
               </label>
               <label>
@@ -463,12 +524,6 @@ const AdminSessions = () => {
               <label>
                 Tutors required
                 <input type="number" name="requiredTutors" min="1" value={formData.requiredTutors} onChange={handleChange} required />
-              </label>
-              <label>
-                Status
-                <select name="status" value={formData.status} onChange={handleChange} required>
-                  {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
-                </select>
               </label>
             </div>
 

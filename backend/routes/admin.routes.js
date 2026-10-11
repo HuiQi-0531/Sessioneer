@@ -282,17 +282,17 @@ router.get('/users', async (req, res) => {
           WHERE user_id = u.id AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
-        SELECT STRING_AGG(DISTINCT unit_labels.label, ', ' ORDER BY unit_labels.label)
-        FROM (
-          SELECT un.unit_code || ' · ' || un.semester || ' ' || un.year::text AS label
-          FROM unit_memberships um
-          JOIN units un ON un.id = um.unit_id
-          WHERE um.user_id = u.id
-          UNION
-          SELECT unit_code || ' · ' || semester || ' ' || year::text
-          FROM units
-          WHERE unit_coordinator_id = u.id
-        ) unit_labels
+          SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
+          FROM (
+            SELECT un.unit_code
+            FROM unit_memberships um
+            JOIN units un ON un.id = um.unit_id
+            WHERE um.user_id = u.id
+            UNION
+            SELECT unit_code
+            FROM units
+            WHERE unit_coordinator_id = u.id
+          ) unit_labels
         ) AS unit_summary
       FROM users u
       ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
@@ -370,36 +370,6 @@ router.put('/users/:id', async (req, res) => {
       return res.status(400).json({ error: selfEditError });
     }
 
-        // Leaving the coordinator role: not allowed while she is the MAIN
-    // coordinator of a unit (that unit would have no owner).
-    if (role === 'tutor' || role === 'super_tutor') {
-      const mainUnits = await pool.query(
-        'SELECT unit_code FROM units WHERE unit_coordinator_id = $1',
-        [req.params.id]
-      );
-      if (mainUnits.rows.length > 0) {
-        const codes = mainUnits.rows.map(row => row.unit_code).join(', ');
-        return res.status(409).json({
-          error: `This user is the main coordinator of ${codes}. Change the main coordinator first.`
-        });
-      }
-    }
-
-    // Going back to Tutor: stop if she still teaches a Lecture/Consultation
-    // in any unit where she is a Super Tutor (same rule as the Units page).
-    if (role === 'tutor') {
-      const superTutorUnits = await pool.query(
-        `SELECT unit_id FROM unit_memberships WHERE user_id = $1 AND role = 'super_tutor'`,
-        [req.params.id]
-      );
-      for (const row of superTutorUnits.rows) {
-        const downgradeError = await superTutorDowngradeError(req.params.id, row.unit_id);
-        if (downgradeError) {
-          return res.status(409).json({ error: downgradeError });
-        }
-      }
-    }
-
     const result = await pool.query(
       `
       UPDATE users
@@ -418,28 +388,6 @@ router.put('/users/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Keep unit access in step with the account role: in every unit she
-    // belongs to, her access becomes the new role (Tutor, Super Tutor or UC).
-    const SYNC_ROLES = ['tutor', 'super_tutor', 'coordinator'];
-    if (SYNC_ROLES.includes(role)) {
-      const fromRoles = SYNC_ROLES.filter(r => r !== role);
-
-      await pool.query(
-        `
-        INSERT INTO unit_memberships (unit_id, user_id, role)
-        SELECT DISTINCT unit_id, user_id, $2
-        FROM unit_memberships
-        WHERE user_id = $1 AND role = ANY($3::text[])
-        ON CONFLICT (unit_id, user_id, role) DO NOTHING
-        `,
-        [req.params.id, role, fromRoles]
-      );
-
-      await pool.query(
-        `DELETE FROM unit_memberships WHERE user_id = $1 AND role = ANY($2::text[])`,
-        [req.params.id, fromRoles]
-      );
-    }
     const counts = await pool.query(
       `
       SELECT
@@ -465,17 +413,17 @@ router.put('/users/:id', async (req, res) => {
           WHERE user_id = $1 AND role IN ('tutor', 'super_tutor')
         ) AS tutor_unit_count,
         (
-        SELECT STRING_AGG(DISTINCT unit_labels.label, ', ' ORDER BY unit_labels.label)
-        FROM (
-          SELECT un.unit_code || ' · ' || un.semester || ' ' || un.year::text AS label
-          FROM unit_memberships um
-          JOIN units un ON un.id = um.unit_id
-          WHERE um.user_id = $1
-          UNION
-          SELECT unit_code || ' · ' || semester || ' ' || year::text
-          FROM units
-          WHERE unit_coordinator_id = $1
-        ) unit_labels
+          SELECT STRING_AGG(DISTINCT unit_labels.unit_code, ', ' ORDER BY unit_labels.unit_code)
+          FROM (
+            SELECT un.unit_code
+            FROM unit_memberships um
+            JOIN units un ON un.id = um.unit_id
+            WHERE um.user_id = $1
+            UNION
+            SELECT unit_code
+            FROM units
+            WHERE unit_coordinator_id = $1
+          ) unit_labels
         ) AS unit_summary
       `,
       [req.params.id]
@@ -1415,9 +1363,7 @@ router.get('/requests', async (req, res) => {
           NULL::varchar AS claimed_by_name,
           NULL::varchar AS claimed_by_last_name,
           NULL::varchar AS claimed_by_email,
-          NULL::timestamp AS claimed_at,
-          un.semester,
-          un.year
+          NULL::timestamp AS claimed_at
         FROM change_requests cr
         LEFT JOIN units un ON un.id = cr.unit_id
         LEFT JOIN users tutor ON tutor.id = cr.tutor_id
@@ -1451,9 +1397,7 @@ router.get('/requests', async (req, res) => {
           claimer.name AS claimed_by_name,
           claimer.last_name AS claimed_by_last_name,
           claimer.email AS claimed_by_email,
-          cover.claimed_at,
-          un.semester,
-          un.year
+          cover.claimed_at
         FROM cover_requests cover
         JOIN units un ON un.id = cover.unit_id
         JOIN sessions s ON s.id = cover.session_id
@@ -1738,6 +1682,7 @@ router.get('/sessions', async (req, res) => {
         un.semester,
         un.year,
         un.schedule_locked,
+        s.session_code,
         s.day,
         s.start_time,
         s.end_time,
@@ -1781,6 +1726,23 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
+// A session code the admin typed (optional). Returns { code } (null = none sent)
+// or { error } when it is malformed or already used by another session in the unit.
+const resolveRequestedSessionCode = async (rawCode, unitId, excludeSessionId = null) => {
+  const code = String(rawCode || '').trim().toUpperCase();
+  if (!code) return { code: null };
+  if (!/^[A-Z0-9-]{1,30}$/.test(code)) {
+    return { error: 'Session code can only use letters, numbers and dashes (e.g. TUT01)' };
+  }
+  const taken = await pool.query(
+    `SELECT 1 FROM sessions
+     WHERE unit_id = $1 AND UPPER(TRIM(session_code)) = $2 AND ($3::uuid IS NULL OR id <> $3)`,
+    [unitId, code, excludeSessionId]
+  );
+  if (taken.rows.length > 0) return { error: `Session code ${code} is already used in this unit` };
+  return { code };
+};
+
 router.post('/sessions', async (req, res) => {
   try {
     const unitId = String(req.body.unitId || '').trim();
@@ -1819,14 +1781,29 @@ router.post('/sessions', async (req, res) => {
       return res.status(404).json({ error: 'Unit not found' });
     }
 
+    // Give it the next code for its type in this unit (TUT01, TUT02, ...),
+    // the same way the UC's Add Session does. Admin-created sessions used to
+    // be saved with no code at all.
+    const requested = await resolveRequestedSessionCode(req.body.sessionCode, unitId);
+    if (requested.error) return res.status(409).json({ error: requested.error });
+    let sessionCode = requested.code;
+    if (!sessionCode) {
+      const prefix = codePrefixForType(sessionType);
+      const usedCodes = await pool.query(
+        'SELECT session_code FROM sessions WHERE unit_id = $1 AND session_code LIKE $2',
+        [unitId, `${prefix}%`]
+      );
+      sessionCode = nextSessionCode(prefix, usedCodes.rows.map(r => r.session_code));
+    }
+
     const result = await pool.query(
       `
       INSERT INTO sessions
-        (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (unit_id, day, start_time, end_time, location, campus, session_type, capacity, required_tutors, status, session_code)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
       `,
-      [unitId, day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status]
+      [unitId, day, startTime, endTime, location, campus, sessionType, capacity, requiredTutors, status, sessionCode]
     );
 
     const refreshed = await pool.query(
@@ -1915,9 +1892,12 @@ router.put('/sessions/:id', async (req, res) => {
       if (clash) return res.status(409).json({ error: clash });
     }
 
-    // Bug 5b: the code follows a type change (TUT03 -> WOR01).
-    let newSessionCode = null;
-    if (shouldRegenerateCode({
+    // A code typed in the form wins (if it is free in the unit); otherwise the
+    // code follows a type change automatically (Bug 5b: TUT03 -> WOR01).
+    const requested = await resolveRequestedSessionCode(req.body.sessionCode, unitId, id);
+    if (requested.error) return res.status(409).json({ error: requested.error });
+    let newSessionCode = requested.code;
+    if (!newSessionCode && shouldRegenerateCode({
       currentType: current.session_type,
       newType: sessionType,
       currentCode: current.session_code,

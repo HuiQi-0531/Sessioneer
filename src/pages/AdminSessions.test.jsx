@@ -100,3 +100,38 @@ test('sends an assigned session to tutor management instead of offering deletion
   expect(screen.getByRole('tab', { name: 'Tutors' })).toHaveAttribute('aria-selected', 'true');
   await screen.findByText('Assigned staff');
 });
+
+test('each session shows its code, and the code is searchable', async () => {
+  adminAPI.getSessions.mockResolvedValue([
+    { ...session, sessionCode: 'TUT01' },
+    { ...session, id: '99999999-9999-9999-9999-999999999999', sessionCode: 'LEC01', sessionType: 'Lecture' }
+  ]);
+  render(<AdminSessions />);
+  expect(await screen.findByText('TUT01')).toBeInTheDocument();
+  expect(screen.getByText('LEC01')).toBeInTheDocument();
+  fireEvent.change(screen.getByPlaceholderText(/Search sessions/i), { target: { value: 'lec01' } });
+  await waitFor(() => expect(screen.queryByText('TUT01')).toBeNull());
+  expect(screen.getByText('LEC01')).toBeInTheDocument();
+});
+
+test('Modify: the session code field follows the type, and a hand-typed code is kept', async () => {
+  const tut3 = { ...session, sessionCode: 'TUT03' };
+  adminAPI.getSessions.mockResolvedValue([
+    tut3,
+    { ...session, id: 'p1', sessionCode: 'PRC01', sessionType: 'Practical' }
+  ]);
+  render(<AdminSessions />);
+  const row = (await screen.findByText('TUT03')).closest('tr');
+  fireEvent.click(within(row).getByRole('button', { name: /Modify/ }));
+  const code = await screen.findByLabelText(/Session code/);
+  const type = screen.getByLabelText(/^Type/);
+  expect(code).toHaveValue('TUT03');
+  fireEvent.change(type, { target: { value: 'Practical' } });
+  expect(code).toHaveValue('PRC02');          // PRC01 is taken in this unit
+  fireEvent.change(type, { target: { value: 'Tutorial' } });
+  expect(code).toHaveValue('TUT03');          // back to its own code
+  fireEvent.change(code, { target: { value: 'tut-lab' } });
+  expect(code).toHaveValue('TUT-LAB');
+  fireEvent.change(type, { target: { value: 'Lecture' } });
+  expect(code).toHaveValue('TUT-LAB');        // typed by hand: not replaced
+});

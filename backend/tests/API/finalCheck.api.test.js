@@ -77,3 +77,85 @@ defineApiCases('API final sweep', (add) => {
     expect(rows.some(r => r.start_time === '23:00:00')).toBe(true);
   });
 });
+
+const fs = require('fs');
+const path = require('path');
+
+const adminSessionBody = (ctx, overrides = {}) => ({
+  unitId: ctx.unitA.id, day: 'THU', startTime: '15:00', endTime: '16:00', location: 'GP-P-999',
+  campus: 'GP', sessionType: 'Tutorial', capacity: 30, requiredTutors: 1, status: 'Draft', ...overrides
+});
+
+defineApiCases('API final sweep: session codes', (add) => {
+  add('FC-07 a session added by an admin gets the next code for its type', async (ctx) => {
+    const res = await api('post', '/admin/sessions', ctx.tokens.admin, adminSessionBody(ctx));
+    expect(res.status).toBe(201);
+    // unit A already has TUT01-TUT06 from the seed
+    expect(res.body.sessionCode).toBe('TUT07');
+    const lec = await api('post', '/admin/sessions', ctx.tokens.admin, adminSessionBody(ctx, { sessionType: 'Lecture', day: 'FRI' }));
+    expect(lec.body.sessionCode).toBe('LEC02');
+  });
+
+  add('FC-08 the admin session list includes each session code', async (ctx) => {
+    const res = await api('get', '/admin/sessions', ctx.tokens.admin);
+    expect(res.status).toBe(200);
+    expect(res.body.find(s => s.id === ctx.s.held).sessionCode).toBe('TUT03');
+  });
+
+  add('FC-09 migration 003 fills in missing codes without touching existing ones', async (ctx) => {
+    await query("UPDATE sessions SET session_code = NULL WHERE id = ANY($1)", [[ctx.s.lecture, ctx.s.long, ctx.s.overlap]]);
+    await query("UPDATE sessions SET session_code = '  ' WHERE id = $1", [ctx.s.declined]);
+    const sql = fs.readFileSync(path.join(__dirname, '../../db/migrations/003_backfill_session_codes.sql'), 'utf8');
+    await query(sql);
+    const code = async (id) => (await query('SELECT session_code FROM sessions WHERE id = $1', [id])).rows[0].session_code;
+    expect(await code(ctx.s.held)).toBe('TUT03');      // untouched
+    expect(await code(ctx.s.lecture)).toBe('LEC01');   // no lecture codes left, starts at 01
+    // missing tutorials continue after the highest existing TUT (TUT03), ordered by day/time:
+    // TUT06 slot MON 09:30 -> TUT04, TUT05 slot MON 13:00 -> TUT05, TUT04 slot THU -> TUT06
+    expect(await code(ctx.s.overlap)).toBe('TUT04');
+    expect(await code(ctx.s.long)).toBe('TUT05');
+    expect(await code(ctx.s.declined)).toBe('TUT06');
+    const dupes = await query(`SELECT unit_id, session_code, COUNT(*) FROM sessions GROUP BY 1, 2 HAVING COUNT(*) > 1`);
+    expect(dupes.rows).toHaveLength(0);
+  });
+});
+
+defineApiCases('API final sweep: admin session code field', (add) => {
+  const sessionRow = async (id) => (await query('SELECT session_code, session_type FROM sessions WHERE id = $1', [id])).rows[0];
+  const editBody = (ctx, overrides = {}) => adminSessionBody(ctx, {
+    day: 'WED', startTime: '11:00', endTime: '12:00', location: 'GP-P-101', status: 'Confirmed', ...overrides
+  });
+
+  add('FC-10 a code typed in the Add form is used as-is (upper-cased)', async (ctx) => {
+    const res = await api('post', '/admin/sessions', ctx.tokens.admin, adminSessionBody(ctx, { sessionCode: 'tut99' }));
+    expect(res.status).toBe(201);
+    expect(res.body.sessionCode).toBe('TUT99');
+  });
+
+  add('FC-11 a code already used in the unit is refused, on add and on edit', async (ctx) => {
+    const add1 = await api('post', '/admin/sessions', ctx.tokens.admin, adminSessionBody(ctx, { sessionCode: 'TUT01' }));
+    expect(add1.status).toBe(409);
+    expect(add1.body.error).toMatch(/TUT01 is already used/);
+    const edit = await api('put', `/admin/sessions/${ctx.s.held}`, ctx.tokens.admin, editBody(ctx, { sessionCode: 'TUT02' }));
+    expect(edit.status).toBe(409);
+    expect((await sessionRow(ctx.s.held)).session_code).toBe('TUT03');
+  });
+
+  add('FC-12 saving with its own unchanged code is fine', async (ctx) => {
+    const res = await api('put', `/admin/sessions/${ctx.s.held}`, ctx.tokens.admin, editBody(ctx, { sessionCode: 'TUT03', capacity: 40 }));
+    expect(res.status).toBe(200);
+    expect((await sessionRow(ctx.s.held)).session_code).toBe('TUT03');
+  });
+
+  add('FC-13 changing the type with the code the form proposed saves both', async (ctx) => {
+    const res = await api('put', `/admin/sessions/${ctx.s.held}`, ctx.tokens.admin, editBody(ctx, { sessionType: 'Practical', sessionCode: 'PRC01' }));
+    expect(res.status).toBe(200);
+    expect(await sessionRow(ctx.s.held)).toEqual({ session_code: 'PRC01', session_type: 'Practical' });
+  });
+
+  add('FC-14 changing the type without sending a code still regenerates it', async (ctx) => {
+    const res = await api('put', `/admin/sessions/${ctx.s.held}`, ctx.tokens.admin, editBody(ctx, { sessionType: 'Workshop' }));
+    expect(res.status).toBe(200);
+    expect((await sessionRow(ctx.s.held)).session_code).toBe('WOR01');
+  });
+});

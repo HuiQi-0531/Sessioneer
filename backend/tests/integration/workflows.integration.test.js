@@ -411,7 +411,11 @@ describe('Integration workflows', () => {
       expect(cols).not.toEqual(expect.arrayContaining(['assigned_tutor_id']));
       expect(cols).not.toContain('is_assigned');
       expect(cols).not.toContain('tutor_confirmed');
-      expect(applied).toEqual(['001_single_assignment_table.sql', '002_reminders_teaching_period_token_version.sql']);
+      expect(applied).toEqual([
+        '001_single_assignment_table.sql',
+        '002_reminders_teaching_period_token_version.sql',
+        '003_backfill_session_codes.sql'
+      ]);
       expect(unit).toEqual([{ teaching_start_date: null, teaching_end_date: null, unit_code: 'OLD1' }]);
       expect(versions).toEqual([{ token_version: 0 }]);
       expect(reminderTables).toEqual({ a: 'availability_reminders', s: 'session_reminders' });
