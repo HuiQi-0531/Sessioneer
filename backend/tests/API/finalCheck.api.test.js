@@ -170,3 +170,24 @@ defineApiCases('API final sweep: admin password', (add) => {
     expect((await api('post', '/auth/login', null, { email, password: ctx.password })).status).toBe(401);
   });
 });
+
+defineApiCases('API final sweep: admin emails', (add) => {
+  add('FC-16 creating a user when the setup email fails still creates them and says the email failed', async (ctx) => {
+    const { sendEmail } = require('../../utils/email');
+    sendEmail.mockRejectedValueOnce(new Error('Brevo email settings are not configured'));
+    const res = await api('post', '/admin/users', ctx.tokens.admin, {
+      firstName: 'Nora', lastName: 'New', email: 'nora.new@api.test', role: 'tutor', accountStatus: 'active', sendSetupLink: true
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.setupEmailError).toMatch(/could not be sent/);
+    expect((await query("SELECT 1 FROM users WHERE email = 'nora.new@api.test'")).rows).toHaveLength(1);
+  });
+
+  add('FC-17 "Send reset link" reports a failed email as an error, not a success', async (ctx) => {
+    const { sendEmail } = require('../../utils/email');
+    sendEmail.mockRejectedValueOnce(new Error('Brevo email settings are not configured'));
+    const res = await api('post', `/admin/users/${ctx.u.tutor.id}/send-reset-link`, ctx.tokens.admin);
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/Failed to send reset link/);
+  });
+});

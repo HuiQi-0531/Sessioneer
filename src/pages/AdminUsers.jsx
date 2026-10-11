@@ -2,20 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminShell from './AdminShell';
 import { adminAPI } from '../config/api';
 
-// Roles an admin can choose in the Add/Modify User form
 const ROLE_OPTIONS = [
   { value: 'tutor', label: 'Tutor' },
-  { value: 'super_tutor', label: 'Super Tutor' },
-  { value: 'coordinator', label: 'Unit Coordinator' }
+  { value: 'coordinator', label: 'Unit Coordinator' },
+  { value: 'admin', label: 'Administrator' }
 ];
-
-// Labels for every role that can exist, including admin accounts already in the system
-const ROLE_LABELS = {
-  tutor: 'Tutor',
-  super_tutor: 'Super Tutor',
-  coordinator: 'Unit Coordinator',
-  admin: 'Administrator'
-};
 
 const ACCOUNT_STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -30,7 +21,6 @@ const MEMBERSHIP_ROLE_OPTIONS = [
 ];
 
 const TUTOR_ACCESS_ROLES = new Set(['tutor', 'super_tutor']);
-const semesterRank = { Summer: 3, 'Semester 2': 2, 'Semester 1': 1 };
 
 const emptyForm = {
   firstName: '',
@@ -41,7 +31,9 @@ const emptyForm = {
   sendSetupLink: true
 };
 
-const getRoleLabel = (role) => ROLE_LABELS[role] || role;
+const getRoleLabel = (role) => {
+  return ROLE_OPTIONS.find(option => option.value === role)?.label || role;
+};
 
 const getStatusLabel = (status) => {
   return ACCOUNT_STATUS_OPTIONS.find(option => option.value === status)?.label || status || 'Active';
@@ -55,9 +47,6 @@ const formatDate = (value) => {
     year: 'numeric'
   });
 };
-
-const formatTerm = (unit) => [unit?.semester, unit?.year].filter(Boolean).join(', ');
-const unitAccessLabel = (unit) => `${unit.unitCode} · ${unit.semester} ${unit.year}`;
 
 const getUnitAccessPreview = (unitSummary) => {
   if (!unitSummary) {
@@ -82,7 +71,6 @@ const AdminUsers = () => {
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [semesterFilter, setSemesterFilter] = useState('all');
   const [unitFilter, setUnitFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -125,39 +113,20 @@ const AdminUsers = () => {
   const filteredUsers = useMemo(() => {
     const search = query.trim().toLowerCase();
     const selectedUnit = units.find(unit => unit.id === unitFilter);
-    const semesterText = semesterFilter.replace(', ', ' ');
 
     return users.filter(user => {
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
       const matchesStatus = statusFilter === 'all' || (user.accountStatus || 'active') === statusFilter;
-      const matchesUnit = unitFilter === 'all' || (
-        selectedUnit && user.unitSummary?.split(', ').includes(unitAccessLabel(selectedUnit))
-      );
-      const matchesSemester = semesterFilter === 'all' || user.unitSummary?.includes(semesterText);
+      const matchesUnit = unitFilter === 'all' || user.unitSummary?.split(', ').includes(selectedUnit?.unitCode);
       const matchesSearch = !search ||
         user.displayName?.toLowerCase().includes(search) ||
         user.email?.toLowerCase().includes(search) ||
         user.unitSummary?.toLowerCase().includes(search) ||
         getRoleLabel(user.role).toLowerCase().includes(search);
 
-      return matchesRole && matchesStatus && matchesUnit && matchesSemester && matchesSearch;
+      return matchesRole && matchesStatus && matchesUnit && matchesSearch;
     });
-  }, [query, roleFilter, semesterFilter, statusFilter, unitFilter, units, users]);
-
-  const semesterOptions = useMemo(() => {
-    const terms = units.filter(unit => unit.semester && unit.year);
-    const uniqueTerms = Array.from(new Map(terms.map(unit => [formatTerm(unit), unit])).values());
-    return uniqueTerms.sort((a, b) => Number(b.year) - Number(a.year)
-      || (semesterRank[b.semester] || 0) - (semesterRank[a.semester] || 0));
-  }, [units]);
-
-  const visibleUnits = useMemo(() => {
-    return units
-      .filter(unit => semesterFilter === 'all' || formatTerm(unit) === semesterFilter)
-      .slice()
-      .sort((a, b) => String(a.unitCode).localeCompare(String(b.unitCode))
-        || Number(b.year) - Number(a.year));
-  }, [units, semesterFilter]);
+  }, [query, roleFilter, statusFilter, unitFilter, units, users]);
 
   const refreshUser = async (userId) => {
     const data = await adminAPI.getUsers();
@@ -227,7 +196,10 @@ const AdminUsers = () => {
       setModalUser(undefined);
       setFormError('');
       if (!modalUser && payload.sendSetupLink) {
-        setResetMessage(`Setup link sent to ${savedUser.email}.`);
+        // "Failed" in the text makes the banner red.
+        setResetMessage(savedUser.setupEmailError
+          ? `Failed to email ${savedUser.email}: ${savedUser.setupEmailError}`
+          : `Setup link sent to ${savedUser.email}.`);
       }
     } catch (err) {
       setFormError(err.message || 'Failed to save user');
@@ -406,16 +378,10 @@ const AdminUsers = () => {
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
-        <select aria-label="Semester filter" value={semesterFilter} onChange={event => { setSemesterFilter(event.target.value); setUnitFilter('all'); }}>
-          <option value="all">All semesters</option>
-          {semesterOptions.map(unit => (
-            <option key={formatTerm(unit)} value={formatTerm(unit)}>{formatTerm(unit)}</option>
-          ))}
-        </select>
         <select aria-label="Unit filter" value={unitFilter} onChange={event => setUnitFilter(event.target.value)}>
           <option value="all">All units</option>
-          {visibleUnits.map(unit => (
-            <option key={unit.id} value={unit.id}>{unitAccessLabel(unit)}</option>
+          {units.map(unit => (
+            <option key={unit.id} value={unit.id}>{unit.unitCode}</option>
           ))}
         </select>
       </div>
@@ -514,17 +480,11 @@ const AdminUsers = () => {
             <div className="admin-form-grid">
               <label>
                 Role
-                {formData.role === 'admin' ? (
-                  <select name="role" value="admin" disabled>
-                    <option value="admin">Administrator</option>
-                  </select>
-                ) : (
-                  <select name="role" value={formData.role} onChange={updateForm}>
-                    {ROLE_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                )}
+                <select name="role" value={formData.role} onChange={updateForm}>
+                  {ROLE_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 Account status
@@ -577,172 +537,170 @@ const AdminUsers = () => {
       )}
 
       {unitModalUser && (
-  <div className="admin-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-user-units-title">
-    <div className="admin-modal wide admin-user-unit-modal">
-      <div className="admin-modal-header">
-        <div>
-          <div className="admin-modal-title-row">
-            <h2 id="admin-user-units-title">Manage Unit Access</h2>
-            <span className="admin-count-pill">{groupedUnitAccess.length} units</span>
-          </div>
-          <p className="admin-modal-copy">{unitModalUser.displayName} - {unitModalUser.email}</p>
-        </div>
-        <button type="button" className="admin-icon-btn light" onClick={closeUnitAccessModal} aria-label="Close">x</button>
-      </div>
-
-      {unitError && <div className="admin-alert error">{unitError}</div>}
-
-      <div className="admin-user-unit-list">
-        <div className="admin-user-unit-list-header">
-          <span>Unit</span>
-          <span>Access</span>
-          <span>Assigned</span>
-          <span>Action</span>
-        </div>
-
-        {isUnitLoading && <div className="admin-empty-panel">Loading unit access...</div>}
-        {!isUnitLoading && groupedUnitAccess.length === 0 && <div className="admin-empty-panel">No unit access yet.</div>}
-
-        {!isUnitLoading && groupedUnitAccess.map(accessGroup => {
-          const coordinatorAccess = accessGroup.roles.find(access => access.role === 'coordinator');
-          const tutorAccess = coordinatorAccess
-            ? null
-            : accessGroup.roles.find(access => access.role === 'super_tutor') ||
-              accessGroup.roles.find(access => access.role === 'tutor');
-          const tutorAccessLabel = tutorAccess?.role === 'super_tutor' ? 'Super Tutor' : 'Tutor';
-
-          return (
-            <div className="admin-user-unit-row" key={accessGroup.unitId}>
-              <div>
-                <strong>{accessGroup.unitCode}</strong>
-                <span>{accessGroup.unitName}</span>
-                <small>{accessGroup.semester}, {accessGroup.year}</small>
-              </div>
-
-              <div className="admin-access-badge-group">
-                {coordinatorAccess && <span className="admin-pill role-coordinator">Unit Coordinator</span>}
-                {tutorAccess && (
-                  <span className={`admin-pill role-${tutorAccess.role}`}>
-                    {tutorAccessLabel}
-                  </span>
-                )}
-              </div>
-
-              <div className="admin-access-badge-group">
-                {coordinatorAccess && (
-                  <span className="admin-pill inactive">
-                    {coordinatorAccess.isPrimaryCoordinator ? 'Main coordinator' : 'Coordinator access'}
-                  </span>
-                )}
-                {tutorAccess && (
-                  <span className="admin-pill inactive">
-                    {`${tutorAccess.assignedSessionCount} assigned ${tutorAccess.assignedSessionCount === 1 ? 'session' : 'sessions'}`}
-                  </span>
-                )}
-              </div>
-
-              <div className="admin-access-actions">
-                {coordinatorAccess && (
-                  <button
-                    type="button"
-                    className="admin-danger-btn subtle"
-                    onClick={() => removeUnitAccess(coordinatorAccess)}
-                    disabled={isUnitSaving || coordinatorAccess.isPrimaryCoordinator}
-                  >
-                    {coordinatorAccess.isPrimaryCoordinator ? 'Locked' : 'Remove UC'}
-                  </button>
-                )}
-                {tutorAccess && (
-                  <button
-                    type="button"
-                    className="admin-danger-btn subtle"
-                    onClick={() => removeUnitAccess(tutorAccess)}
-                    disabled={isUnitSaving}
-                  >
-                    Remove {tutorAccessLabel}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="admin-modal-actions">
-        <button type="button" className="admin-primary-btn" onClick={openAddUnitModal} disabled={isUnitSaving || !units.length}>
-          Add Unit
-        </button>
-        <button type="button" className="admin-secondary-btn" onClick={closeUnitAccessModal}>Done</button>
-      </div>
-    </div>
-  </div>
-)}
-
-      {unitModalUser && isAddUnitModalOpen && (
-        <div className="admin-nested-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-add-unit-access-title">
-          <form className="admin-modal admin-add-unit-modal" onSubmit={addUnitAccess}>
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-user-units-title">
+          <div className="admin-modal wide admin-user-unit-modal">
             <div className="admin-modal-header">
               <div>
-                <h2 id="admin-add-unit-access-title">Add Unit Access</h2>
+                <div className="admin-modal-title-row">
+                  <h2 id="admin-user-units-title">Manage Unit Access</h2>
+                  <span className="admin-count-pill">{groupedUnitAccess.length} units</span>
+                </div>
                 <p className="admin-modal-copy">{unitModalUser.displayName} - {unitModalUser.email}</p>
               </div>
-              <button type="button" className="admin-icon-btn light" onClick={closeAddUnitModal} aria-label="Close">x</button>
+              <button type="button" className="admin-icon-btn light" onClick={closeUnitAccessModal} aria-label="Close">x</button>
             </div>
 
-            <div className="admin-add-unit-body">
-              <label>
-                Search unit
-                <input
-                  value={unitSearch}
-                  onChange={event => setUnitSearch(event.target.value)}
-                  placeholder="Search code, name, semester or year"
-                />
-              </label>
+            {unitError && <div className="admin-alert error">{unitError}</div>}
 
-              <div className="admin-unit-picker" role="listbox" aria-label="Units">
-                {filteredAddUnits.length === 0 && (
-                  <div className="admin-empty-panel compact">No units found.</div>
-                )}
-
-                {filteredAddUnits.map(unit => (
-                  <button
-                    key={unit.id}
-                    type="button"
-                    className={`admin-unit-picker-option ${unitForm.unitId === unit.id ? 'selected' : ''}`}
-                    onClick={() => setUnitForm(prev => ({ ...prev, unitId: unit.id }))}
-                  >
-                    <span>
-                      <strong>{unit.unitCode}</strong>
-                      <small>{unit.unitName}</small>
-                    </span>
-                    <em>{unit.semester}, {unit.year}</em>
-                  </button>
-                ))}
+            <div className="admin-user-unit-list">
+              <div className="admin-user-unit-list-header">
+                <span>Unit</span>
+                <span>Access</span>
+                <span>Assigned</span>
+                <span>Action</span>
               </div>
 
-              {selectedAddUnit && (
-                <div className="admin-selected-unit-note">
-                  Selected: <strong>{selectedAddUnit.unitCode}</strong> - {selectedAddUnit.unitName} ({selectedAddUnit.semester}, {selectedAddUnit.year})
-                </div>
-              )}
+              {isUnitLoading && <div className="admin-empty-panel">Loading unit access...</div>}
+              {!isUnitLoading && groupedUnitAccess.length === 0 && <div className="admin-empty-panel">No unit access yet.</div>}
 
-              <label>
-                Access
-                <select value={unitForm.role} onChange={event => setUnitForm(prev => ({ ...prev, role: event.target.value }))}>
-                  {MEMBERSHIP_ROLE_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
+              {!isUnitLoading && groupedUnitAccess.map(accessGroup => {
+                const coordinatorAccess = accessGroup.roles.find(access => access.role === 'coordinator');
+                const tutorAccess = coordinatorAccess
+                  ? null
+                  : accessGroup.roles.find(access => access.role === 'super_tutor') ||
+                    accessGroup.roles.find(access => access.role === 'tutor');
+                const tutorAccessLabel = tutorAccess?.role === 'super_tutor' ? 'Super Tutor' : 'Tutor';
+
+                return (
+                  <div className="admin-user-unit-row" key={accessGroup.unitId}>
+                    <div>
+                      <strong>{accessGroup.unitCode}</strong>
+                      <span>{accessGroup.unitName}</span>
+                      <small>{accessGroup.semester}, {accessGroup.year}</small>
+                    </div>
+
+                    <div className="admin-access-badge-group">
+                      {coordinatorAccess && <span className="admin-pill role-coordinator">Unit Coordinator</span>}
+                      {tutorAccess && (
+                        <span className={`admin-pill role-${tutorAccess.role}`}>
+                          {tutorAccessLabel}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="admin-access-badge-group">
+                      {coordinatorAccess && (
+                        <span className="admin-pill inactive">
+                          {coordinatorAccess.isPrimaryCoordinator ? 'Main coordinator' : 'Coordinator access'}
+                        </span>
+                      )}
+                      {tutorAccess && (
+                        <span className="admin-pill inactive">
+                          {`${tutorAccess.assignedSessionCount} assigned ${tutorAccess.assignedSessionCount === 1 ? 'session' : 'sessions'}`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="admin-access-actions">
+                      {coordinatorAccess && (
+                        <button
+                          type="button"
+                          className="admin-danger-btn subtle"
+                          onClick={() => removeUnitAccess(coordinatorAccess)}
+                          disabled={isUnitSaving || coordinatorAccess.isPrimaryCoordinator}
+                        >
+                          {coordinatorAccess.isPrimaryCoordinator ? 'Locked' : 'Remove UC'}
+                        </button>
+                      )}
+                      {tutorAccess && (
+                        <button
+                          type="button"
+                          className="admin-danger-btn subtle"
+                          onClick={() => removeUnitAccess(tutorAccess)}
+                          disabled={isUnitSaving}
+                        >
+                          Remove {tutorAccessLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="admin-modal-actions">
-              <button type="button" className="admin-secondary-btn" onClick={closeAddUnitModal}>Cancel</button>
-              <button className="admin-primary-btn" type="submit" disabled={isUnitSaving || !unitForm.unitId}>
-                {isUnitSaving ? 'Adding...' : 'Add Access'}
+              <button type="button" className="admin-primary-btn" onClick={openAddUnitModal} disabled={isUnitSaving || !units.length}>
+                Add Unit
               </button>
+              <button type="button" className="admin-secondary-btn" onClick={closeUnitAccessModal}>Done</button>
             </div>
-          </form>
+
+            {isAddUnitModalOpen && (
+              <div className="admin-nested-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-add-unit-access-title">
+                <form className="admin-modal admin-add-unit-modal" onSubmit={addUnitAccess}>
+                  <div className="admin-modal-header">
+                    <div>
+                      <h2 id="admin-add-unit-access-title">Add Unit Access</h2>
+                      <p className="admin-modal-copy">{unitModalUser.displayName} - {unitModalUser.email}</p>
+                    </div>
+                    <button type="button" className="admin-icon-btn light" onClick={closeAddUnitModal} aria-label="Close">x</button>
+                  </div>
+
+                  <label>
+                    Search unit
+                    <input
+                      value={unitSearch}
+                      onChange={event => setUnitSearch(event.target.value)}
+                      placeholder="Search code, name, semester or year"
+                    />
+                  </label>
+
+                  <div className="admin-unit-picker" role="listbox" aria-label="Units">
+                    {filteredAddUnits.length === 0 && (
+                      <div className="admin-empty-panel compact">No units found.</div>
+                    )}
+
+                    {filteredAddUnits.map(unit => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`admin-unit-picker-option ${unitForm.unitId === unit.id ? 'selected' : ''}`}
+                        onClick={() => setUnitForm(prev => ({ ...prev, unitId: unit.id }))}
+                      >
+                        <span>
+                          <strong>{unit.unitCode}</strong>
+                          <small>{unit.unitName}</small>
+                        </span>
+                        <em>{unit.semester}, {unit.year}</em>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedAddUnit && (
+                    <div className="admin-selected-unit-note">
+                      Selected: <strong>{selectedAddUnit.unitCode}</strong> - {selectedAddUnit.unitName} ({selectedAddUnit.semester}, {selectedAddUnit.year})
+                    </div>
+                  )}
+
+                  <label>
+                    Access
+                    <select value={unitForm.role} onChange={event => setUnitForm(prev => ({ ...prev, role: event.target.value }))}>
+                      {MEMBERSHIP_ROLE_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="admin-modal-actions">
+                    <button type="button" className="admin-secondary-btn" onClick={closeAddUnitModal}>Cancel</button>
+                    <button className="admin-primary-btn" type="submit" disabled={isUnitSaving || !unitForm.unitId}>
+                      {isUnitSaving ? 'Adding...' : 'Add Access'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </AdminShell>
