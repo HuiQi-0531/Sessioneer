@@ -393,6 +393,45 @@ const TutorRequests = () => {
     }
   };
 
+    // The admin's / coordinator's note on an accepted or rejected request.
+  const renderReviewNote = (req) => {
+    if (!isProcessed(req.status) || !req.reviewNotes) return null;
+    const rejected = statusKey(req.status) === 'rejected';
+    return (
+      <div className={`review-note-section ${rejected ? 'rejected' : 'accepted'}`}>
+        <div className="reason-label">{rejected ? 'Reason for rejection' : 'Reviewer note'}</div>
+        <div className="reason-text">{req.reviewNotes}</div>
+      </div>
+    );
+  };
+
+  // Reason (+ appeal, if any) block, shared by every card type.
+  const renderReason = (req) => {
+    const { reason, appeal } = splitReasonAndAppeal(req.reason);
+    return (
+      <>
+        <div className="reason-section">
+          <div className="reason-label">Reason</div>
+          <div className="reason-text">{reason}</div>
+        </div>
+        {appeal && (
+          <div style={{ marginTop: '4px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
+            <div className="reason-text">{appeal}</div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderAppealButton = (req) => (
+    statusKey(req.status) === 'rejected' && (
+      <div className="appeal-actions">
+        <button className="btn-appeal" onClick={() => handleOpenAppeal(req)}>Appeal decision</button>
+      </div>
+    )
+  );
+
   const renderCardBody = (req) => {
     if (statusKey(req.status) === 'suggested' && req.reviewNotes) {
       return (
@@ -406,23 +445,7 @@ const TutorRequests = () => {
             <div className="session-label">UC Suggested Session</div>
             <div className="session-time">{req.reviewNotes}</div>
           </div>
-          {(() => {
-            const { reason, appeal } = splitReasonAndAppeal(req.reason);
-            return (
-              <>
-                <div className="reason-section">
-                  <div className="reason-label">Reason</div>
-                  <div className="reason-text">{reason}</div>
-                </div>
-                {appeal && (
-                  <div style={{ marginTop: '4px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
-                    <div className="reason-text">{appeal}</div>
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          {renderReason(req)}
           <div className="suggestion-actions">
             <button className="btn-accept-suggestion" onClick={() => { setSelectedSuggestion(req); setSuggestionAction('accept'); setShowSuggestedModal(true); }}>Accept Suggestion</button>
             <button className="btn-reject-suggestion" onClick={() => { setSelectedSuggestion(req); setSuggestionAction('reject'); setShowSuggestedModal(true); }}>Reject Suggestion</button>
@@ -430,6 +453,7 @@ const TutorRequests = () => {
         </>
       );
     }
+
     if ((req.requestType || '').toLowerCase().includes('change')) {
       return (
         <>
@@ -437,31 +461,13 @@ const TutorRequests = () => {
             <div className="session-label">Current Session Will Be Removed</div>
             <div className="session-time">{labelFromValue(req.currentSession) || req.currentSession}</div>
           </div>
-          {(() => {
-            const { reason, appeal } = splitReasonAndAppeal(req.reason);
-            return (
-              <>
-                <div className="reason-section">
-                  <div className="reason-label">Reason</div>
-                  <div className="reason-text">{reason}</div>
-                </div>
-                {appeal && (
-                  <div style={{ marginTop: '4px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
-                    <div className="reason-text">{appeal}</div>
-                  </div>
-                )}
-              </>
-            );
-          })()}
-          {statusKey(req.status) === 'rejected' && (
-            <div className="appeal-actions">
-              <button className="btn-appeal" onClick={() => handleOpenAppeal(req)}>Appeal decision</button>
-            </div>
-          )}
+          {renderReason(req)}
+          {renderReviewNote(req)}
+          {renderAppealButton(req)}
         </>
       );
     }
+
     return (
       <>
         <div className="session-info">
@@ -477,28 +483,9 @@ const TutorRequests = () => {
             </div>
           </>
         )}
-        {(() => {
-          const { reason, appeal } = splitReasonAndAppeal(req.reason);
-          return (
-            <>
-              <div className="reason-section">
-                <div className="reason-label">Reason</div>
-                <div className="reason-text">{reason}</div>
-              </div>
-              {appeal && (
-                <div style={{ marginTop: '4px' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px', textAlign: 'left' }}>Appeal</div>
-                  <div className="reason-text">{appeal}</div>
-                </div>
-              )}
-            </>
-          );
-        })()}
-        {statusKey(req.status) === 'rejected' && (
-          <div className="appeal-actions">
-            <button className="btn-appeal" onClick={() => handleOpenAppeal(req)}>Appeal decision</button>
-          </div>
-        )}
+        {renderReason(req)}
+        {renderReviewNote(req)}
+        {renderAppealButton(req)}
       </>
     );
   };
