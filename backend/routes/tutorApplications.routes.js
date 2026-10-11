@@ -13,6 +13,7 @@ const { isValidEmail } = require('../utils/authRules');
 const { getCoordinatorUnitId, LINKED_UNITS_SQL, superTutorDowngradeError } = require('../utils/unitAccess');
 const { DEFAULT_APPLICATION_FIELDS, sanitiseFields, withRequiredFields } = require('../utils/applicationFields');
 const { parseMaximumHours } = require('../utils/profileRules');
+const { ApplicationActionError, inviteApplication, declineApplication } = require('../utils/applicationActions');
 
 const router = express.Router();
 
@@ -219,9 +220,10 @@ router.get('/:id/resume', verifyToken, requireRole('coordinator'), async (req, r
   }
 });
 
-// PATCH /tutor-applications/:id/invite (coordinator only) - generate an invite link
-router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req, res) => {
-  try {
+// PATCH /tutor-applications/:id/invite (coordinator only) - generate an invite
+// link, or add the applicant straight away if they already have an account.
+// The rules live in utils/applicationActions.js (shared with the admin page).
+router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req, res) => {  try {
     const { id } = req.params;
     const { unitId, role } = req.body;
     if (!unitId) {
@@ -230,81 +232,41 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
     const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
-    const invitedRole = normaliseInvitedRole(role);
-
-    // An applicant who already has a Sessioneer account (e.g. a tutor from
-    // another unit) can't use an invite link: accept-invite refuses existing
-    // emails, so they were never added. Add them to the unit straight away,
-    // like the direct invite does, and close the application.
-    const applicationResult = await pool.query(
-      'SELECT email FROM tutor_applications WHERE id = $1 AND unit_id = $2',
-      [id, unitId]
-    );
-    if (applicationResult.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
-    const existingUser = await pool.query(
-      'SELECT id, role, name, last_name, email FROM users WHERE LOWER(email) = LOWER($1)',
-      [applicationResult.rows[0].email]
-    );
-    if (existingUser.rows.length > 0) {
-      const user = existingUser.rows[0];
-      if (user.role === 'admin') {
-        return res.status(409).json({ error: 'This email belongs to an administrator account and cannot be added as a tutor.' });
-      }
-      if (await getCoordinatorUnitId(ownedUnitId, user.id)) {
-        return res.status(409).json({ error: 'This person is already a coordinator of this unit.' });
-      }
-      if (invitedRole === 'tutor') {
-        const downgradeError = await superTutorDowngradeError(user.id, ownedUnitId);
-        if (downgradeError) return res.status(409).json({ error: downgradeError });
-      }
-      await pool.query(
-        `DELETE FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor') AND role != $3`,
-        [ownedUnitId, user.id, invitedRole]
-      );
-      await pool.query(
-        `INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, $3)
-         ON CONFLICT (unit_id, user_id, role) DO NOTHING`,
-        [ownedUnitId, user.id, invitedRole]
-      );
-      const updated = await pool.query(
-        `
-        UPDATE tutor_applications
-        SET status = 'accepted', invited_by_id = $1, invited_at = NOW(), invited_role = $2, created_user_id = $3
-        WHERE id = $4 AND unit_id = $5
-        RETURNING *
-        `,
-        [req.user.id, invitedRole, user.id, id, unitId]
-      );
-      const unitRow = (await pool.query('SELECT unit_code FROM units WHERE id = $1', [ownedUnitId])).rows[0] || {};
-      const roleLabel = invitedRole === 'super_tutor' ? 'Super Tutor' : 'tutor';
-      await pool.query(
-        `INSERT INTO notifications (user_id, notification_type, title, content, related_unit_id, action_url)
-         VALUES ($1, 'tutor_unit_invite', 'Added to a new tutor unit', $2, $3, '/tutor-dashboard')`,
-        [user.id, `You have been added as a ${roleLabel} for ${unitRow.unit_code || 'a unit'}.`, ownedUnitId]
-      );
-      return res.json({ ...formatApplication(updated.rows[0]), addedExistingUser: true });
-    }
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    const result = await pool.query(
-      `
-      UPDATE tutor_applications
-      SET status = 'invited', invited_by_id = $1, invited_at = NOW(),
-          invite_token = $2, invite_token_expires_at = $3, invited_role = $4
-      WHERE id = $5 AND unit_id = $6
-      RETURNING *
-      `,
-      [req.user.id, token, expiresAt, invitedRole, id, unitId]
-    );
-
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
-
-    res.json({ ...formatApplication(result.rows[0]), inviteToken: token });
+ const result = await inviteApplication({
+      applicationId: id,
+      unitId: ownedUnitId,
+      role,
+      invitedById: req.user.id
+    });
+    res.json(result);
   } catch (error) {
+    if (error instanceof ApplicationActionError) {
+      return res.status(error.status).json({ error: error.message });
+     }
     console.error('Error inviting applicant:', error);
     res.status(500).json({ error: 'Failed to invite applicant' });
+  }
+});
+
+// PATCH /tutor-applications/:id/decline (coordinator only) - decline a pending
+// application. The applicant isn't notified; the note is only for the UC and admin.
+router.patch('/:id/decline', verifyToken, requireRole('coordinator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { unitId, note } = req.body;
+    if (!unitId) {
+      return res.status(400).json({ error: 'Unit is required' });
+    }
+    const ownedUnitId = await getOwnedUnitId(unitId, req.user.id);
+    if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
+
+    const result = await declineApplication({ applicationId: id, unitId: ownedUnitId, note });
+    res.json(result);  } catch (error) {
+    if (error instanceof ApplicationActionError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('Error declining application:', error);
+    res.status(500).json({ error: 'Failed to decline application' });
   }
 });
 

@@ -403,7 +403,9 @@ CREATE TABLE IF NOT EXISTS tutor_applications (
     invited_role VARCHAR(20) NOT NULL DEFAULT 'tutor',
     invite_token VARCHAR(255) UNIQUE,
     invite_token_expires_at TIMESTAMP,
-    created_user_id UUID REFERENCES users(id) ON DELETE SET NULL
+    created_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    review_note TEXT,
+    reviewed_at TIMESTAMP
 );
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE CASCADE;
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS name VARCHAR(255);
@@ -425,6 +427,8 @@ ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invited_role VARCHAR(20)
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invite_token VARCHAR(255);
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMP;
 ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS created_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS review_note TEXT;
+ALTER TABLE tutor_applications ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
 
 -- availability_reminders (availability deadline reminder log; see migration 002)
 CREATE TABLE IF NOT EXISTS availability_reminders (

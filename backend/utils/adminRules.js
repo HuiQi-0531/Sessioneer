@@ -1,6 +1,7 @@
 // Admin logic used by admin.routes.js.
 const { formatUserNameFields, joinUserName } = require('./userNames');
 const { toDateKey } = require('./brisbaneTime');
+const { isInviteExpired } = require('./applicationRules');
 
 const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor', 'super_tutor']);
 const VALID_ACCOUNT_STATUSES = new Set(['active', 'pending', 'disabled']);
@@ -181,6 +182,13 @@ const formatAdminApplication = (application) => ({
   appliedAt: application.applied_at,
   invitedAt: application.invited_at,
   inviteExpiresAt: application.invite_token_expires_at,
+  // Same rule as the UC page, plus no link once it has expired.
+  inviteToken: application.status === 'invited' && application.invite_token &&
+    !isInviteExpired(application.invite_token_expires_at)
+    ? application.invite_token
+    : null,
+  reviewNote: application.review_note || '',
+  reviewedAt: application.reviewed_at || null,
   createdUserId: application.created_user_id || null,
   invitedByName: [application.invited_by_name, application.invited_by_last_name].filter(Boolean).join(' '),
   invitedByEmail: application.invited_by_email || '',

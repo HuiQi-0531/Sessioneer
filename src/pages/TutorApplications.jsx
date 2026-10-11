@@ -30,6 +30,14 @@ const TutorApplications = () => {
   // Which application is mid-invite, and which role the UC picked for it.
   const [inviteRoleModal, setInviteRoleModal] = useState(null);
   const [inviteRoleChoice, setInviteRoleChoice] = useState('tutor');
+  const [inviteError, setInviteError] = useState('');
+
+
+  // Which application is being declined, and the optional note.
+  const [declineModal, setDeclineModal] = useState(null);
+  const [declineNote, setDeclineNote] = useState('');
+  const [declineError, setDeclineError] = useState('');
+  const [isDeclining, setIsDeclining] = useState(false);
 
   const loadApplications = useCallback(async () => {
     if (!activeUnit?.id) {
@@ -83,6 +91,7 @@ const TutorApplications = () => {
 
   const handleInvite = async (application, role) => {
     setIsInviting(application.id);
+    setInviteError('');
     try {
       const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id, role);
       setInviteRoleModal(null);
@@ -98,12 +107,35 @@ const TutorApplications = () => {
       }
       await loadApplications();
     } catch (err) {
-      alert(err.message || 'Failed to generate invite link.');
+      setInviteError(err.message || 'Failed to generate invite link.');
+      // The list may be out of date (e.g. someone else already handled it).
+      await loadApplications();
     } finally {
       setIsInviting(null);
     }
   };
 
+  const openDeclineModal = (application) => {
+    setDeclineNote('');
+    setDeclineError('');
+    setDeclineModal(application);
+  };
+
+  const handleDecline = async () => {
+    if (!declineModal) return;
+    setIsDeclining(true);
+    setDeclineError('');
+    try {
+      await tutorApplicationsAPI.decline(declineModal.id, activeUnit.id, declineNote.trim());
+      setDeclineModal(null);
+      await loadApplications();
+    } catch (err) {
+      setDeclineError(err.message || 'Failed to decline application.');
+      await loadApplications();
+    } finally {
+      setIsDeclining(false);
+    }
+  };
   const handleDownloadResume = async (application) => {
     try {
       await tutorApplicationsAPI.downloadResume(application.id, application.resumeFilename);
@@ -175,14 +207,13 @@ const TutorApplications = () => {
           </div>
 
           <div className="tap-tabs">
-            {['pending', 'invited', 'accepted'].map(tab => (
+            {['pending', 'invited', 'accepted', 'rejected'].map(tab => (
               <button
                 key={tab}
                 className={`tap-tab ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab)}
               >
-                {tab === 'pending' ? 'Pending' : tab === 'invited' ? 'Invited' : 'Joined'}
-                <span className="tap-tab-count">{applications.filter(a => a.status === tab).length}</span>
+                {tab === 'pending' ? 'Pending' : tab === 'invited' ? 'Invited' : tab === 'accepted' ? 'Joined' : 'Declined'}                <span className="tap-tab-count">{applications.filter(a => a.status === tab).length}</span>
               </button>
             ))}
           </div>
@@ -194,6 +225,7 @@ const TutorApplications = () => {
               {activeTab === 'pending' && 'No pending applications.'}
               {activeTab === 'invited' && 'No pending invites.'}
               {activeTab === 'accepted' && 'No one has joined yet.'}
+              {activeTab === 'rejected' && 'No declined applications.'}
             </div>
           ) : (
             <div className="tap-card-list">
@@ -204,7 +236,7 @@ const TutorApplications = () => {
                       <div className="tap-card-name">{app.fullName || app.name || 'Pending profile'}</div>
                       <div className="tap-card-email">{app.email}</div>
                     </div>
-                    <span className={`tap-badge ${app.status}`}>{app.status}</span>
+                    <span className={`tap-badge ${app.status}`}>{app.status === 'rejected' ? 'declined' : app.status}</span>
                   </div>
 
                 
@@ -237,8 +269,18 @@ const TutorApplications = () => {
                     <div className="tap-card-detail-row">
                       <span className="tap-card-detail-label">Applied</span>{formatDate(app.appliedAt)}
                     </div>
+                    {app.status === 'rejected' && app.reviewedAt && (
+                      <div className="tap-card-detail-row">
+                        <span className="tap-card-detail-label">Declined</span>{formatDate(app.reviewedAt)}
+                      </div>
+                    )}
                   </div>
-                
+                  {app.status === 'rejected' && app.reviewNote && (
+                    <div className="tap-review-note">
+                      <span className="tap-review-note-label">Internal note</span>
+                      {app.reviewNote}
+                    </div>
+                  )}               
 
                   <div className="tap-card-actions">
                     {app.hasResume && (
@@ -249,10 +291,19 @@ const TutorApplications = () => {
                     {app.status === 'pending' && (
                       <button
                         className="tap-btn tap-btn-invite"
-                        onClick={() => { setInviteRoleChoice('tutor'); setInviteRoleModal(app); }}
+                        onClick={() => { setInviteRoleChoice('tutor'); setInviteError(''); setInviteRoleModal(app); }}
                         disabled={isInviting === app.id}
                       >
                         {isInviting === app.id ? 'Generating...' : 'Invite'}
+                      </button>
+                    )}
+                    {app.status === 'pending' && (
+                      <button
+                        className="tap-btn tap-btn-decline"
+                        onClick={() => openDeclineModal(app)}
+                        disabled={isInviting === app.id}
+                      >
+                        Decline
                       </button>
                     )}
                     {app.status === 'invited' && (
@@ -333,6 +384,8 @@ const TutorApplications = () => {
               </p>
             </div>
 
+           {inviteError && <p className="tap-modal-error">{inviteError}</p>}
+           
             <button
               className="tap-btn tap-btn-invite"
               style={{ width: '100%' }}
@@ -341,6 +394,37 @@ const TutorApplications = () => {
             >
               {isInviting === inviteRoleModal.id ? 'Generating...' : 'Generate Invite Link'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {declineModal && (
+        <div className="tap-modal-overlay" onClick={() => !isDeclining && setDeclineModal(null)}>
+          <div className="tap-modal-content" onClick={e => e.stopPropagation()}>
+            <h2>Decline {declineModal.fullName || declineModal.name || 'applicant'}?</h2>
+            <p>The application moves to Declined. The applicant won't be notified.</p>
+
+            <div className="tap-form-field">
+              <label>Note <span className="tap-optional">(optional, only UC and admin see this)</span></label>
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={declineNote}
+                onChange={(e) => setDeclineNote(e.target.value)}
+                placeholder="e.g. Availability doesn't match any tutorial times"
+              />
+            </div>
+
+            {declineError && <p className="tap-modal-error">{declineError}</p>}
+
+            <div className="tap-modal-actions">
+              <button className="tap-btn tap-btn-resume" onClick={() => setDeclineModal(null)} disabled={isDeclining}>
+                Cancel
+              </button>
+              <button className="tap-btn tap-btn-decline-confirm" onClick={handleDecline} disabled={isDeclining}>
+                {isDeclining ? 'Declining...' : 'Decline'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1028,43 +1028,37 @@ export const ucDashboardAPI = {
 };
 
 export const tutorDashboardAPI = {
-  // The cards are for one unit (the Active Unit), so the cache is per unit too.
-  getSummary: async (unitId = null) => {
+  getSummary: async () => {
     const now = Date.now();
-    const key = String(unitId || '');
-    const cached = tutorDashboardCache?.key === key ? tutorDashboardCache : null;
 
-    if (cached?.data && now - cached.updatedAt < DASHBOARD_CACHE_TTL_MS) {
-      return cached.data;
+    if (tutorDashboardCache?.data && now - tutorDashboardCache.updatedAt < DASHBOARD_CACHE_TTL_MS) {
+      return tutorDashboardCache.data;
     }
 
-    if (cached?.promise) {
-      return cached.promise;
+    if (tutorDashboardCache?.promise) {
+      return tutorDashboardCache.promise;
     }
 
-    const query = unitId ? `?unitId=${encodeURIComponent(unitId)}` : '';
-    const promise = fetch(`${API_URL}/tutor/dashboard-summary${query}`, {
+    const promise = fetch(`${API_URL}/tutor/dashboard-summary`, {
       headers: authHeader()
     })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to fetch dashboard summary');
-        if (tutorDashboardCache?.key === key) {
-          tutorDashboardCache = { key, data, updatedAt: Date.now() };
-        }
+        tutorDashboardCache = { data, updatedAt: Date.now() };
         return data;
       })
       .catch((error) => {
-        if (tutorDashboardCache?.key === key) tutorDashboardCache = null;
+        tutorDashboardCache = null;
         throw error;
       });
 
-    tutorDashboardCache = { key, promise, updatedAt: now };
+    tutorDashboardCache = { promise, updatedAt: now };
     return promise;
   },
 
-  prefetch: async (unitId = null) => {
-    return tutorDashboardAPI.getSummary(unitId);
+  prefetch: async () => {
+    return tutorDashboardAPI.getSummary();
   }
 };
 
@@ -1490,8 +1484,23 @@ export const tutorApplicationsAPI = {
       body: JSON.stringify({ unitId, role })
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
+    // Cleared even on failure: a "no longer pending" error means the cached
+    // list is out of date, and the page reloads it.
     clearApplicationsCache(unitId);
+    if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
+    return result;
+  },
+
+  decline: async (applicationId, unitId, note = '') => {
+    const response = await fetch(`${API_URL}/tutor-applications/${applicationId}/decline`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ unitId, note })
+    });
+    const result = await response.json();
+    clearApplicationsCache(unitId);
+    if (!response.ok) throw new Error(result.error || 'Failed to decline application');
+
     return result;
   },
 
@@ -1760,6 +1769,41 @@ export const adminAPI = {
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  },
+
+  inviteApplication: async (applicationId, role = 'tutor') => {
+    const response = await fetch(`${API_URL}/admin/applications/${applicationId}/invite`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ role })
+    });
+    const result = await response.json();
+    clearApplicationsCache();
+    if (!response.ok) throw new Error(result.error || 'Failed to invite applicant');
+    return result;
+  },
+
+  declineApplication: async (applicationId, note = '') => {
+    const response = await fetch(`${API_URL}/admin/applications/${applicationId}/decline`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ note })
+    });
+    const result = await response.json();
+    clearApplicationsCache();
+    if (!response.ok) throw new Error(result.error || 'Failed to decline application');
+    return result;
+  },
+
+  deleteApplication: async (applicationId) => {
+    const response = await fetch(`${API_URL}/admin/applications/${applicationId}`, {
+      method: 'DELETE',
+      headers: authHeader()
+    });
+    const result = await response.json();
+    clearApplicationsCache();
+    if (!response.ok) throw new Error(result.error || 'Failed to delete application');
+    return result;
   },
 
   getRequests: async () => {

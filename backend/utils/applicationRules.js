@@ -29,7 +29,10 @@ const formatApplication = (a) => ({
   // reused link says "already used"); it's how the "Copy link" button on an
   // already-invited card still works after the success modal is closed.
   inviteToken: a.status === 'invited' ? a.invite_token : null,
-  customAnswers: a.custom_answers || {}
+  customAnswers: a.custom_answers || {},
+  // Set when the application is declined. The note is only seen by the UC and admin.
+  reviewNote: a.review_note || '',
+  reviewedAt: a.reviewed_at || null
 });
 
 // Only keep answers for keys that aren't one of the legacy dedicated columns.

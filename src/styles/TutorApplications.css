@@ -157,6 +157,8 @@
 .tap-badge.pending { background-color: var(--color-warning-bg); color: var(--color-warning-hover); }
 .tap-badge.invited { background-color: #dbeafe; color: #1d4ed8; }
 .tap-badge.accepted { background-color: var(--color-success-bg); color: var(--color-success); }
+.tap-badge.rejected { background-color: var(--color-danger-bg); color: var(--color-danger-text); }
+
 
 .tap-role-tag {
   font-size: 12px;
@@ -224,6 +226,51 @@
 
 .tap-btn-invite:hover {
   background-color: var(--color-primary-hover);
+}
+
+/* Decline: same shape as Invite, light red so it doesn't compete with it */
+.tap-btn-decline {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.tap-btn-decline:hover {
+  background-color: #fecaca;
+}
+
+.tap-btn-decline-confirm {
+  background-color: var(--color-danger-text);
+  color: var(--color-surface);
+}
+
+.tap-btn-decline-confirm:hover {
+  background-color: #991b1b;
+}
+
+.tap-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tap-review-note {
+  background-color: var(--color-bg-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.tap-review-note-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  margin-bottom: 4px;
 }
 
 /* Modals */
@@ -308,7 +355,8 @@
 }
 
 .tap-form-field input,
-.tap-form-field select {
+.tap-form-field select,
+.tap-form-field textarea {
   width: 100%;
   padding: 9px 12px;
   border: 1px solid var(--color-border-strong);
@@ -335,4 +383,26 @@
   outline: none;
   border-color: var(--color-primary, #4f46e5);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.tap-form-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.tap-optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Inside .tap-modal-content, so it wins over the grey paragraph colour */
+.tap-modal-content .tap-modal-error {
+  color: var(--color-danger-text);
+  font-size: 13px;
+}
+
+.tap-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

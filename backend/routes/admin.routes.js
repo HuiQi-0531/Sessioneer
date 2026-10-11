@@ -58,6 +58,7 @@ const {
 } = require('../utils/allocationRules');
 const { normaliseUnitCode, deleteUnitCascade } = require('../utils/unitRules');
 const { superTutorDowngradeError } = require('../utils/unitAccess');
+const { ApplicationActionError, inviteApplication, declineApplication } = require('../utils/applicationActions');
 const { sameTermUnitIdsSql } = require('../utils/termRules');
 const { shouldApplyChange } = require('../utils/changeRequestRules');
 const {
@@ -1327,8 +1328,11 @@ router.get('/applications', async (req, res) => {
         ta.status,
         ta.applied_at,
         ta.invited_at,
+        ta.invite_token,
         ta.invite_token_expires_at,
         ta.created_user_id,
+        ta.review_note,
+        ta.reviewed_at,
         invited_by.name AS invited_by_name,
         invited_by.last_name AS invited_by_last_name,
         invited_by.email AS invited_by_email,
@@ -1374,6 +1378,62 @@ router.get('/applications/:id/resume', async (req, res) => {
   } catch (error) {
     console.error('Admin application resume fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch resume' });
+  }
+});
+
+// Admin actions on an application use the same rules as the UC page
+// (utils/applicationActions.js): only a pending application can be invited
+// or declined.
+router.patch('/applications/:id/invite', async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid application ID' });
+    const result = await inviteApplication({
+      applicationId: req.params.id,
+      role: req.body.role,
+      invitedById: req.user.id
+    });
+    res.json(result);
+  } catch (error) {
+    if (error instanceof ApplicationActionError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('Admin application invite error:', error);
+    res.status(500).json({ error: 'Failed to invite applicant' });
+  }
+});
+
+router.patch('/applications/:id/decline', async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid application ID' });
+    const result = await declineApplication({ applicationId: req.params.id, note: req.body.note });
+    res.json(result);
+  } catch (error) {
+    if (error instanceof ApplicationActionError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('Admin application decline error:', error);
+    res.status(500).json({ error: 'Failed to decline application' });
+  }
+});
+
+// Only a declined application can be deleted (removes the resume too).
+// Pending, invited and joined ones stay on record.
+router.delete('/applications/:id', async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Invalid application ID' });
+    const result = await pool.query(
+      `DELETE FROM tutor_applications WHERE id = $1 AND status = 'rejected' RETURNING id`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      const exists = await pool.query('SELECT 1 FROM tutor_applications WHERE id = $1', [req.params.id]);
+      if (exists.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
+      return res.status(409).json({ error: 'Only declined applications can be deleted. Refresh the page to see its current status.' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin application delete error:', error);
+    res.status(500).json({ error: 'Failed to delete application' });
   }
 });
 
