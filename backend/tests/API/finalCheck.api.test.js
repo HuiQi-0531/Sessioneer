@@ -191,3 +191,66 @@ defineApiCases('API final sweep: admin emails', (add) => {
     expect(res.body.error).toMatch(/Failed to send reset link/);
   });
 });
+
+defineApiCases('API final sweep: UC and admin flows', (add) => {
+  const addApplication = async (ctx, email) => (await query(
+    `INSERT INTO tutor_applications (unit_id, name, last_name, email, status)
+     VALUES ($1, 'App', 'Licant', $2, 'pending') RETURNING id`,
+    [ctx.unitA.id, email]
+  )).rows[0].id;
+
+  add('FC-18 inviting an applicant who already has an account adds them to the unit (no dead invite link)', async (ctx) => {
+    const email = (await query('SELECT email FROM users WHERE id = $1', [ctx.u.outsider.id])).rows[0].email;
+    const appId = await addApplication(ctx, email.toUpperCase());
+    const res = await api('patch', `/tutor-applications/${appId}/invite`, ctx.tokens.uc, { unitId: ctx.unitA.id, role: 'tutor' });
+    expect(res.status).toBe(200);
+    expect(res.body.addedExistingUser).toBe(true);
+    const membership = await query("SELECT role FROM unit_memberships WHERE unit_id = $1 AND user_id = $2", [ctx.unitA.id, ctx.u.outsider.id]);
+    expect(membership.rows.map(r => r.role)).toEqual(['tutor']);
+    expect((await query('SELECT status FROM tutor_applications WHERE id = $1', [appId])).rows[0].status).toBe('accepted');
+  });
+
+  add('FC-19 a brand-new applicant still gets an invite link', async (ctx) => {
+    const appId = await addApplication(ctx, 'brand.new.person@api.test');
+    const res = await api('patch', `/tutor-applications/${appId}/invite`, ctx.tokens.uc, { unitId: ctx.unitA.id, role: 'tutor' });
+    expect(res.status).toBe(200);
+    expect(res.body.inviteToken).toBeTruthy();
+    expect(res.body.addedExistingUser).toBeUndefined();
+  });
+
+  add('FC-20 a coordinator account cannot be switched to tutor or admin while it coordinates units', async (ctx) => {
+    const ucRow = (await query('SELECT name, last_name, email FROM users WHERE id = $1', [ctx.u.uc.id])).rows[0];
+    const body = (role) => ({ firstName: ucRow.name, lastName: ucRow.last_name || 'X', email: ucRow.email, role, accountStatus: 'active' });
+    const toTutor = await api('put', `/admin/users/${ctx.u.uc.id}`, ctx.tokens.admin, body('tutor'));
+    expect(toTutor.status).toBe(409);
+    expect(toTutor.body.error).toMatch(/coordinator of API101/);
+    expect((await query('SELECT role FROM users WHERE id = $1', [ctx.u.uc.id])).rows[0].role).toBe('coordinator');
+    expect((await api('put', `/admin/users/${ctx.u.uc.id}`, ctx.tokens.admin, body('coordinator'))).status).toBe(200);
+  });
+
+  add('FC-21 a tutor with unit access cannot be made an admin; one without can', async (ctx) => {
+    const row = async (id) => (await query('SELECT name, last_name, email FROM users WHERE id = $1', [id])).rows[0];
+    const t = await row(ctx.u.tutor.id);
+    const res = await api('put', `/admin/users/${ctx.u.tutor.id}`, ctx.tokens.admin, { firstName: t.name, lastName: t.last_name || 'X', email: t.email, role: 'admin', accountStatus: 'active' });
+    expect(res.status).toBe(409);
+    const o = await row(ctx.u.outsider.id);
+    const ok = await api('put', `/admin/users/${ctx.u.outsider.id}`, ctx.tokens.admin, { firstName: o.name, lastName: o.last_name || 'X', email: o.email, role: 'coordinator', accountStatus: 'active' });
+    expect(ok.status).toBe(200);
+  });
+
+  add('FC-22 CSV import skips a row whose code already exists, and a code repeated inside the file', async (ctx) => {
+    const row = (code, day) => ({ sessionCode: code, day, startTime: '15:00', endTime: '16:00', location: 'GP-Z-1', campus: 'GP', sessionType: 'Tutorial', capacity: 30, requiredTutors: 1 });
+    const res = await api('post', `/units/${ctx.unitA.id}/sessions/import`, ctx.tokens.uc, {
+      replace: false,
+      sessions: [row('TUT01', 'MON'), row('TUT50', 'TUE'), row('tut50', 'WED'), row('', 'THU')]
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.importedCount).toBe(2);
+    expect(res.body.skipped.map(s => s.reason)).toEqual([
+      'Session code TUT01 is already used in this unit',
+      'Session code TUT50 is already used in this unit'
+    ]);
+    const dupes = await query('SELECT session_code FROM sessions WHERE unit_id = $1 GROUP BY 1 HAVING COUNT(*) > 1', [ctx.unitA.id]);
+    expect(dupes.rows).toHaveLength(0);
+  });
+});

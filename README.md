@@ -142,7 +142,7 @@ Other notices:
 | Suite | Command (from `backend/` unless stated) | Tests |
 |-------|------------------------------------------|-------|
 | Logic (unit) | `npm run test:logic` | 711 |
-| API | `npm run test:api` | 468 |
+| API | `npm run test:api` | 473 |
 | Integration | `npm run test:integration` | 16 |
 | RBAC | `npm run test:rbac` | 99 |
 | Frontend components | `CI=true npm test -- --watchAll=false` (project root) | 89 |

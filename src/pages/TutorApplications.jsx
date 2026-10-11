@@ -86,7 +86,16 @@ const TutorApplications = () => {
     try {
       const result = await tutorApplicationsAPI.invite(application.id, activeUnit.id, role);
       setInviteRoleModal(null);
-      setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
+      if (result.addedExistingUser) {
+        // They already have an account, so there is no link to send: they are on the unit now.
+        const roleLabel = role === 'super_tutor' ? 'Super Tutor' : 'tutor';
+        setDirectInviteSuccess({
+          title: 'Tutor added',
+          message: `${result.fullName || result.name || result.email} already has a Sessioneer account and has been added as a ${roleLabel} for ${activeUnit.unitCode}.`
+        });
+      } else {
+        setInviteLinkInfo({ name: result.fullName || result.name, url: buildInviteUrl(result.inviteToken) });
+      }
       await loadApplications();
     } catch (err) {
       alert(err.message || 'Failed to generate invite link.');

@@ -231,6 +231,60 @@ router.patch('/:id/invite', verifyToken, requireRole('coordinator'), async (req,
     if (!ownedUnitId) return res.status(404).json({ error: 'Unit not found' });
 
     const invitedRole = normaliseInvitedRole(role);
+
+    // An applicant who already has a Sessioneer account (e.g. a tutor from
+    // another unit) can't use an invite link: accept-invite refuses existing
+    // emails, so they were never added. Add them to the unit straight away,
+    // like the direct invite does, and close the application.
+    const applicationResult = await pool.query(
+      'SELECT email FROM tutor_applications WHERE id = $1 AND unit_id = $2',
+      [id, unitId]
+    );
+    if (applicationResult.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
+    const existingUser = await pool.query(
+      'SELECT id, role, name, last_name, email FROM users WHERE LOWER(email) = LOWER($1)',
+      [applicationResult.rows[0].email]
+    );
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+      if (user.role === 'admin') {
+        return res.status(409).json({ error: 'This email belongs to an administrator account and cannot be added as a tutor.' });
+      }
+      if (await getCoordinatorUnitId(ownedUnitId, user.id)) {
+        return res.status(409).json({ error: 'This person is already a coordinator of this unit.' });
+      }
+      if (invitedRole === 'tutor') {
+        const downgradeError = await superTutorDowngradeError(user.id, ownedUnitId);
+        if (downgradeError) return res.status(409).json({ error: downgradeError });
+      }
+      await pool.query(
+        `DELETE FROM unit_memberships WHERE unit_id = $1 AND user_id = $2 AND role IN ('tutor', 'super_tutor') AND role != $3`,
+        [ownedUnitId, user.id, invitedRole]
+      );
+      await pool.query(
+        `INSERT INTO unit_memberships (unit_id, user_id, role) VALUES ($1, $2, $3)
+         ON CONFLICT (unit_id, user_id, role) DO NOTHING`,
+        [ownedUnitId, user.id, invitedRole]
+      );
+      const updated = await pool.query(
+        `
+        UPDATE tutor_applications
+        SET status = 'accepted', invited_by_id = $1, invited_at = NOW(), invited_role = $2, created_user_id = $3
+        WHERE id = $4 AND unit_id = $5
+        RETURNING *
+        `,
+        [req.user.id, invitedRole, user.id, id, unitId]
+      );
+      const unitRow = (await pool.query('SELECT unit_code FROM units WHERE id = $1', [ownedUnitId])).rows[0] || {};
+      const roleLabel = invitedRole === 'super_tutor' ? 'Super Tutor' : 'tutor';
+      await pool.query(
+        `INSERT INTO notifications (user_id, notification_type, title, content, related_unit_id, action_url)
+         VALUES ($1, 'tutor_unit_invite', 'Added to a new tutor unit', $2, $3, '/tutor-dashboard')`,
+        [user.id, `You have been added as a ${roleLabel} for ${unitRow.unit_code || 'a unit'}.`, ownedUnitId]
+      );
+      return res.json({ ...formatApplication(updated.rows[0]), addedExistingUser: true });
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 

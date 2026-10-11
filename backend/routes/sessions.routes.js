@@ -597,6 +597,12 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
 
     const imported = [];
     const skipped = [];
+    // Codes already in the unit (after a replace, none) plus ones added by this
+    // import, so a CSV can't create a second TUT01.
+    const usedCodes = new Set((await client.query(
+      'SELECT UPPER(TRIM(session_code)) AS code FROM sessions WHERE unit_id = $1 AND session_code IS NOT NULL',
+      [unitId]
+    )).rows.map(r => r.code));
 
     for (let i = 0; i < sessions.length; i++) {
       const row = sessions[i];
@@ -604,6 +610,10 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
 
       if (prepared.skipReason) {
         skipped.push({ rowIndex: i, reason: prepared.skipReason, row });
+        continue;
+      }
+      if (prepared.sessionCode && usedCodes.has(String(prepared.sessionCode).trim().toUpperCase())) {
+        skipped.push({ rowIndex: i, reason: `Session code ${String(prepared.sessionCode).trim().toUpperCase()} is already used in this unit`, row });
         continue;
       }
       const v = prepared.values;
@@ -625,6 +635,7 @@ router.post('/import', verifyToken, requireRole('coordinator'), async (req, res)
           v.capacity, v.requiredTutors, v.status, v.staffNote, sessionCode
         ]
       );
+      usedCodes.add(String(sessionCode || '').trim().toUpperCase());
       imported.push(result.rows[0].id);
     }
 

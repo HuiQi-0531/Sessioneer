@@ -382,6 +382,39 @@ router.put('/users/:id', async (req, res) => {
       return res.status(400).json({ error: selfEditError });
     }
 
+    // Unit access depends on the account role (coordinator pages need a
+    // coordinator account, admins cannot teach). Changing the role while the
+    // person still holds unit access left units with a UC who could not open
+    // them. Ask for the unit access to be moved first.
+    const roleConflict = await pool.query(
+      `
+      SELECT
+        ARRAY(
+          SELECT DISTINCT un.unit_code FROM units un
+          WHERE un.unit_coordinator_id = $1
+             OR EXISTS (SELECT 1 FROM unit_memberships cm WHERE cm.unit_id = un.id AND cm.user_id = $1 AND cm.role = 'coordinator')
+          ORDER BY un.unit_code
+        ) AS coordinated,
+        ARRAY(
+          SELECT DISTINCT un.unit_code FROM unit_memberships um JOIN units un ON un.id = um.unit_id
+          WHERE um.user_id = $1 AND um.role IN ('tutor', 'super_tutor')
+          ORDER BY un.unit_code
+        ) AS tutoring
+      `,
+      [req.params.id]
+    );
+    const { coordinated = [], tutoring = [] } = roleConflict.rows[0] || {};
+    if (role !== 'coordinator' && coordinated.length > 0) {
+      return res.status(409).json({
+        error: `This user is a coordinator of ${coordinated.join(', ')}. Give those units another coordinator (Admin > Units) before changing the role.`
+      });
+    }
+    if (role === 'admin' && tutoring.length > 0) {
+      return res.status(409).json({
+        error: `This user tutors in ${tutoring.join(', ')}. Remove that unit access before making them an admin.`
+      });
+    }
+
     const result = await pool.query(
       `
       UPDATE users
