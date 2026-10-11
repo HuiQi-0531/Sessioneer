@@ -407,6 +407,8 @@ router.get('/:id/coordinators', verifyToken, requireRole('coordinator'), async (
         u.name,
         u.last_name,
         u.email,
+        u.avatar_url,
+        u.phone_number,
         units.unit_coordinator_id = u.id AS is_main
       FROM units
       JOIN users u ON (
@@ -431,6 +433,8 @@ router.get('/:id/coordinators', verifyToken, requireRole('coordinator'), async (
       lastName: user.last_name,
       fullName: [user.name, user.last_name].filter(Boolean).join(' '),
       email: user.email,
+      avatarUrl: user.avatar_url || null,
+      phoneNumber: user.phone_number || '',
       isMain: user.is_main
     })));
   } catch (error) {

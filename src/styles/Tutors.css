@@ -601,3 +601,14 @@
   background-color: var(--color-bg-subtle);
   color: var(--color-text-secondary);
 }
+
+.tt-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 4px 0 12px;
+}
+
+.tt-coordinator-section .tt-card-list {
+  margin-bottom: 24px;
+}

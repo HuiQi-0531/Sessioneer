@@ -693,22 +693,26 @@ router.get('/:sessionId/candidates', verifyToken, requireRole('coordinator'), as
       [unitId, TUTOR_LIKE_ROLES]
     );
 
+        // You plus every other coordinator of this unit (co-UCs).
     const coordinatorResult = await pool.query(
       `
       SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name,
              u.email, u.maximum_hours, 'coordinator' AS membership_role,
              NULL::text AS priority_tag, false AS starred, false AS flagged
       FROM users u
-      WHERE u.id = $1
+      WHERE u.id = $2
+         OR u.id = (SELECT unit_coordinator_id FROM units WHERE id = $1)
+         OR EXISTS (
+           SELECT 1 FROM unit_memberships um
+           WHERE um.unit_id = $1 AND um.user_id = u.id AND um.role = 'coordinator'
+         )
       `,
-      [req.user.id]
+      [unitId, req.user.id]
     );
 
     const candidateMap = new Map();
     tutorsResult.rows.forEach(tutor => candidateMap.set(tutor.id, tutor));
-    if (coordinatorResult.rows[0]) {
-      candidateMap.set(coordinatorResult.rows[0].id, coordinatorResult.rows[0]);
-    }
+    coordinatorResult.rows.forEach(coordinator => candidateMap.set(coordinator.id, coordinator));
 
     const sessionNeedsSuperTutor = requiresSuperTutor(session.session_type);
 
@@ -799,6 +803,9 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     }
 
     const isCoordinatorSelfAssignment = tutorId === req.user.id && Boolean(ownedUnitId);
+    // Is the person being assigned a coordinator of this unit (you or a co-UC)?
+    const isCoordinatorTarget = isCoordinatorSelfAssignment
+      || Boolean(await getCoordinatorUnitId(unitId, tutorId));
     const tutorResult = await pool.query(
       `
       SELECT u.id, TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) AS name,
@@ -810,12 +817,12 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       WHERE u.id = $1 AND ($4::boolean OR u.role = 'tutor' OR um.id IS NOT NULL)
       GROUP BY u.id, u.name, u.last_name, u.email, u.maximum_hours
       `,
-      [tutorId, unitId, TUTOR_LIKE_ROLES, isCoordinatorSelfAssignment]
+      [tutorId, unitId, TUTOR_LIKE_ROLES, isCoordinatorTarget]
     );
     if (tutorResult.rows.length === 0) return res.status(404).json({ error: 'Staff member not found' });
     const tutor = tutorResult.rows[0];
 
-    if (violatesSuperTutorRule(session.session_type, tutor.is_super_tutor, isCoordinatorSelfAssignment)) {
+      if (violatesSuperTutorRule(session.session_type, tutor.is_super_tutor, isCoordinatorTarget)) {
       return res.status(409).json({ error: `Only Super Tutors can be assigned to ${session.session_type} sessions` });
     }
 
@@ -858,10 +865,10 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
       ON CONFLICT (session_id, tutor_id)
       DO UPDATE SET tutor_confirmed = $3, tutor_reject_reason = NULL
       `,
-      [sessionId, tutorId, isCoordinatorSelfAssignment ? true : null]
+      [sessionId, tutorId, isCoordinatorTarget ? true : null]
     );
 
-    if (!isCoordinatorSelfAssignment) {
+    if (!isCoordinatorTarget) {
       await pool.query(
         `
         INSERT INTO unit_memberships (unit_id, user_id, role)
@@ -915,13 +922,15 @@ router.patch('/:sessionId/assign', verifyToken, requireRole('coordinator'), asyn
     await createNotification({
       userId: tutorId,
       type: 'session_assigned',
-      title: isCoordinatorSelfAssignment ? 'Session assigned to you' : 'New session assignment',
+      title: isCoordinatorTarget ? 'Session assigned to you' : 'New session assignment',
       content: isCoordinatorSelfAssignment
         ? `You assigned yourself to a ${session.day} session in ${unitCode}.`
-        : `You've been assigned to a ${session.day} session in ${unitCode}. Please confirm or decline it.`,
+        : isCoordinatorTarget
+          ? `A co-coordinator assigned you to a ${session.day} session in ${unitCode}.`
+          : `You've been assigned to a ${session.day} session in ${unitCode}. Please confirm or decline it.`,
       unitId,
       sessionId,
-      actionUrl: isCoordinatorSelfAssignment ? `/schedule-builder/${unitId}` : `/tutor-schedule/${unitId}`
+      actionUrl: isCoordinatorTarget ? `/schedule-builder/${unitId}` : `/tutor-schedule/${unitId}`
     });
 
     res.json(formatSessionRow(withName.rows[0]));

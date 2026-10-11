@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { tutorsAPI } from '../config/api';
+import { tutorsAPI, unitsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -39,10 +39,19 @@ const Tutors = () => {
   } = useActiveUnit();
 
   const [tutors, setTutors] = useState([]);
+  const [coordinators, setCoordinators] = useState([]);
+  const currentUserId = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('currentUser'))?.id || null;
+    } catch {
+      return null;
+    }
+  }, []);
   const [isLoadingTutors, setIsLoadingTutors] = useState(true);
   const [search, setSearch] = useState('');
 
   const [selectedTutor, setSelectedTutor] = useState(null);
+  const [selectedCoordinator, setSelectedCoordinator] = useState(null);
   const [draft, setDraft] = useState({ priorityTag: 'Standard', internalNotes: '', tags: [] });
   const [newTagText, setNewTagText] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -86,11 +95,16 @@ const Tutors = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilters]);
 
-  const loadTutors = async (unitId) => {
+    const loadTutors = async (unitId) => {
     setIsLoadingTutors(true);
     try {
-      const data = await tutorsAPI.getAll(unitId);
+    const [data, coordinatorData] = await Promise.all([
+        tutorsAPI.getAll(unitId),
+        unitsAPI.getCoordinators(unitId).catch(() => [])
+      ]);
       setTutors(dedupeTutors(data));
+      // Show the unit's OTHER coordinators (not yourself)
+      setCoordinators((coordinatorData || []).filter(c => c.id !== currentUserId));
     } catch (err) {
       console.error('Error loading tutors:', err);
     } finally {
@@ -380,6 +394,38 @@ const Tutors = () => {
 
           </div>
 
+
+          {!isLoadingTutors && coordinators.length > 0 && (
+            <div className="tt-coordinator-section">
+              <h3 className="tt-section-title">Unit Coordinators</h3>
+              <div className="tt-card-list">
+                {coordinators.map(c => (
+                  <div key={c.id} className="tt-card" onClick={() => setSelectedCoordinator(c)}>
+                    <div className="tt-card-top">
+                      <div className="tt-card-name-group">
+                        <div className="tt-card-avatar">
+                          {c.avatarUrl ? (
+                            <img src={c.avatarUrl} alt={c.fullName || c.email} />
+                          ) : (
+                            (c.fullName || c.email || '?').charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <span className="tt-card-name">
+                          {c.fullName || c.email}
+                          <span className="tt-badge super-tutor" style={{ marginLeft: 8 }}>
+                            {c.isMain ? 'Main Coordinator' : 'Unit Coordinator'}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="tt-card-meta">{c.email}</div>
+                  </div>
+                ))}
+              </div>
+              <h3 className="tt-section-title">Tutors</h3>
+            </div>
+          )}
+
           {isLoadingTutors ? (
             <div className="tt-empty-state">Loading tutors...</div>
           ) : filteredTutors.length === 0 ? (
@@ -567,6 +613,55 @@ const Tutors = () => {
         </div>
       )}
 
+            {selectedCoordinator && (
+        <div className="tt-modal-overlay" onClick={() => setSelectedCoordinator(null)}>
+          <div className="tt-modal-content" onClick={e => e.stopPropagation()}>
+            <button className="tt-modal-close" onClick={() => setSelectedCoordinator(null)}>&times;</button>
+
+            <div className="tt-modal-header">
+              <div className="tt-modal-avatar">
+                {selectedCoordinator.avatarUrl ? (
+                  <img
+                    src={selectedCoordinator.avatarUrl}
+                    alt={selectedCoordinator.fullName || selectedCoordinator.email}
+                  />
+                ) : (
+                  (selectedCoordinator.fullName || selectedCoordinator.email || '?').charAt(0).toUpperCase()
+                )}
+              </div>
+              <div>
+                <div className="tt-modal-name">{selectedCoordinator.fullName || selectedCoordinator.email}</div>
+                <div className="tt-modal-role">
+                  {selectedCoordinator.isMain ? 'Main Unit Coordinator' : 'Unit Coordinator'}
+                </div>
+              </div>
+            </div>
+
+            <div className="tt-readonly-grid">
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Email</div>
+                <div className="tt-readonly-value">{selectedCoordinator.email}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Phone</div>
+                <div className="tt-readonly-value">{selectedCoordinator.phoneNumber || 'Not provided'}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Unit</div>
+                <div className="tt-readonly-value">{activeUnit?.unitCode}</div>
+              </div>
+              <div className="tt-readonly-item">
+                <div className="tt-readonly-label">Access</div>
+                <div className="tt-readonly-value">
+                  {selectedCoordinator.isMain ? 'Main coordinator' : 'Co-coordinator'}
+                </div>
+              </div>
+              <p className="tt-readonly-note">Coordinator details are set on their own profile and can't be edited here.</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {showConfirm && (
         <div className="tt-confirm-overlay" onClick={() => setShowConfirm(false)}>
           <div className="tt-confirm-content" onClick={e => e.stopPropagation()}>

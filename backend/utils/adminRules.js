@@ -2,7 +2,7 @@
 const { formatUserNameFields, joinUserName } = require('./userNames');
 const { toDateKey } = require('./brisbaneTime');
 
-const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor']);
+const VALID_ROLES = new Set(['admin', 'coordinator', 'tutor', 'super_tutor']);
 const VALID_ACCOUNT_STATUSES = new Set(['active', 'pending', 'disabled']);
 const VALID_MEMBERSHIP_ROLES = new Set(['coordinator', 'tutor', 'super_tutor']);
 const TUTOR_MEMBERSHIP_ROLES = ['tutor', 'super_tutor'];
