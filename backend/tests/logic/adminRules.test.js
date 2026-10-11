@@ -8,7 +8,7 @@ describe('normaliseRole', () => {
   test('LG-264: "UC" becomes coordinator', () => { expect(a.normaliseRole('UC')).toBe('coordinator'); });
   test('LG-265: "Administrator" becomes admin', () => { expect(a.normaliseRole('Administrator')).toBe('admin'); });
   test('LG-266: " TUTOR " becomes tutor', () => { expect(a.normaliseRole(' TUTOR ')).toBe('tutor'); });
-  test('LG-267: super_tutor is not an account role', () => { expect(a.normaliseRole('super_tutor')).toBe(''); });
+  test('LG-267: super_tutor is an account role an admin can set', () => { expect(a.normaliseRole('super_tutor')).toBe('super_tutor'); });
   test('LG-268: missing role gives ""', () => { expect(a.normaliseRole(null)).toBe(''); });
 });
 
