@@ -645,3 +645,20 @@
     overflow: visible;
   }
 }
+
+.uc-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 4px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.uc-modal-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}

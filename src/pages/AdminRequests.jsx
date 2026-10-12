@@ -144,9 +144,36 @@ const AdminRequests = () => {
       return request.location || 'Open for eligible tutors';
     }
 
-    return request.preferredSwapTo
-      ? `Preferred: ${labelFromSessionValue(request.preferredSwapTo)}`
-      : request.reviewNotes || 'No alternative recorded';
+    if (request.preferredSwapTo) {
+      return `Preferred: ${labelFromSessionValue(request.preferredSwapTo)}`;
+    }
+    if (getStatusClass(request.status) === 'suggested' && request.reviewNotes) {
+      return `Suggested: ${request.reviewNotes}`;
+    }
+    return 'No alternative recorded';
+  };
+
+  // Who decided it: Admin or Unit Coordinator.
+  const reviewerLabel = (role) =>
+    role === 'admin' ? 'Admin' : role === 'coordinator' ? 'Unit Coordinator' : 'Reviewer';
+
+  // Reason / note, and whether a UC or an admin made the decision.
+  const renderReviewNote = (request) => {
+    if (request.requestGroup !== 'Swap/Change' || !request.reviewNotes) return null;
+    const status = getStatusClass(request.status);
+    const who = reviewerLabel(request.reviewerRole);
+    const appealed = status === 'pending' && String(request.reason || '').includes('--- Appeal ---');
+    if (status === 'rejected' || appealed) {
+      return (
+        <small className="admin-review-note rejected">
+          {appealed ? `Previously rejected by ${who}: ` : `Rejected by ${who}: `}{request.reviewNotes}
+        </small>
+      );
+    }
+    if (status === 'accepted') {
+      return <small className="admin-review-note">Approved by {who}: {request.reviewNotes}</small>;
+    }
+    return null;
   };
 
   const closeActionModal = () => {
@@ -396,6 +423,7 @@ const AdminRequests = () => {
                           })}
                         </strong>
                         <span>{request.coordinatorName || request.coordinatorEmail || 'Unknown'}</span>
+                        {renderReviewNote(request)}
                       </div>
                     ) : (
                       <span className="admin-muted">No review yet</span>

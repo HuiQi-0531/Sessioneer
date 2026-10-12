@@ -1985,3 +1985,18 @@
   font: inherit;
   font-size: 13px;
 }
+
+.admin-strong-cell .admin-review-note {
+  display: block;
+  max-width: 260px;
+  margin-top: 2px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.admin-strong-cell .admin-review-note.rejected {
+  color: #b91c1c;
+}

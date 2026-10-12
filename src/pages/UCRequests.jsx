@@ -52,6 +52,7 @@ const UCRequests = () => {
   const [showSuggestConfirmModal, setShowSuggestConfirmModal] = useState(false);
 
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [reviewNote, setReviewNote] = useState('');
   const [selectedSession, setSelectedSession] = useState('');
   const [availableSessions, setAvailableSessions] = useState([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
@@ -96,8 +97,8 @@ const UCRequests = () => {
     }
   };
 
-  const handleApprove = (request) => { setSelectedRequest(request); setShowApproveModal(true); };
-  const handleReject  = (request) => { setSelectedRequest(request); setShowRejectModal(true); };
+  const handleApprove = (request) => { setSelectedRequest(request); setReviewNote(''); setShowApproveModal(true); };
+  const handleReject  = (request) => { setSelectedRequest(request); setReviewNote(''); setShowRejectModal(true); };
 
   const formatSessionSuggestion = (session) => {
     // Database times come back as "11:00:00"; show and store them as "11:00".
@@ -209,7 +210,7 @@ const UCRequests = () => {
   const confirmApprove = async () => {
     if (!selectedRequest) return;
     try {
-      await ucAPI.reviewRequest(selectedRequest.id, 'accepted', 'Approved by Unit Coordinator');
+      await ucAPI.reviewRequest(selectedRequest.id, 'accepted', reviewNote.trim() || 'Approved by Unit Coordinator');
       await fetchRequests();
       setShowApproveModal(false);
       setSelectedRequest(null);
@@ -222,7 +223,7 @@ const UCRequests = () => {
   const confirmReject = async () => {
     if (!selectedRequest) return;
     try {
-      await ucAPI.reviewRequest(selectedRequest.id, 'rejected', 'Rejected by Unit Coordinator');
+      await ucAPI.reviewRequest(selectedRequest.id, 'rejected', reviewNote.trim() || 'Rejected by Unit Coordinator');
       await fetchRequests();
       setShowRejectModal(false);
       setSelectedRequest(null);
@@ -284,6 +285,33 @@ const UCRequests = () => {
     );
   };
 
+  // Who decided it: Admin or Unit Coordinator.
+  const reviewerLabel = (role) =>
+    role === 'admin' ? 'Admin' : role === 'coordinator' ? 'Unit Coordinator' : '';
+
+  // Reviewer's note: on accepted/rejected cards, and on appealed cards
+  // (which are Pending again) so the UC can compare it with the appeal.
+  const renderReviewNote = (request, pending) => {
+    if (!request.reviewNotes) return null;
+    const status = (request.status || '').toLowerCase();
+    const who = reviewerLabel(request.reviewerRole);
+    let label = null;
+    let action = 'Rejected';
+    let tone = 'rejected';
+    if (pending && isAppealed(request)) { label = 'Previous rejection reason'; }
+    else if (!pending && status === 'rejected') { label = 'Reason for rejection'; }
+    else if (!pending && status === 'accepted') { label = 'Reviewer note'; action = 'Approved'; tone = 'accepted'; }
+    if (!label) return null;
+    return (
+      <div className={`review-note-section ${tone}`}>
+        <div className="uc-reason-label">
+          {label}{who && ` · ${action} by ${who}`}
+        </div>
+        <p className="uc-reason-text">{request.reviewNotes}</p>
+      </div>
+    );
+  };
+
   const renderSessionRow = (request) => (
     <div className="uc-session-row">
       <div className="uc-session-box">
@@ -333,6 +361,7 @@ const UCRequests = () => {
           </div>
         )}
         {renderReasonSections(request)}
+        {renderReviewNote(request, pending)}
       </div>
 
       {pending && (
@@ -418,6 +447,13 @@ const UCRequests = () => {
             <div className="uc-modal-icon success">✓</div>
             <h2>Approve Request?</h2>
             <p className="uc-modal-subtitle">This will move the tutor to the preferred session and remove them from their current session. If the preferred session is already full, approval will fail.</p>
+            <textarea
+              className="uc-modal-textarea"
+              value={reviewNote}
+              onChange={(e) => setReviewNote(e.target.value)}
+              placeholder="Note for the tutor (optional)"
+              rows={3}
+            />
             <button className="uc-btn-done" onClick={confirmApprove}>Done</button>
           </div>
         </div>
@@ -431,6 +467,13 @@ const UCRequests = () => {
             <div className="uc-modal-icon warning">!</div>
             <h2>Reject Request?</h2>
             <p className="uc-modal-subtitle">This request will be rejected and moved to confirmation status.</p>
+            <textarea
+              className="uc-modal-textarea"
+              value={reviewNote}
+              onChange={(e) => setReviewNote(e.target.value)}
+              placeholder="Reason for rejection (the tutor will see this)"
+              rows={3}
+            />
             <button className="uc-btn-done" onClick={confirmReject}>Done</button>
           </div>
         </div>

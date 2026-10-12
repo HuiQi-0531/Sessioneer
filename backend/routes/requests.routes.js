@@ -176,10 +176,12 @@ router.get('/requests', verifyToken, requireRole('tutor', 'coordinator'), async 
         cr.priority,
         cr.unit_id as "unitId",
         TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as "tutorName",
-        un.unit_code as "unitCode"
+        un.unit_code as "unitCode",
+        reviewer.role as "reviewerRole"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       LEFT JOIN units un ON cr.unit_id = un.id
+      LEFT JOIN users reviewer ON reviewer.id = cr.reviewed_by_id
       WHERE cr.tutor_id = $1
       ORDER BY 
         CASE WHEN LOWER(cr.priority) = 'urgent' THEN 0 ELSE 1 END,
@@ -500,10 +502,12 @@ router.get('/uc/requests', verifyToken, requireRole('coordinator'), async (req, 
         cr.priority,
         cr.unit_id as "unitId",
         TRIM(CONCAT(u.name, ' ', COALESCE(u.last_name, ''))) as "tutorName",
-        un.unit_code as "unitCode"
+        un.unit_code as "unitCode",
+        reviewer.role as "reviewerRole"
       FROM change_requests cr
       LEFT JOIN users u ON cr.tutor_id = u.id
       JOIN units un ON cr.unit_id = un.id
+      LEFT JOIN users reviewer ON reviewer.id = cr.reviewed_by_id
       WHERE EXISTS (
         SELECT 1
         FROM unit_memberships um

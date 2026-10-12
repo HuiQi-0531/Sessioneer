@@ -219,7 +219,8 @@ const formatAdminRequest = (request) => ({
   location: request.location || '',
   claimedByName: [request.claimed_by_name, request.claimed_by_last_name].filter(Boolean).join(' '),
   claimedByEmail: request.claimed_by_email || '',
-  claimedAt: request.claimed_at
+  claimedAt: request.claimed_at,
+  reviewerRole: request.reviewer_role || ''
 });
 
 // Same email check the admin user forms used inline.

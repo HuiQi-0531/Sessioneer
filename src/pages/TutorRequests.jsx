@@ -393,13 +393,21 @@ const TutorRequests = () => {
     }
   };
 
-    // The admin's / coordinator's note on an accepted or rejected request.
+  // Who decided it: Admin or Unit Coordinator.
+  const reviewerLabel = (role) =>
+    role === 'admin' ? 'Admin' : role === 'coordinator' ? 'Unit Coordinator' : '';
+
+  // The note on an accepted or rejected request, and who made the decision.
   const renderReviewNote = (req) => {
     if (!isProcessed(req.status) || !req.reviewNotes) return null;
     const rejected = statusKey(req.status) === 'rejected';
+    const who = reviewerLabel(req.reviewerRole);
     return (
       <div className={`review-note-section ${rejected ? 'rejected' : 'accepted'}`}>
-        <div className="reason-label">{rejected ? 'Reason for rejection' : 'Reviewer note'}</div>
+        <div className="reason-label">
+          {rejected ? 'Reason for rejection' : 'Reviewer note'}
+          {who && ` · ${rejected ? 'Rejected' : 'Approved'} by ${who}`}
+        </div>
         <div className="reason-text">{req.reviewNotes}</div>
       </div>
     );
