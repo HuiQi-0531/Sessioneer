@@ -113,10 +113,13 @@ const AdminSessions = () => {
 
       const matchesUnit = unitFilter === 'all' || session.unitCode === unitFilter;
       const matchesSemester = semesterFilter === 'all' || formatUnitTerm(session) === semesterFilter;
-      const matchesStatus = statusFilter === 'all'
-        || String(session.status || '').toLowerCase() === statusFilter
-        || String(session.tutorConfirmationState || '').toLowerCase().replace(/\s+/g, '-') === statusFilter;
-
+      const toFilterKey = (value) => String(value || '').toLowerCase().replace(/\s+/g, '-');
+      const isTutorStateFilter = ['unassigned', 'awaiting-confirmation', 'confirmed'].includes(statusFilter);
+      const matchesStatus = statusFilter === 'all' || (
+        isTutorStateFilter
+          ? toFilterKey(session.tutorConfirmationState) === statusFilter
+          : toFilterKey(session.status) === statusFilter
+      );
       return matchesSearch && matchesUnit && matchesSemester && matchesStatus;
     });
   }, [sessions, searchTerm, unitFilter, semesterFilter, statusFilter]);
@@ -355,14 +358,18 @@ const AdminSessions = () => {
           ))}
         </select>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Status filter">
-          <option value="all">All status</option>
+        <option value="all">All status</option>
+        <optgroup label="Tutor confirmation">
           <option value="unassigned">Unassigned</option>
           <option value="awaiting-confirmation">Awaiting confirmation</option>
           <option value="confirmed">Confirmed</option>
+        </optgroup>
+        <optgroup label="Session status">
           <option value="draft">Draft</option>
           <option value="tentative">Tentative</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </optgroup>
+      </select>
         <button className="admin-primary-btn admin-toolbar-action" onClick={openCreateModal}>
           Add session
         </button>

@@ -52,6 +52,7 @@ const formatAdminUser = (user) => ({
   coordinatorUnitCount: Number(user.coordinator_unit_count || 0),
   tutorUnitCount: Number(user.tutor_unit_count || 0),
   unitSummary: user.unit_summary || '',
+  unitIds: Array.isArray(user.unit_ids) ? user.unit_ids.map(String) : [],
   createdAt: user.created_at || null
 });
 

@@ -293,9 +293,18 @@ router.get('/users', async (req, res) => {
             SELECT unit_code
             FROM units
             WHERE unit_coordinator_id = u.id
-          ) unit_labels
-        ) AS unit_summary
-      FROM users u
+            ) unit_labels
+          ) AS unit_summary,
+          (
+            SELECT COALESCE(ARRAY_AGG(DISTINCT access_units.unit_id::text), ARRAY[]::text[])
+            FROM (
+              SELECT unit_id FROM unit_memberships WHERE user_id = u.id
+              UNION
+              SELECT id AS unit_id FROM units WHERE unit_coordinator_id = u.id
+            ) access_units
+            WHERE access_units.unit_id IS NOT NULL
+          ) AS unit_ids
+        FROM users u
       ORDER BY LOWER(u.name), LOWER(COALESCE(u.last_name, '')), LOWER(u.email)
     `);
 
@@ -469,10 +478,19 @@ router.put('/users/:id', async (req, res) => {
             SELECT unit_code
             FROM units
             WHERE unit_coordinator_id = $1
-          ) unit_labels
-        ) AS unit_summary
-      `,
-      [req.params.id]
+            ) unit_labels
+          ) AS unit_summary,
+          (
+            SELECT COALESCE(ARRAY_AGG(DISTINCT access_units.unit_id::text), ARRAY[]::text[])
+            FROM (
+              SELECT unit_id FROM unit_memberships WHERE user_id = $1
+              UNION
+              SELECT id AS unit_id FROM units WHERE unit_coordinator_id = $1
+            ) access_units
+            WHERE access_units.unit_id IS NOT NULL
+          ) AS unit_ids
+        `,
+        [req.params.id]
     );
 
     res.json(formatAdminUser({ ...result.rows[0], ...counts.rows[0] }));

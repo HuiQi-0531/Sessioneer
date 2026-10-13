@@ -31,6 +31,8 @@ const MEMBERSHIP_ROLE_OPTIONS = [
 
 const TUTOR_ACCESS_ROLES = new Set(['tutor', 'super_tutor']);
 
+const SEMESTER_RANK = { Summer: 3, 'Semester 2': 2, 'Semester 1': 1 };
+
 const emptyForm = {
   firstName: '',
   lastName: '',
@@ -54,6 +56,8 @@ const formatDate = (value) => {
     year: 'numeric'
   });
 };
+
+const formatUnitTerm = (unit) => [unit?.semester, unit?.year].filter(Boolean).join(', ');
 
 const getUnitAccessPreview = (unitSummary) => {
   if (!unitSummary) {
@@ -79,6 +83,7 @@ const AdminUsers = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [unitFilter, setUnitFilter] = useState('all');
+  const [semesterFilter, setSemesterFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalUser, setModalUser] = useState(undefined);
@@ -117,14 +122,41 @@ const AdminUsers = () => {
     loadPageData();
   }, []);
 
+  const unitCodeOptions = useMemo(() => {
+    const unitMap = new Map();
+    units.forEach(unit => {
+      if (!unit.unitCode || unitMap.has(unit.unitCode)) return;
+      unitMap.set(unit.unitCode, unit);
+    });
+    return Array.from(unitMap.values()).sort((a, b) => a.unitCode.localeCompare(b.unitCode));
+  }, [units]);
+
+  const semesterOptions = useMemo(() => {
+    const terms = units.filter(unit => unit.semester && unit.year);
+    const uniqueTerms = Array.from(new Map(terms.map(unit => [formatUnitTerm(unit), unit])).values());
+    return uniqueTerms
+      .sort((a, b) => Number(b.year) - Number(a.year)
+        || (SEMESTER_RANK[b.semester] || 0) - (SEMESTER_RANK[a.semester] || 0))
+      .map(formatUnitTerm);
+  }, [units]);
+
+  const matchingUnitIds = useMemo(() => {
+    if (unitFilter === 'all' && semesterFilter === 'all') return null;
+    return new Set(
+      units
+        .filter(unit => unitFilter === 'all' || unit.unitCode === unitFilter)
+        .filter(unit => semesterFilter === 'all' || formatUnitTerm(unit) === semesterFilter)
+        .map(unit => String(unit.id))
+    );
+  }, [units, unitFilter, semesterFilter]);
+
   const filteredUsers = useMemo(() => {
     const search = query.trim().toLowerCase();
-    const selectedUnit = units.find(unit => unit.id === unitFilter);
 
     return users.filter(user => {
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
       const matchesStatus = statusFilter === 'all' || (user.accountStatus || 'active') === statusFilter;
-      const matchesUnit = unitFilter === 'all' || user.unitSummary?.split(', ').includes(selectedUnit?.unitCode);
+      const matchesUnit = !matchingUnitIds || (user.unitIds || []).some(id => matchingUnitIds.has(String(id)));
       const matchesSearch = !search ||
         user.displayName?.toLowerCase().includes(search) ||
         user.email?.toLowerCase().includes(search) ||
@@ -133,7 +165,7 @@ const AdminUsers = () => {
 
       return matchesRole && matchesStatus && matchesUnit && matchesSearch;
     });
-  }, [query, roleFilter, statusFilter, unitFilter, units, users]);
+  }, [query, roleFilter, statusFilter, matchingUnitIds, users]);
 
   const refreshUser = async (userId) => {
     const data = await adminAPI.getUsers();
@@ -387,8 +419,16 @@ const AdminUsers = () => {
         </select>
         <select aria-label="Unit filter" value={unitFilter} onChange={event => setUnitFilter(event.target.value)}>
           <option value="all">All units</option>
-          {units.map(unit => (
-            <option key={unit.id} value={unit.id}>{unit.unitCode}</option>
+          {unitCodeOptions.map(unit => (
+            <option key={unit.unitCode} value={unit.unitCode}>
+              {unit.unitCode}{unit.unitName ? ` - ${unit.unitName}` : ''}
+            </option>
+          ))}
+        </select>
+        <select aria-label="Semester filter" value={semesterFilter} onChange={event => setSemesterFilter(event.target.value)}>
+          <option value="all">All semesters</option>
+          {semesterOptions.map(term => (
+            <option key={term} value={term}>{term}</option>
           ))}
         </select>
       </div>
@@ -653,75 +693,74 @@ const AdminUsers = () => {
       )}
 
       {unitModalUser && isAddUnitModalOpen && (
-              <div className="admin-nested-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-add-unit-access-title">
-                <form className="admin-modal admin-add-unit-modal" onSubmit={addUnitAccess}>
-                  <div className="admin-modal-header">
-                    <div>
-                      <h2 id="admin-add-unit-access-title">Add Unit Access</h2>
-                      <p className="admin-modal-copy">{unitModalUser.displayName} - {unitModalUser.email}</p>
-                    </div>
-                    <button type="button" className="admin-icon-btn light" onClick={closeAddUnitModal} aria-label="Close">x</button>
-                  </div>
-
-                  <div className="admin-add-unit-body">
-                  {unitError && <div className="admin-alert error" role="alert">{unitError}</div>}
-
-                  <label>
-                    Search unit
-                    <input
-                      value={unitSearch}
-                      autoFocus
-                      onChange={event => setUnitSearch(event.target.value)}
-                      placeholder="Search code, name, semester or year"
-                    />
-                  </label>
-
-                  <div className="admin-unit-picker" role="listbox" aria-label="Units">
-                    {filteredAddUnits.length === 0 && (
-                      <div className="admin-empty-panel compact">No units found.</div>
-                    )}
-
-                    {filteredAddUnits.map(unit => (
-                      <button
-                        key={unit.id}
-                        type="button"
-                        className={`admin-unit-picker-option ${unitForm.unitId === unit.id ? 'selected' : ''}`}
-                        onClick={() => setUnitForm(prev => ({ ...prev, unitId: unit.id }))}
-                      >
-                        <span>
-                          <strong>{unit.unitCode}</strong>
-                          <small>{unit.unitName}</small>
-                        </span>
-                        <em>{unit.semester}, {unit.year}</em>
-                      </button>
-                    ))}
-                  </div>
-
-                  {selectedAddUnit && (
-                    <div className="admin-selected-unit-note">
-                      Selected: <strong>{selectedAddUnit.unitCode}</strong> - {selectedAddUnit.unitName} ({selectedAddUnit.semester}, {selectedAddUnit.year})
-                    </div>
-                  )}
-
-                  <label>
-                    Access
-                    <select value={unitForm.role} onChange={event => setUnitForm(prev => ({ ...prev, role: event.target.value }))}>
-                      {MEMBERSHIP_ROLE_OPTIONS.map(option => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  </div>
-
-                  <div className="admin-modal-actions">
-                    <button type="button" className="admin-secondary-btn" onClick={closeAddUnitModal}>Cancel</button>
-                    <button className="admin-primary-btn" type="submit" disabled={isUnitSaving || !unitForm.unitId}>
-                      {isUnitSaving ? 'Adding...' : 'Add Access'}
-                    </button>
-                  </div>
-                </form>
+        <div className="admin-nested-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-add-unit-access-title">
+          <form className="admin-modal admin-add-unit-modal" onSubmit={addUnitAccess}>
+            <div className="admin-modal-header">
+              <div>
+                <h2 id="admin-add-unit-access-title">Add Unit Access</h2>
+                <p className="admin-modal-copy">{unitModalUser.displayName} - {unitModalUser.email}</p>
               </div>
+              <button type="button" className="admin-icon-btn light" onClick={closeAddUnitModal} aria-label="Close">x</button>
+            </div>
+
+            <div className="admin-add-unit-body">
+              {unitError && <div className="admin-alert error" role="alert">{unitError}</div>}
+
+              <label>
+                Search unit
+                <input
+                  value={unitSearch}
+                  autoFocus
+                  onChange={event => setUnitSearch(event.target.value)}
+                  placeholder="Search code, name, semester or year"
+                />
+              </label>
+
+              <div className="admin-unit-picker" role="listbox" aria-label="Units">
+                {filteredAddUnits.length === 0 && (
+                  <div className="admin-empty-panel compact">No units found.</div>
+                )}
+
+                {filteredAddUnits.map(unit => (
+                  <button
+                    key={unit.id}
+                    type="button"
+                    className={`admin-unit-picker-option ${unitForm.unitId === unit.id ? 'selected' : ''}`}
+                    onClick={() => setUnitForm(prev => ({ ...prev, unitId: unit.id }))}
+                  >
+                    <span>
+                      <strong>{unit.unitCode}</strong>
+                      <small>{unit.unitName}</small>
+                    </span>
+                    <em>{unit.semester}, {unit.year}</em>
+                  </button>
+                ))}
+              </div>
+
+              {selectedAddUnit && (
+                <div className="admin-selected-unit-note">
+                  Selected: <strong>{selectedAddUnit.unitCode}</strong> - {selectedAddUnit.unitName} ({selectedAddUnit.semester}, {selectedAddUnit.year})
+                </div>
+              )}
+
+              <label>
+                Access
+                <select value={unitForm.role} onChange={event => setUnitForm(prev => ({ ...prev, role: event.target.value }))}>
+                  {MEMBERSHIP_ROLE_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="admin-modal-actions">
+              <button type="button" className="admin-secondary-btn" onClick={closeAddUnitModal}>Cancel</button>
+              <button className="admin-primary-btn" type="submit" disabled={isUnitSaving || !unitForm.unitId}>
+                {isUnitSaving ? 'Adding...' : 'Add Access'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </AdminShell>
   );
