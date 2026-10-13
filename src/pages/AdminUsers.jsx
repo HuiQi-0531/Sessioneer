@@ -537,7 +537,7 @@ const AdminUsers = () => {
       )}
 
       {unitModalUser && (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-user-units-title">
+        <div className="admin-modal-backdrop" role="dialog" aria-modal={!isAddUnitModalOpen} aria-labelledby="admin-user-units-title" aria-hidden={isAddUnitModalOpen || undefined} inert={isAddUnitModalOpen || undefined}>
           <div className="admin-modal wide admin-user-unit-modal">
             <div className="admin-modal-header">
               <div>
@@ -550,7 +550,7 @@ const AdminUsers = () => {
               <button type="button" className="admin-icon-btn light" onClick={closeUnitAccessModal} aria-label="Close">x</button>
             </div>
 
-            {unitError && <div className="admin-alert error">{unitError}</div>}
+            {unitError && !isAddUnitModalOpen && <div className="admin-alert error">{unitError}</div>}
 
             <div className="admin-user-unit-list">
               <div className="admin-user-unit-list-header">
@@ -635,7 +635,11 @@ const AdminUsers = () => {
               <button type="button" className="admin-secondary-btn" onClick={closeUnitAccessModal}>Done</button>
             </div>
 
-            {isAddUnitModalOpen && (
+          </div>
+        </div>
+      )}
+
+      {unitModalUser && isAddUnitModalOpen && (
               <div className="admin-nested-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-add-unit-access-title">
                 <form className="admin-modal admin-add-unit-modal" onSubmit={addUnitAccess}>
                   <div className="admin-modal-header">
@@ -646,10 +650,14 @@ const AdminUsers = () => {
                     <button type="button" className="admin-icon-btn light" onClick={closeAddUnitModal} aria-label="Close">x</button>
                   </div>
 
+                  <div className="admin-add-unit-body">
+                  {unitError && <div className="admin-alert error" role="alert">{unitError}</div>}
+
                   <label>
                     Search unit
                     <input
                       value={unitSearch}
+                      autoFocus
                       onChange={event => setUnitSearch(event.target.value)}
                       placeholder="Search code, name, semester or year"
                     />
@@ -691,6 +699,8 @@ const AdminUsers = () => {
                     </select>
                   </label>
 
+                  </div>
+
                   <div className="admin-modal-actions">
                     <button type="button" className="admin-secondary-btn" onClick={closeAddUnitModal}>Cancel</button>
                     <button className="admin-primary-btn" type="submit" disabled={isUnitSaving || !unitForm.unitId}>
@@ -699,9 +709,6 @@ const AdminUsers = () => {
                   </div>
                 </form>
               </div>
-            )}
-          </div>
-        </div>
       )}
     </AdminShell>
   );

@@ -1389,20 +1389,54 @@
 }
 
 .admin-nested-modal-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 2;
+  z-index: 110;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  border-radius: inherit;
+  padding: 24px;
+  box-sizing: border-box;
   background: rgba(15, 23, 42, 0.34);
 }
 
 .admin-add-unit-modal {
+  box-sizing: border-box;
   width: min(620px, 100%);
+  max-height: calc(100dvh - 48px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+}
+
+.admin-add-unit-modal .admin-modal-header,
+.admin-add-unit-modal .admin-modal-actions {
+  flex: 0 0 auto;
+}
+
+.admin-add-unit-modal .admin-modal-header > div {
+  min-width: 0;
+}
+
+.admin-add-unit-modal .admin-modal-copy,
+.admin-add-unit-modal .admin-selected-unit-note {
+  overflow-wrap: anywhere;
+}
+
+.admin-add-unit-body {
+  display: grid;
+  grid-auto-rows: max-content;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.admin-add-unit-body .admin-unit-picker {
+  min-height: 96px;
+  max-height: min(260px, 36dvh);
 }
 
 .admin-add-unit-modal select {
@@ -1753,6 +1787,15 @@
 }
 
 @media (max-width: 640px) {
+  .admin-nested-modal-backdrop {
+    padding: 12px;
+  }
+
+  .admin-add-unit-modal {
+    max-height: calc(100dvh - 24px);
+    padding: 18px;
+  }
+
   .admin-modal.wide.admin-session-modal {
     width: 100%;
     max-height: calc(100dvh - 24px);
