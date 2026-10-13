@@ -14,10 +14,16 @@ const formatDate = (iso) => new Date(iso).toLocaleDateString([], { day: 'numeric
 
 const buildInviteUrl = (token) => `${window.location.origin}/activate/${token}`;
 
+const getSemesterKey = (application) =>
+  application.semester || application.year ? `${application.year || ''}|${application.semester || ''}` : '';
+
+const formatSemester = (semester, year) => [semester, year].filter(Boolean).join(', ');
+
 
 const AdminApplications = () => {
   const [applications, setApplications] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [semesterFilter, setSemesterFilter] = useState('all');
   const [unitFilter, setUnitFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -52,18 +58,48 @@ const AdminApplications = () => {
     loadApplications();
   }, []);
 
-  const units = useMemo(() => {
-    const unitMap = new Map();
+  const semesters = useMemo(() => {
+    const semesterMap = new Map();
     applications.forEach((application) => {
-      if (application.unitId) {
-        unitMap.set(application.unitId, {
-          id: application.unitId,
-          label: application.unitCode || 'Unknown unit'
+      const key = getSemesterKey(application);
+      if (key && !semesterMap.has(key)) {
+        semesterMap.set(key, {
+          key,
+          semester: application.semester || '',
+          year: Number(application.year) || 0,
+          label: formatSemester(application.semester, application.year)
         });
       }
     });
-    return Array.from(unitMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(semesterMap.values()).sort((a, b) =>
+      b.year - a.year || b.semester.localeCompare(a.semester)
+    );
   }, [applications]);
+
+  // Only units in the chosen semester, so the same code from another semester doesn't show up twice.
+  const units = useMemo(() => {
+    const unitMap = new Map();
+    applications.forEach((application) => {
+      if (!application.unitId) return;
+      if (semesterFilter !== 'all' && getSemesterKey(application) !== semesterFilter) return;
+      const term = semesterFilter === 'all' ? formatSemester(application.semester, application.year) : '';
+      unitMap.set(application.unitId, {
+        id: application.unitId,
+        label: `${application.unitCode || 'Unknown unit'}${term ? ` (${term})` : ''}`
+      });
+    });
+    return Array.from(unitMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [applications, semesterFilter]);
+
+  const handleSemesterChange = (value) => {
+    setSemesterFilter(value);
+    if (value !== 'all' && unitFilter !== 'all') {
+      const unitStillMatches = applications.some(application =>
+        application.unitId === unitFilter && getSemesterKey(application) === value
+      );
+      if (!unitStillMatches) setUnitFilter('all');
+    }
+  };
 
   const filteredApplications = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -75,18 +111,21 @@ const AdminApplications = () => {
         application.phoneNumber,
         application.unitCode,
         application.unitName,
+        application.semester,
+        application.year,
         application.status,
         application.contractType,
         application.coordinatorName,
         application.invitedByName
       ].some(value => String(value || '').toLowerCase().includes(term));
 
+      const matchesSemester = semesterFilter === 'all' || getSemesterKey(application) === semesterFilter;
       const matchesUnit = unitFilter === 'all' || application.unitId === unitFilter;
       const matchesStatus = statusFilter === 'all' || getStatusClass(application.status) === statusFilter;
 
-      return matchesSearch && matchesUnit && matchesStatus;
+      return matchesSearch && matchesSemester && matchesUnit && matchesStatus;
     });
-  }, [applications, searchTerm, unitFilter, statusFilter]);
+  }, [applications, searchTerm, semesterFilter, unitFilter, statusFilter]);
 
   const handleDownloadResume = async (application) => {
     setResumeLoadingId(application.id);
@@ -170,6 +209,12 @@ const AdminApplications = () => {
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
         />
+        <select value={semesterFilter} onChange={(event) => handleSemesterChange(event.target.value)} aria-label="Semester filter">
+          <option value="all">All semesters</option>
+          {semesters.map(semester => (
+            <option key={semester.key} value={semester.key}>{semester.label}</option>
+          ))}
+        </select>
         <select value={unitFilter} onChange={(event) => setUnitFilter(event.target.value)} aria-label="Unit filter">
           <option value="all">All units</option>
           {units.map(unit => (
@@ -218,8 +263,15 @@ const AdminApplications = () => {
             </div>
           </td>
           <td>
-            {application.unitCode || 'No unit'}
-            {application.unitName ? ` · ${application.unitName}` : ''}
+            <div className="admin-strong-cell">
+              <strong>
+                {application.unitCode || 'No unit'}
+                {application.unitName ? ` · ${application.unitName}` : ''}
+              </strong>
+              {formatSemester(application.semester, application.year) && (
+                <span>{formatSemester(application.semester, application.year)}</span>
+              )}
+            </div>
           </td>
           <td>
             <div className="admin-strong-cell">
@@ -308,6 +360,9 @@ const AdminApplications = () => {
 
             <p className="admin-modal-copy">
               {action.application.fullName} - {action.application.unitCode || 'No unit'}
+              {formatSemester(action.application.semester, action.application.year)
+                ? ` (${formatSemester(action.application.semester, action.application.year)})`
+                : ''}
             </p>
 
             {action.type === 'invite' && (

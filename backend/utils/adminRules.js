@@ -169,6 +169,8 @@ const formatAdminApplication = (application) => ({
   unitId: application.unit_id,
   unitCode: application.unit_code || '',
   unitName: application.unit_name || '',
+  semester: application.semester || '',
+  year: application.year || null,
   firstName: application.name || '',
   lastName: application.last_name || '',
   fullName: [application.name, application.last_name].filter(Boolean).join(' ') || 'Pending profile',

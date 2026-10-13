@@ -1335,6 +1335,8 @@ router.get('/applications', async (req, res) => {
         ta.unit_id,
         un.unit_code,
         un.unit_name,
+        un.semester,
+        un.year,
         ta.name,
         ta.last_name,
         ta.email,
