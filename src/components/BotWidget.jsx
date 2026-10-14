@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageCircle, X, Send } from 'lucide-react';
 import { botAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
@@ -6,6 +7,7 @@ import '../styles/BotWidget.css';
 
 const BotWidget = () => {
   const { activeUnit } = useActiveUnit();
+  const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content }
   const [input, setInput] = useState('');
@@ -15,6 +17,7 @@ const BotWidget = () => {
   // Only coordinators get this widget - it's built for their workflows.
   const savedUser = localStorage.getItem('currentUser');
   const role = savedUser ? JSON.parse(savedUser).role : null;
+  const aboveComposer = pathname.startsWith('/messages');
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,7 +53,7 @@ const BotWidget = () => {
   };
 
   return (
-    <div className="bot-widget">
+    <div className={`bot-widget${aboveComposer ? ' bot-widget--above-composer' : ''}`}>
       {isOpen && (
         <div className="bot-widget__panel">
           <div className="bot-widget__header">
