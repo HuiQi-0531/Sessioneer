@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
-import { pickMessageUnits, messageUnitLabel, initialMessageUnitId } from '../utils/messageUnits';
+import { pickMessageUnits, messageUnitLabel, initialMessageUnitId, messageUnitStatus } from '../utils/messageUnits';
+import MessageUnitList from '../components/MessageUnitList';
 import { getSocket } from '../utils/socket';
 import UCSidebar from '../components/UCSidebar';
 import UCPageHeader from '../components/UCPageHeader';
@@ -375,6 +376,9 @@ const [selectedUnitId, setSelectedUnitId] = useState(null);
   };
 
   const selectedUnit = allUnits.find(u => u.id === selectedUnitId);
+  // Past semesters keep their history but nobody can post in the group chat.
+  // Direct messages are not tied to a semester, so they stay open.
+  const isGroupReadOnly = chatMode === 'group' && messageUnitStatus(selectedUnit) === 'past'
 
   const getMessageDisplayName = (message) => {
     if (message.isMine) return 'You';
@@ -416,17 +420,11 @@ const [selectedUnitId, setSelectedUnitId] = useState(null);
         <UCPageHeader title="Messages" />
 
         <div className="msg-container">
-          <div className="msg-units-col">
-            {messageUnits.map(unit => (
-              <div
-                key={unit.id}
-                className={`msg-unit-item ${selectedUnitId === unit.id ? 'active' : ''}`}
-                onClick={() => setSelectedUnitId(unit.id)}
-              >
-                {messageUnitLabel(unit, messageUnits)}
-              </div>
-            ))}
-          </div>
+          <MessageUnitList
+            units={messageUnits}
+            selectedUnitId={selectedUnitId}
+            onSelect={setSelectedUnitId}
+          />
 
           <div className="msg-inbox-col">
             <div className="msg-inbox-header">Inbox</div>
@@ -486,7 +484,7 @@ const [selectedUnitId, setSelectedUnitId] = useState(null);
                   ))}
                   <div ref={threadEndRef} />
                 </div>
-                {attachmentPreview && (
+                {!isGroupReadOnly && attachmentPreview && (
                   <div className="msg-attachment-preview">
                     {attachmentPreview.url ? (
                       <img src={attachmentPreview.url} alt={attachmentPreview.name} />
@@ -500,34 +498,38 @@ const [selectedUnitId, setSelectedUnitId] = useState(null);
                     <button type="button" onClick={clearAttachment} aria-label="Remove attachment">&times;</button>
                   </div>
                 )}
-                <div className="msg-input-row">
-                  <input
-                    ref={attachmentInputRef}
-                    type="file"
-                    accept={ATTACHMENT_ACCEPT}
-                    className="msg-file-input"
-                    onChange={handleAttachmentChange}
-                  />
+              {isGroupReadOnly ? (
+                  <div className="msg-readonly-note">This semester has ended. The group chat is read-only.</div>
+                ) : (
+                  <div className="msg-input-row">
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      accept={ATTACHMENT_ACCEPT}
+                      className="msg-file-input"
+                      onChange={handleAttachmentChange}
+                    />
                   <button
-                    type="button"
-                    className="msg-attach-btn"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={isSending}
-                    title="Attach file"
-                  >
-                    +
-                  </button>
-                  <input
-                    type="text"
-                    placeholder="Send Message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-                  />
-                  <button className="msg-send-btn" onClick={handleSend} disabled={isSending || (!newMessage.trim() && !selectedAttachment)}>
-                    Send
-                  </button>
-                </div>
+                      type="button"
+                      className="msg-attach-btn"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={isSending}
+                      title="Attach file"
+                    >
+                      +
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="Send Message..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
+                    />
+                    <button className="msg-send-btn" onClick={handleSend} disabled={isSending || (!newMessage.trim() && !selectedAttachment)}>
+                      Send
+                    </button>
+                  </div>
+                 )}
               </>
             )}
           </div>

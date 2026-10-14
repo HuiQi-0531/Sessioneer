@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { messagesAPI, sessionsAPI } from '../config/api';
 import { useActiveUnit } from '../context/ActiveUnitContext';
-import { pickMessageUnits, messageUnitLabel, initialMessageUnitId } from '../utils/messageUnits';
+import { pickMessageUnits, messageUnitLabel, initialMessageUnitId, messageUnitStatus } from '../utils/messageUnits';
+import MessageUnitList from '../components/MessageUnitList';
 import { getSocket } from '../utils/socket';
 import { unitHasTutorAccess } from '../utils/roles';
 import TutorSidebar from '../components/TutorSidebar';
@@ -376,6 +377,10 @@ const TutorMessages = () => {
 
   const selectedUnit = allUnits.find(u => u.id === selectedUnitId);
 
+  // Past semesters keep their history but nobody can post in the group chat.
+  // Direct messages are not tied to a semester, so they stay open.
+  const isGroupReadOnly = chatMode === 'group' && messageUnitStatus(selectedUnit) === 'past';
+
   const getMessageDisplayName = (message) => {
     if (message.isMine) return 'You';
     return chatMode === 'group' ? message.senderName : selectedContact?.name;
@@ -416,17 +421,11 @@ const TutorMessages = () => {
         <UCPageHeader title="Messages" />
 
         <div className="msg-container">
-                    <div className="msg-units-col">
-            {messageUnits.map(unit => (
-              <div
-                key={unit.id}
-                className={`msg-unit-item ${selectedUnitId === unit.id ? 'active' : ''}`}
-                onClick={() => setSelectedUnitId(unit.id)}
-              >
-                {messageUnitLabel(unit, messageUnits)}
-              </div>
-            ))}
-          </div>
+          <MessageUnitList
+            units={messageUnits}
+            selectedUnitId={selectedUnitId}
+            onSelect={setSelectedUnitId}
+          />
 
           <div className="msg-inbox-col">
             <div className="msg-inbox-header">Inbox</div>
@@ -486,7 +485,7 @@ const TutorMessages = () => {
                   ))}
                   <div ref={threadEndRef} />
                 </div>
-                {attachmentPreview && (
+                {!isGroupReadOnly && attachmentPreview && (
                   <div className="msg-attachment-preview">
                     {attachmentPreview.url ? (
                       <img src={attachmentPreview.url} alt={attachmentPreview.name} />
@@ -500,6 +499,9 @@ const TutorMessages = () => {
                     <button type="button" onClick={clearAttachment} aria-label="Remove attachment">&times;</button>
                   </div>
                 )}
+                {isGroupReadOnly ? (
+                  <div className="msg-readonly-note">This semester has ended. The group chat is read-only.</div>
+                ) : (
                 <div className="msg-input-row">
                   <input
                     ref={attachmentInputRef}
@@ -528,6 +530,7 @@ const TutorMessages = () => {
                     Send
                   </button>
                 </div>
+                )}
               </>
             )}
           </div>

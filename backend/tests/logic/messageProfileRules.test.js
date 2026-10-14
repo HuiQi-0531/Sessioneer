@@ -1,4 +1,4 @@
-const { formatMessage } = require('../../utils/messageRules');
+const { formatMessage, unitChatStatus } = require('../../utils/messageRules');
 const { getSupabaseConfig, buildRequestBaseUrl, isAllowedAttachmentType, isAllowedAvatarType } = require('../../utils/uploadRules');
 const { formatProfile, buildProfileUpdateParams } = require('../../utils/profileRules');
 
@@ -16,6 +16,30 @@ describe('formatMessage', () => {
     expect(formatMessage({ id: 'm1', sender_id: 'x' }, 'me')).toMatchObject({
       recipientId: null, attachmentUrl: null, attachmentName: null, attachmentType: null, attachmentSize: null
     });
+  });
+});
+
+describe('unitChatStatus', () => {
+  test('LG-693: day before Semester 2 starts is upcoming', () => {
+    expect(unitChatStatus('Semester 2', 2026, '2026-06-30')).toBe('upcoming');
+  });
+  test('LG-694: first and last day of Semester 2 are current', () => {
+    expect(unitChatStatus('Semester 2', 2026, '2026-07-01')).toBe('current');
+    expect(unitChatStatus('Semester 2', 2026, '2026-12-31')).toBe('current');
+  });
+  test('LG-695: day after Semester 2 ends is past (read-only)', () => {
+    expect(unitChatStatus('Semester 2', 2026, '2027-01-01')).toBe('past');
+  });
+  test('LG-696: Semester 1 is past from 1 July', () => {
+    expect(unitChatStatus('Semester 1', 2026, '2026-06-30')).toBe('current');
+    expect(unitChatStatus('Semester 1', 2026, '2026-07-01')).toBe('past');
+  });
+  test('LG-697: next year\'s unit is upcoming', () => {
+    expect(unitChatStatus('Semester 2', 2027, '2026-10-14')).toBe('upcoming');
+  });
+  test('LG-698: missing semester or year is treated as current, never locked', () => {
+    expect(unitChatStatus(null, 2026, '2026-10-14')).toBe('current');
+    expect(unitChatStatus('Semester 2', null, '2026-10-14')).toBe('current');
   });
 });
 

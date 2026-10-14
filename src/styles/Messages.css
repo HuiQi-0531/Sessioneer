@@ -30,6 +30,82 @@
   color: var(--color-surface);
 }
 
+/* Collapsible "Past semesters" / "Upcoming" groups above the current units */
+.msg-unit-group {
+  margin-bottom: 4px;
+}
+
+.msg-unit-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.msg-unit-group-toggle:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.msg-unit-group-arrow {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.msg-unit-group-arrow.open {
+  transform: rotate(90deg);
+}
+
+.msg-unit-group-title {
+  flex: 1;
+}
+
+.msg-unit-group-count {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+}
+
+.msg-unit-group-new {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+/* Past chats are read-only, so they sit back a little until selected */
+.msg-unit-group-list.past .msg-unit-item:not(.active) {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.msg-unit-section-label {
+  padding: 12px 10px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+}
+
+.msg-readonly-note {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-subtle);
+}
+
 .msg-inbox-col {
   width: 220px;
   border-right: 1px solid var(--color-border);

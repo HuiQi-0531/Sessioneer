@@ -6,7 +6,7 @@ const multer = require('multer');
 const pool = require('../db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { getCoordinatorUnitId, shareAnyUnit } = require('../utils/unitAccess');
-const { formatMessage } = require('../utils/messageRules');
+const { formatMessage, unitChatStatus } = require('../utils/messageRules');
 const { ALLOWED_ATTACHMENT_TYPES, getSupabaseConfig, buildRequestBaseUrl } = require('../utils/uploadRules');
 
 const router = express.Router();
@@ -391,6 +391,14 @@ router.post('/group/:unitId', verifyToken, upload.single('attachment'), async (r
 
     if (!(await canAccessUnit(req.user, unitId))) {
       return res.status(403).json({ error: 'You do not have access to this unit chat' });
+    }
+
+    // Past semesters stay readable but no one can post in them. Checked
+    // before the upload so a blocked message never leaves a stray file.
+    const unitResult = await pool.query('SELECT semester, year FROM units WHERE id = $1', [unitId]);
+    const unit = unitResult.rows[0];
+    if (unit && unitChatStatus(unit.semester, unit.year) === 'past') {
+      return res.status(403).json({ error: 'This semester has ended. The group chat is read-only.' });
     }
 
     const attachment = await uploadAttachment(req.file, req.user.id, req);
