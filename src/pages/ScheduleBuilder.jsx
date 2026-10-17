@@ -85,6 +85,7 @@ const ScheduleBuilder = () => {
   const [isLocking, setIsLocking] = useState(false);
   const [showForceLockModal, setShowForceLockModal] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [showUnreleaseModal, setShowUnreleaseModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const gridRef = React.useRef(null);
 
@@ -346,17 +347,14 @@ const renderThreeColorGrid = () => (
   };
 
   const handleReleaseToggle = async () => {
+  // Un-releasing hides the timetable from tutors, so ask first in our own modal
+   if (activeUnit.draftReleased) {
+     setShowUnreleaseModal(true);
+     return;
+   }
    setIsReleasing(true);
    try {
-     if (activeUnit.draftReleased) {
-       if (!window.confirm("Un-release the draft? Tutors won't be able to see the timetable until it's released again (or finalised).")) {
-         setIsReleasing(false);
-         return;
-       }
-       await unitsAPI.unreleaseDraft(activeUnit.id);
-     } else {
-       await unitsAPI.releaseDraft(activeUnit.id);
-     }
+    await unitsAPI.releaseDraft(activeUnit.id);
      await refreshUnits();
    } catch (err) {
      alert(err.message || 'Failed to update draft release status.');
@@ -365,6 +363,18 @@ const renderThreeColorGrid = () => (
    }
  };
 
+ const confirmUnrelease = async () => {
+    setIsReleasing(true);
+    try {
+      await unitsAPI.unreleaseDraft(activeUnit.id);
+      setShowUnreleaseModal(false);
+      await refreshUnits();
+    } catch (err) {
+      alert(err.message || 'Failed to update draft release status.');
+    } finally {
+      setIsReleasing(false);
+    }
+  };
   if (unitLoading || (isLoadingSessions && sessions.length === 0)) {
     return (
       <div className="uc-dashboard-container">
@@ -767,6 +777,27 @@ const renderThreeColorGrid = () => (
               </button>
               <button className="sb-toggle-btn active" style={{ flex: 1 }} onClick={() => handleLockClick(true)} disabled={isLocking}>
                 {isLocking ? 'Locking...' : 'Lock anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showUnreleaseModal && (
+        <div className="sb-modal-overlay" onClick={() => setShowUnreleaseModal(false)}>
+          <div className="sb-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <button className="sb-modal-close" onClick={() => setShowUnreleaseModal(false)}>&times;</button>
+            <div className="sb-modal-header">
+              <h2>Un-release the draft?</h2>
+            </div>
+            <p style={{ fontSize: 14, color: '#374151', marginBottom: 16 }}>
+              Tutors won't be able to see the timetable until it's released again (or finalised).
+            </p>
+            <div className="sb-modal-buttons" style={{ display: 'flex', gap: 12 }}>
+              <button className="is-btn-secondary" style={{ flex: 1 }} onClick={() => setShowUnreleaseModal(false)}>
+                Go back
+              </button>
+              <button className="sb-toggle-btn active" style={{ flex: 1 }} onClick={confirmUnrelease} disabled={isReleasing}>
+                {isReleasing ? 'Un-releasing...' : 'Un-release'}
               </button>
             </div>
           </div>
